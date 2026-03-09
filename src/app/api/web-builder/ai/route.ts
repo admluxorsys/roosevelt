@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { VertexAI, HarmCategory, HarmBlockThreshold } from '@google-cloud/vertexai';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import fs from 'fs';
-import path from 'path';
+import * as fs from 'fs';
+import * as path from 'path';
 import { SYSTEM_PROMPT } from './prompt';
 
 // Design pass for visual excellence
@@ -28,7 +28,6 @@ You are an Elite UI/UX Design Critic and Framer Motion Expert. Your job is to pe
    - GLOBAL FEEL: Ensure a massive Footer and a premium sticky Navbar are present and functional across all routes.
 
 🚨 VALIDATION & LINTING (CRITICAL) 🚨
-- STACK ENFORCEMENT: All state must use 'Zustand'. All data fetching must use 'React Query'.
 - ICON AUDIT: Use valid 'lucide-react' icons ONLY.
 - REACT ERROR #130: Verify every single component import.
 - CLEANUP: Remove any business logic commentary from the code.
@@ -139,7 +138,7 @@ async function callVertex(modelName: string, messages: any[], fileContext: strin
           // Add a deadline/timeout for the model generation
           // 90s timeout — gemini-2.5-flash is a thinking model that needs more time
           const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("Timeout: AI generation took too long")), 90000)
+            setTimeout(() => reject(new Error("Timeout: AI generation took too long")), 120000)
           );
 
           const resultPromise = model.generateContent({ contents });
@@ -445,8 +444,13 @@ function extractJSON(responseText: string, currentFiles: Record<string, string> 
 
     let jsonPart = cleaned.substring(start, end + 1);
 
+    // ABORTIVE SANITIZATION: Remove actual control characters that break JSON.parse
+    // EXCEPT for legitimate whitespace (\n, \t, \r)
+    jsonPart = jsonPart.replace(/[\x00-\x09\x0B\x0C\x0E-\x1F]/g, '');
+
     // SANITIZE: Fix common AI JSON mistakes before parsing
-    // 1. Fix unescaped newlines inside string values
+    // 1. Fix unescaped newlines inside string values (carefully)
+    // We only want to escape raw newlines that haven't been escaped yet
     jsonPart = jsonPart.replace(/(?<=:\s*"[^"]*)\n(?=[^"]*")/g, '\\n');
     // 2. Remove trailing commas before } or ]
     jsonPart = jsonPart.replace(/,\s*([\]}])/g, '$1');
@@ -468,9 +472,7 @@ function extractJSON(responseText: string, currentFiles: Record<string, string> 
       try {
         let sanitized = jsonMatch[0]
           .replace(/,\s*([\]}])/g, '$1')     // trailing commas
-          .replace(/'/g, '"')                // single quotes
-          .replace(/\n/g, '\\n')             // all newlines
-          .replace(/\t/g, '\\t');            // all tabs
+          .replace(/'/g, '"');                // single quotes
         return JSON.parse(sanitized);
       } catch (innerErr) {
         logToFile(`[extractJSON] Regex match also failed: ${jsonMatch[0].substring(0, 100)}`);
@@ -485,11 +487,8 @@ function extractJSON(responseText: string, currentFiles: Record<string, string> 
       const contentMatch = cleaned.match(/"content"\s*:\s*"((?:[^"\\]|\\.)*)"/);
 
       if (typeMatch && typeMatch[1] === 'code_update') {
-        // Extract files by finding "path": "..." and "content": "..." pairs
-        // Strategy: Find each file block between { "path": ... } boundaries
+        // strategy 1: Multi-pattern extraction for robust file catching
         const extractedFiles: { path: string; content: string }[] = [];
-
-        // Find all "path" values
         const pathRegex = /"path"\s*:\s*"([^"]+)"/g;
         let pathMatch;
         const pathPositions: { path: string; index: number }[] = [];
@@ -536,14 +535,18 @@ function extractJSON(responseText: string, currentFiles: Record<string, string> 
             j++;
           }
 
-          // Unescape the content
+          // Unescape the content properly
           try {
+            // Restore actual characters from escaped sequences
+            fileContent = JSON.parse(`"${fileContent}"`);
+          } catch {
+            // Simple manual fallback if JSON.parse fails
             fileContent = fileContent
               .replace(/\\n/g, '\n')
               .replace(/\\t/g, '\t')
               .replace(/\\"/g, '"')
               .replace(/\\\\/g, '\\');
-          } catch { }
+          }
 
           if (path && fileContent.length > 10) {
             extractedFiles.push({ path, content: fileContent });
@@ -612,12 +615,12 @@ async function agenticFlow(messages: any[], fileContext: string, currentFiles: R
 
 export async function POST(req: Request) {
   try {
-    const { messages, currentFiles, model } = await req.json();
+    const { messages, currentFiles, model, supabaseConfig } = await req.json();
     logToFile(`[POST] Request started. Model: ${model}, Messages: ${messages.length}`);
 
     const fileEntries = Object.entries(currentFiles || {}) as [string, string][];
     const filteredFiles = fileEntries.filter(([path]) => {
-      const isAsset = path.includes('assets/') || path.includes('public/');
+      const isAsset = path.includes('assets/') || path.includes('public/') || path.includes('lovable-uploads/');
       const isCode = path.endsWith('.tsx') || path.endsWith('.ts') || path.endsWith('.jsx') || path.endsWith('.js') || path.endsWith('.css');
       return isCode || isAsset;
     });
@@ -635,15 +638,15 @@ export async function POST(req: Request) {
 🎯 GENERATION STRATEGY: PHASE 1 — FOUNDATION FIRST 🎯
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-This is a BRAND NEW project. To ensure MAXIMUM QUALITY, follow this strategy:
+This is a BRAND NEW project. To ensure MAXIMUM QUALITY and prevent loading errors, follow this strategy:
 
 1. GENERATE ONLY THESE FILES (no more):
    - src/index.css — Complete design system with CSS variables (colors, fonts, spacing, shadows)
-   - src/App.tsx — HashRouter with routes DEFINED for future pages (Home, Menu/Services, About, Contact) but ONLY HomePage implemented
-   - src/features/Navbar/Navbar.tsx — Premium sticky navbar with links to ALL future pages
-   - src/features/Footer/Footer.tsx — Rich footer with columns
-   - src/pages/HomePage.tsx — THE MAIN PAGE: invest ALL your creative energy here. Make it STUNNING.
-   - src/pages/ComingSoonPage.tsx — A beautiful placeholder page for routes not yet built, showing "Esta página se está diseñando..." with the site's design language
+   - src/App.tsx — HashRouter with routes DEFINED for future pages (Home, Menu/Services, About, Contact) but ONLY HomePage implemented. Import pages using NAMED imports: \`import { HomePage } from './pages/HomePage'\`.
+   - src/features/Navbar/Navbar.tsx — Premium sticky navbar. Use NAMED EXPORT: \`export const Navbar = ...\`
+   - src/features/Footer/Footer.tsx — Rich footer with columns. Use NAMED EXPORT: \`export const Footer = ...\`
+   - src/pages/HomePage.tsx — THE MAIN PAGE. Use NAMED EXPORT: \`export const HomePage = ...\`
+   - src/pages/ComingSoonPage.tsx — A beautiful placeholder. Use NAMED EXPORT: \`export const ComingSoonPage = ...\`
 
 2. QUALITY FOCUS:
    - Dedicate 80% of your output tokens to HomePage.tsx — it MUST be breathtaking
@@ -665,7 +668,14 @@ This is a BRAND NEW project. To ensure MAXIMUM QUALITY, follow this strategy:
        https://images.unsplash.com/photo-1476224203421-9ac39bcb3327?w=800&q=80
        https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=800&q=80
        https://images.unsplash.com/photo-1484723091739-30a097e8f929?w=800&q=80
-     RESTAURANT/INTERIOR:
+      BEAUTY/COSMETICS:
+        https://images.unsplash.com/photo-1596462502278-27bfdc4033c8?w=800&q=80
+        https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=800&q=80
+        https://images.unsplash.com/photo-1512496015851-a90fb38ba796?w=800&q=80
+        https://images.unsplash.com/photo-1571781926291-c477ecfd024b?w=800&q=80
+        https://images.unsplash.com/photo-1612817288484-6f916006741a?w=800&q=80
+        https://images.unsplash.com/photo-1515377905703-c4788e51af15?w=800&q=80
+      RESTAURANT/INTERIOR:
        https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&q=80
        https://images.unsplash.com/photo-1552566626-98f62d27f5c9?w=800&q=80
        https://images.unsplash.com/photo-1559329007-40d22fd2b3c8?w=800&q=80
@@ -699,10 +709,12 @@ DO NOT generate Menu, About, Contact, or other pages yet. The user will ask for 
 This project ALREADY has an established design. When generating new pages or modifying existing ones:
 
 1. DESIGN CONSISTENCY:
-   - Extract the color palette, typography, and spacing from the existing index.css and components
+   - Extract the color palette, typography, and spacing from the existing globals.css and components
    - New pages MUST match the visual quality and style of the existing HomePage
    - Use the SAME animation patterns, glassmorphism level, and layout approach as existing pages
    - Reuse the existing Navbar and Footer components
+   - MANDATORY: Use NAMED EXPORTS for all new components (e.g., \`export const NewPage = ...\`). NEVER use \`export default\`.
+   - ZUSTAND STORES: Use \`export const useStore = create(...)\`. NEVER use \`export default\`.
 
 2. SINGLE PAGE FOCUS:
    - If the user asks for a new page, generate ONLY that one page file
@@ -724,6 +736,25 @@ This project ALREADY has an established design. When generating new pages or mod
       logToFile(`[POST] Progressive Gen: PHASE 2+ — Follow design (${codeFiles.length} code files, hasPages=${hasPages})`);
     }
 
+    if (supabaseConfig?.url && supabaseConfig?.key) {
+      generationStrategy += `
+🚨 MANDATORY SUPABASE CONFIGURATION 🚨
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+The user has enabled Supabase. You MUST create/update these EXACT files:
+
+1. \`.env\` (at the root):
+VITE_SUPABASE_URL=${supabaseConfig.url}
+VITE_SUPABASE_ANON_KEY=${supabaseConfig.key}
+
+2. \`src/lib/supabase.ts\`:
+import { createClient } from '@supabase/supabase-js';
+export const supabase = createClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY);
+
+NEVER use placeholders like 'your-project-url'. Use the exact values provided above.
+`;
+      logToFile(`[POST] Injected Supabase Config for AI.`);
+    }
+
     let fileContext = filteredFiles.length > 0 ? "\n\nCONTEXT:\n" + filteredFiles
       .map(([p, c]) => {
         if (p.match(/\.(png|jpg|jpeg|gif|svg|webp)$/)) {
@@ -739,121 +770,6 @@ This project ALREADY has an established design. When generating new pages or mod
 
     // ALL requests now use the Agentic Flow (Architect + Refiner) to ensure quality
     let finalResult = await agenticFlow(messages, fileContext, currentFiles || {}, model || "Gemini 1.5 Flash");
-
-    // NEW: Post-Generation Auto-Linter (HARDENS the app against Error #130)
-    if (finalResult && finalResult.type === 'code_update' && finalResult.files && Array.isArray(finalResult.files)) {
-      finalResult.files = finalResult.files
-        .filter((file: any) => file && file.content && typeof file.content === 'string')
-        .map((file: any) => {
-          let content = file.content;
-
-          // 1. AUTO-FIX MISSING LUCIDE-REACT IMPORTS (catches ALL icons, not just specific ones)
-          if (file.path.endsWith('.tsx') || file.path.endsWith('.jsx')) {
-            // Find all PascalCase components used as JSX tags (e.g., <MapPin, <Coffee, <Star)
-            const jsxIconUsages = new Set<string>();
-            const jsxTagRegex = /<([A-Z][a-zA-Z]+)[\s\/\>]/g;
-            let tagMatch;
-            while ((tagMatch = jsxTagRegex.exec(content)) !== null) {
-              jsxIconUsages.add(tagMatch[1]);
-            }
-
-            // Known lucide-react icon names (common ones the AI uses)
-            const lucideIcons = new Set([
-              'MapPin', 'Phone', 'Mail', 'Clock', 'Star', 'Heart', 'Coffee', 'Menu', 'X',
-              'ChevronRight', 'ChevronLeft', 'ChevronDown', 'ChevronUp', 'ArrowRight', 'ArrowLeft',
-              'Search', 'User', 'Users', 'Settings', 'Home', 'Calendar', 'Check', 'Plus', 'Minus',
-              'Trash', 'Edit', 'Eye', 'EyeOff', 'Lock', 'Unlock', 'Globe', 'Zap', 'Award',
-              'Leaf', 'Sun', 'Moon', 'Cloud', 'Droplets', 'Flame', 'Wind', 'Mountain',
-              'Camera', 'Image', 'Play', 'Pause', 'Volume2', 'Download', 'Upload', 'Share',
-              'Facebook', 'Instagram', 'Twitter', 'Youtube', 'Linkedin', 'Github',
-              'MessageSquare', 'MessageCircle', 'Send', 'Bell', 'BellRing',
-              'ShoppingCart', 'ShoppingBag', 'CreditCard', 'DollarSign', 'Wallet',
-              'Utensils', 'UtensilsCrossed', 'Cookie', 'Cake', 'Wine', 'Beer', 'Soup',
-              'Car', 'Bike', 'Plane', 'Train', 'Ship', 'Truck',
-              'Building', 'Store', 'Landmark', 'Construction',
-              'Sparkles', 'Gem', 'Crown', 'Trophy', 'Medal', 'Target', 'Focus',
-              'BookOpen', 'GraduationCap', 'Briefcase', 'Clipboard', 'FileText',
-              'Wifi', 'Bluetooth', 'Battery', 'Monitor', 'Smartphone', 'Tablet',
-              'PawPrint', 'Cat', 'Dog', 'Fish', 'Bug', 'Flower', 'TreePine',
-              'Shield', 'ShieldCheck', 'AlertCircle', 'AlertTriangle', 'Info', 'HelpCircle',
-              'ExternalLink', 'Copy', 'Scissors', 'RotateCcw', 'RefreshCw',
-              'Timer', 'Hourglass', 'Compass', 'Navigation', 'Map',
-              'Gift', 'PartyPopper', 'Percent', 'Tag', 'Tags', 'Bookmark',
-              'ThumbsUp', 'ThumbsDown', 'Smile', 'Frown', 'Meh',
-              'Layers', 'Layout', 'Grid', 'List', 'BarChart', 'PieChart', 'TrendingUp',
-              'CircleDot', 'CircleCheck', 'BadgeCheck', 'BadgePlus',
-            ]);
-
-            // Find icons used in JSX but NOT imported
-            const existingLucideImport = content.match(/import\s*\{([^}]*)\}\s*from\s*['"]lucide-react['"]/);
-            const alreadyImported = new Set(
-              existingLucideImport ? existingLucideImport[1].split(',').map((s: string) => s.trim()) : []
-            );
-
-            const missingIcons: string[] = [];
-            jsxIconUsages.forEach(icon => {
-              if (lucideIcons.has(icon) && !alreadyImported.has(icon)) {
-                missingIcons.push(icon);
-              }
-            });
-
-            if (missingIcons.length > 0) {
-              logToFile(`[Auto-Linter] Missing lucide imports in ${file.path}: ${missingIcons.join(', ')}`);
-              if (existingLucideImport) {
-                // Add to existing import
-                const allIcons = [...alreadyImported, ...missingIcons].filter(Boolean).join(', ');
-                content = content.replace(
-                  /import\s*\{[^}]*\}\s*from\s*['"]lucide-react['"]/,
-                  `import { ${allIcons} } from 'lucide-react'`
-                );
-              } else {
-                // Create new import at top of file
-                content = `import { ${missingIcons.join(', ')} } from 'lucide-react';\n` + content;
-              }
-            }
-          }
-
-          // 2. Fix UI Component Path Ambiguities (Ensure it uses @/components/ui/...)
-          if (content.includes('<Button') && !content.includes('import { Button }')) {
-            content = 'import { Button } from "@/components/ui/button";\n' + content;
-          }
-          if (content.includes('<Card') && !content.includes('import { Card')) {
-            content = 'import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";\n' + content;
-          }
-
-          // 3. Strip phantom utils imports (AI hallucinates functions that don't exist in utils.ts)
-          content = content.replace(
-            /import\s*\{([^}]*)\}\s*from\s*['"]@\/lib\/utils['"];?/g,
-            (match: string, imports: string) => {
-              const validImports = imports.split(',').map((s: string) => s.trim()).filter((s: string) => s === 'cn');
-              if (validImports.length === 0) return '';
-              return `import { ${validImports.join(', ')} } from "@/lib/utils";`;
-            }
-          );
-
-          // 4. Add onError fallback to all <img> tags to prevent broken image icons
-          if (file.path.endsWith('.tsx') || file.path.endsWith('.jsx')) {
-            // Add onError handler that replaces broken images with a gradient placeholder
-            content = content.replace(
-              /<img\s/g,
-              '<img onError={(e)=>{const t=e.currentTarget;t.onerror=null;t.style.background="linear-gradient(135deg,#1a1a2e,#16213e)";t.style.objectFit="cover";t.src="https://placehold.co/800x600/1a1a2e/ffffff?text=";}} '
-            );
-          }
-
-          if (file.path.endsWith('.tsx')) {
-            logToFile(`[Auto-Linter] Processing ${file.path}. Content start: ${content.substring(0, 200)}...`);
-          }
-
-          return { ...file, content };
-        });
-
-      // 4. Truncate overly verbose AI content descriptions
-      if (finalResult.content && finalResult.content.length > 300) {
-        // Keep only the first sentence/paragraph
-        const firstLine = finalResult.content.split('\\n')[0] || finalResult.content.substring(0, 200);
-        finalResult.content = firstLine.substring(0, 250) + (firstLine.length > 250 ? '...' : '');
-      }
-    }
 
     logToFile(`[POST] Returning successful code update with ${finalResult?.files?.length ?? 'N/A'} files.`);
     return NextResponse.json(finalResult ?? { type: 'message', content: 'Error interno: respuesta vacía del modelo.' });

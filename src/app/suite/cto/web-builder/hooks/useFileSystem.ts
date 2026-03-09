@@ -79,20 +79,42 @@ export const useFileSystem = (activeProjectId: string | null, updateProjectLastM
 
     const fetchFiles = async (projectId: string) => {
         try {
+            // 1. Try to load from Local Cache first for instant UI
+            const cacheKey = `fs_cache_${projectId}`;
+            const cachedData = localStorage.getItem(cacheKey);
+            if (cachedData) {
+                try {
+                    const parsed = JSON.parse(cachedData);
+                    if (parsed && typeof parsed === 'object') {
+                        console.log("[FileSystem] Loading from cache:", projectId);
+                        setFiles(parsed);
+                        setLoading(false);
+                        loadedProjectId.current = projectId;
+                    }
+                } catch (e) {
+                    console.error("[FileSystem] Cache parse error", e);
+                }
+            } else {
+                setLoading(true);
+            }
+
+            // 2. Fetch from Firestore (Background / Revalidation)
             const filesCollection = collection(db, "web-projects", projectId, "files");
             const snapshot = await getDocs(filesCollection);
 
             if (!snapshot.empty) {
-                const fetchedFiles: Record<string, string> = { ...INITIAL_FILES }; // Start with defaults
+                const fetchedFiles: Record<string, string> = { ...INITIAL_FILES };
                 snapshot.forEach(doc => {
                     const data = doc.data();
                     if (data.path && data.content !== undefined) {
                         fetchedFiles[data.path] = data.content;
                     }
                 });
-                setFiles(fetchedFiles);
 
-                // If the project was missing mandatory files, save them back to Firestore
+                // Update state and cache
+                setFiles(fetchedFiles);
+                localStorage.setItem(cacheKey, JSON.stringify(fetchedFiles));
+
                 if (snapshot.size < Object.keys(INITIAL_FILES).length) {
                     console.log("[FileSystem] Repairing project: adding missing mandatory files.");
                     saveFilesToFirestore(projectId, fetchedFiles);
@@ -100,11 +122,14 @@ export const useFileSystem = (activeProjectId: string | null, updateProjectLastM
             } else {
                 setFiles(INITIAL_FILES);
                 saveFilesToFirestore(projectId, INITIAL_FILES);
+                localStorage.setItem(cacheKey, JSON.stringify(INITIAL_FILES));
             }
             loadedProjectId.current = projectId;
+            setLoading(false);
         } catch (e) {
             console.error("Failed to fetch files from Firestore", e);
-            setFiles(INITIAL_FILES);
+            setLoading(false);
+            if (Object.keys(files).length === 0) setFiles(INITIAL_FILES);
         }
     };
 
@@ -184,6 +209,9 @@ export const useFileSystem = (activeProjectId: string | null, updateProjectLastM
             filesRef.current = nextFiles;
             setFiles(nextFiles);
 
+            // Update Cache
+            localStorage.setItem(`fs_cache_${projectId}`, JSON.stringify(nextFiles));
+
             updateProjectLastModified(projectId);
             setHasChanges(true); // Flag changes locally immediately
         } catch (e) {
@@ -228,6 +256,9 @@ export const useFileSystem = (activeProjectId: string | null, updateProjectLastM
             });
             await batch.commit();
             updateProjectLastModified(projectId);
+
+            // Update Cache
+            localStorage.setItem(`fs_cache_${projectId}`, JSON.stringify(filesToSave));
             setHasChanges(true);
         } catch (e) {
             console.error("Failed to save files to Firestore batch", e);

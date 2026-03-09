@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { auth, db } from "@/lib/firebase";
 import { doc, updateDoc } from "firebase/firestore";
@@ -99,9 +99,12 @@ function WebBuilderContent() {
 
     // Runtime Monitoring (Bridge between Visor and Editor)
     const [runtimeErrors, setRuntimeErrors] = useState<Record<string, string>>({});
+    const [isAutoFixEnabled, setIsAutoFixEnabled] = useState(true);
+    const lastAutoFixedErrorRef = useRef<string | null>(null);
     const [showTerminal, setShowTerminal] = useState(false);
     const [refreshSignal, setRefreshSignal] = useState(0);
     const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+    const [selection, setSelection] = useState<{ path: string, loc: string, rect: any } | null>(null);
 
     // --- Viewport / Pan State ---
     const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
@@ -179,13 +182,42 @@ function WebBuilderContent() {
         setActiveConversationId,
         handleGenerate,
         handleNewConversation,
+        approvePlan,
         deleteConversation,
         cancelGeneration,
         statusMessage
     } = useChatAI(
         activeProjectId, files, updateFiles, setActiveFile, setGeneratedTheme, showToast,
-        selectedModel, reasoningLevel
+        selectedModel, reasoningLevel,
+        activeProject?.supabaseUrl && activeProject?.supabaseAnonKey
+            ? { url: activeProject.supabaseUrl, key: activeProject.supabaseAnonKey }
+            : undefined
     );
+
+    // Sync initial loading state
+    useEffect(() => {
+        if (!Object.keys(files).length && Object.keys(runtimeErrors).length === 0) {
+            setIsPreviewLoading(true);
+        }
+    }, [files, runtimeErrors]);
+
+    // --- Route Discovery ---
+    const availableRoutes = useMemo(() => {
+        const routes = new Set<string>();
+        Object.keys(files).forEach(path => {
+            if (path.startsWith('src/pages/') && path.endsWith('.tsx')) {
+                const name = path.split('src/pages/')[1].split('.tsx')[0].toLowerCase().replace('page', '');
+                routes.add(name === 'home' || name === 'index' ? '/' : `/${name}`);
+            } else if (path.startsWith('src/app/') && path.endsWith('/page.tsx')) {
+                const route = path.split('src/app/')[1].split('/page.tsx')[0];
+                routes.add(route === 'page.tsx' || route === '' ? '/' : `/${route}`);
+            } else if (path.startsWith('src/app/') && path.endsWith('.tsx') && !path.includes('/page.tsx')) {
+                const name = path.split('src/app/')[1].split('.tsx')[0].toLowerCase();
+                routes.add(name === 'page' ? '/' : `/${name}`);
+            }
+        });
+        return Array.from(routes).sort();
+    }, [files]);
 
     // Helper to propagate navigation to the iframe
     const propagateNavigation = useCallback((path: string) => {
@@ -199,27 +231,29 @@ function WebBuilderContent() {
     // Sync previewPath with activeFile (Filtering)
     useEffect(() => {
         if (activeFile) {
-            const isAppFile = activeFile.startsWith('src/app/');
-            if (!isAppFile) {
-                console.log("[Parent Sync] activeFile is not in src/app/, skipping path sync:", activeFile);
+            const isSupported = activeFile.startsWith('src/app/') || activeFile.startsWith('src/pages/');
+            if (!isSupported) {
+                console.log("[Parent Sync] activeFile is not in a supported route folder, skipping path sync:", activeFile);
                 return;
             }
 
-            const fileName = activeFile.split('/').pop()?.replace('.tsx', '') || "";
-            let targetPath = "";
-            if (activeFile === 'src/app/page.tsx') {
-                targetPath = "";
-            } else {
-                // Better path resolution for src/app/folder/page.tsx or src/app/file.tsx
-                targetPath = activeFile
-                    .replace('src/app/', '')
-                    .replace('/page.tsx', '')
-                    .replace('.tsx', '');
+            let targetPath = ""; // Root by default
+            if (activeFile.includes('src/pages/')) {
+                const base = activeFile.split('src/pages/')[1].split('.tsx')[0].toLowerCase();
+                const clean = base.replace('page', '');
+                targetPath = (clean === 'home' || clean === 'index') ? "" : clean;
+            } else if (activeFile.includes('src/app/')) {
+                const parts = activeFile.split('src/app/')[1];
+                if (parts === 'page.tsx') {
+                    targetPath = "";
+                } else {
+                    targetPath = parts.split('/page.tsx')[0].split('.tsx')[0];
+                }
             }
 
-            console.log("[Parent Sync] activeFile changed to:", activeFile, "Setting previewPath to:", targetPath);
-            setPreviewPath(targetPath);
+            console.log("[Parent] Propagating derived navigation path:", targetPath || "/", "from file:", activeFile);
             propagateNavigation(targetPath || "/");
+            setPreviewPath(targetPath);
         }
     }, [activeFile, propagateNavigation]);
 
@@ -248,59 +282,124 @@ function WebBuilderContent() {
         const handleGlobalMessage = (e: MessageEvent) => {
             if (e.data?.type === 'ask-ai-fix') {
                 const { error, file } = e.data;
-                showToast(`Analizando error en ${file}...`, "info");
-                handleGenerate(`Tengo este error en el archivo ${file}: "${error}". Por favor, arréglalo asegurándote de que todas las dependencias e importaciones estén correctas.`);
+                const errorEntries = Object.entries(runtimeErrors).filter(([k, v]) => v && k !== '__runtime__');
+                const globalError = runtimeErrors['__runtime__'];
+
+                showToast(errorEntries.length > 1 ? `Analizando múltiples errores...` : `Analizando error en ${file}...`, "info");
+
+                let msg = `Tengo el siguiente problema en el proyecto en este momento. Por favor, revisa TODO el contexto de mis archivos (importaciones, dependencias, variables) y soluciona este/os error/es de una sola vez. IMPORTANTE: NO rompas los archivos que ya están funcionando bien.\n\n`;
+
+                if (globalError) {
+                    msg += `🚨 Error global de ejecución (Crashed):\n"${globalError}"\n\n`;
+                }
+                if (errorEntries.length > 0) {
+                    msg += `🚨 Errores detectados por archivo:\n` + errorEntries.map(([k, v]) => `- Archivo ${k}: "${v}"`).join('\n');
+                }
+
+                // Fallback si por alguna razón el estado de runtimeErrors no tiene el error del evento
+                if (!globalError && errorEntries.length === 0) {
+                    msg += `🚨 Error en ${file}:\n"${error}"\n`;
+                }
+
+                handleGenerate(msg);
             }
 
             if (e.data?.type === 'navigation') {
                 const { path } = e.data;
                 console.log("[Parent] Received navigation event from iframe:", path);
 
-                // Normalize path: ignore leading slash, treat empty as root
-                const normalized = path === '/' ? "" : path.startsWith('/') ? path.substring(1) : path;
+                // Normalize path: handle '/', '/index', '/home' and ensure they map to empty string for previewPath
+                const isRoot = path === '/' || path === "" || path === "/index" || path === "/home" || path === "index" || path === "home";
+                const normalized = isRoot ? "" : (path.startsWith('/') ? path.substring(1) : path);
+
                 setPreviewPath(normalized);
 
                 // Extended search for the corresponding file
-                const searchPaths = [
+                const searchPaths = isRoot ? [
+                    "src/app/page.tsx",
+                    "src/pages/index.tsx",
+                    "src/app/main.tsx",
+                    "src/app/main/page.tsx",
+                    "src/pages/home.tsx"
+                ] : [
                     `src/app/${normalized}/page.tsx`,
                     `src/app/${normalized}.tsx`,
-                    `src/app/page.tsx`, // Fallback for root
+                    `src/pages/${normalized}.tsx`,
+                    `src/pages/${normalized}Page.tsx`,
+                    `src/pages/${normalized.charAt(0).toUpperCase() + normalized.slice(1)}Page.tsx`,
                     `src/components/${normalized}.tsx`
                 ];
 
-                // Specific fix for "main" routes often generated by AI
-                if (normalized === "" || normalized === "main") {
-                    searchPaths.unshift("src/app/main.tsx", "src/app/main/page.tsx", "src/app/page.tsx");
-                }
-
                 const found = searchPaths.find(p => files[p]);
-                console.log("[Parent] Map navigation path", normalized, "to file:", found || "NOT FOUND");
+                console.log("[Parent] Map navigation path", normalized || "/", "to file:", found || "NOT FOUND");
                 if (found && found !== activeFile) {
                     setActiveFile(found);
                 }
             }
 
             if (e.data?.type === 'inspect-element') {
-                const { path, loc, textContext, className } = e.data;
+                const { path, loc } = e.data;
 
                 if (path && loc) {
                     setActiveFile(path);
+                    setShowCode(true);
+                    setSelection({ path, loc, rect: e.data.rect });
+
+                    // Auto-expand folders in FileTree
+                    const pathParts = path.split('/');
+                    const foldersToExpand = new Set(expandedFolders);
+                    let currentPath = '';
+                    for (let i = 0; i < pathParts.length - 1; i++) {
+                        currentPath = currentPath ? `${currentPath}/${pathParts[i]}` : pathParts[i];
+                        foldersToExpand.add(currentPath);
+                    }
+                    setExpandedFolders(foldersToExpand);
+
                     const line = parseInt(loc.split(':')[0]);
                     window.dispatchEvent(new CustomEvent('editor-goto-line', {
                         detail: { path, line }
                     }));
-                } else {
-                    const searchTerm = textContext || className?.split(' ')[0];
-                    if (searchTerm) {
-                        showToast(`Sincronizando: ${searchTerm}`, "info");
-                        window.dispatchEvent(new CustomEvent('editor-search', { detail: searchTerm }));
-                    }
                 }
+                // Note: removed the else branch — clicking elements without data-component-path
+                // should NOT open the editor or trigger any search.
+            }
+
+            if (e.data?.type === 'inception-detected') {
+                console.warn("[Parent] Inception detected in preview. Resetting preview bundle...");
+                setRefreshSignal(s => s + 1);
             }
         };
         window.addEventListener('message', handleGlobalMessage);
         return () => window.removeEventListener('message', handleGlobalMessage);
-    }, [handleGenerate, showToast]);
+    }, [
+        handleGenerate, showToast, setRefreshSignal, setPreviewPath,
+        files, setActiveFile, activeFile, setShowCode, setSelection,
+        expandedFolders, setExpandedFolders, runtimeErrors
+    ]);
+
+    // --- Auto-Fix Engine ---
+    useEffect(() => {
+        if (!isAutoFixEnabled || !activeProjectId || isGenerating) return;
+
+        const runtimeErr = runtimeErrors['__runtime__'];
+        const errorEntries = Object.entries(runtimeErrors).filter(([k, v]) => v && k !== '__runtime__');
+
+        if (runtimeErr && runtimeErr !== lastAutoFixedErrorRef.current) {
+            console.log("[Auto-Fix] Detecting runtime error, triggering AI fix:", runtimeErr);
+            lastAutoFixedErrorRef.current = runtimeErr;
+
+            // Trigger AI fix
+            showToast("🔧 Error detectado. Iniciando auto-corrección...", "info");
+
+            let msg = `Tengo el siguiente error de ejecución global (Crash) en la aplicación:\n"${runtimeErr}"\n\nPor favor, revisa TODO el contexto de mis archivos y soluciona el problema de una sola vez. IMPORTANTE: NO rompas los archivos que ya están funcionando bien.\n\n`;
+
+            if (errorEntries.length > 0) {
+                msg += `🛑 Además, he detectado estos errores en archivos específicos:\n` + errorEntries.map(([k, v]) => `- Archivo ${k}: "${v}"`).join('\n') + `\n\n`;
+            }
+
+            handleGenerate(msg);
+        }
+    }, [runtimeErrors, isAutoFixEnabled, isGenerating, activeProjectId, handleGenerate, showToast]);
 
     const handleDisconnectGitHub = async () => {
         try {
@@ -328,6 +427,7 @@ function WebBuilderContent() {
 
         const autoCreateRepo = async () => {
             try {
+                showToast("Creando repositorio en GitHub...", "info");
                 const res = await fetch('/api/web-builder/git', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -337,7 +437,7 @@ function WebBuilderContent() {
                         autoCreate: true,
                         projectName: activeProject.name,
                         message: `Initial commit — ${activeProject.name}`,
-                        files: {}
+                        files: files // Enviar archivos actuales!
                     })
                 });
                 const result = await res.json();
@@ -348,10 +448,11 @@ function WebBuilderContent() {
                         repoName: result.repoName || finalRepoUrl.split('/').slice(-2).join('/'),
                         githubConnected: true
                     });
-                    showToast(`📁 Repositorio "${result.repoName || finalRepoUrl.split('/').pop()}" creado en GitHub`, 'success');
+                    showToast(`📁 Repositorio "${result.repoName || finalRepoUrl.split('/').pop()}" creado y sincronizado`, 'success');
                 }
             } catch (e) {
                 console.error('[AutoCreate]', e);
+                showToast("Error al crear el repositorio", "error");
             }
         };
 
@@ -366,6 +467,34 @@ function WebBuilderContent() {
             });
         }
         showToast("Project deployed successfully!", "success");
+    };
+
+    const handleGitSync = async () => {
+        if (!activeProjectId || !repoUrl) return;
+
+        setIsCommiting(true);
+        showToast("Sincronizando cambios con GitHub...", "info");
+
+        try {
+            const result = await triggerSync({
+                repoUrl: repoUrl || activeProject?.repoUrl
+            });
+
+            if (result?.success) {
+                showToast("Sincronización completada", "success");
+                // Check for updates to repoName if it changed
+                if (result.repoName && result.repoName !== activeProject?.repoName) {
+                    await updateProject(activeProjectId, { repoName: result.repoName });
+                }
+            } else {
+                showToast(result?.error || "Error en la sincronización", "error");
+            }
+        } catch (e) {
+            console.error("[GitSync]", e);
+            showToast("Error de conexión con el servicio de Git", "error");
+        } finally {
+            setIsCommiting(false);
+        }
     };
 
     const handlePublish = async (details?: any) => {
@@ -392,6 +521,36 @@ function WebBuilderContent() {
             } else {
                 showToast("Sincronizando y actualizando despliegue...", "info");
             }
+
+            // --- Programmatic Firebase Hosting Deployment ---
+            const userSiteId = publishDetails?.url?.toLowerCase()?.replace(/[^a-z0-9-]/g, '');
+            const finalSiteId = userSiteId || (activeProject?.name || 'site').toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 20) + "-" + activeProjectId.substring(0, 5).toLowerCase();
+
+            try {
+                const deployResponse = await fetch('/api/web-builder/deploy', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        siteId: finalSiteId,
+                        files: files
+                    })
+                });
+
+                const deployData = await deployResponse.json();
+
+                if (deployData.success) {
+                    await updateProject(activeProjectId, {
+                        deploymentUrl: deployData.url
+                    });
+                    showToast(`Sito web desplegado: ${deployData.url}`, "success");
+                } else {
+                    console.error("Programmatic deployment error:", deployData.details);
+                    showToast(`Error en despliegue hosting: ${deployData.details.substring(0, 50)}...`, "warning");
+                }
+            } catch (deployErr) {
+                console.error("Failed to call deploy API:", deployErr);
+            }
+            // ------------------------------------------------
 
             const result = await triggerSync({
                 autoCreate: true,
@@ -462,6 +621,8 @@ function WebBuilderContent() {
                         setShowTerminal={setShowTerminal}
                         onRefresh={() => setRefreshSignal(s => s + 1)}
                         isPreviewLoading={isPreviewLoading}
+                        isAutoFixEnabled={isAutoFixEnabled}
+                        setIsAutoFixEnabled={setIsAutoFixEnabled}
                     />
 
                     <div className="flex-1 flex overflow-hidden relative">
@@ -479,8 +640,10 @@ function WebBuilderContent() {
                             activeConversationId={activeConversationId}
                             setActiveConversationId={setActiveConversationId}
                             handleNewConversation={handleNewConversation}
+                            approvePlan={approvePlan}
                             deleteConversation={deleteConversation}
                             cancelGeneration={cancelGeneration}
+                            onOpenSettings={() => setShowSettings(true)}
                         />
 
                         <div className="flex-1 overflow-hidden relative flex items-center justify-center bg-[#050505]">
@@ -501,6 +664,7 @@ function WebBuilderContent() {
                                 expandedFolders={expandedFolders}
                                 setExpandedFolders={setExpandedFolders}
                                 runtimeErrors={runtimeErrors}
+                                setRuntimeErrors={setRuntimeErrors}
                             />
 
                             <div
@@ -525,12 +689,16 @@ function WebBuilderContent() {
 
                                 <BrowserAddressBar
                                     url={previewPath}
+                                    availableRoutes={availableRoutes}
                                     onNavigate={(path) => {
                                         setPreviewPath(path);
                                         propagateNavigation(path);
                                         const possibleFiles = [
                                             `src/app/${path}/page.tsx`,
                                             `src/app/${path}.tsx`,
+                                            `src/pages/${path}.tsx`,
+                                            `src/pages/${path}Page.tsx`,
+                                            `src/pages/${path.charAt(0).toUpperCase() + path.slice(1)}Page.tsx`,
                                             `src/components/${path}.tsx`
                                         ];
                                         const found = possibleFiles.find(p => files[p]);
@@ -559,6 +727,9 @@ function WebBuilderContent() {
                                         setShowTerminal={setShowTerminal}
                                         refreshSignal={refreshSignal}
                                         onLoadingChange={setIsPreviewLoading}
+                                        selection={selection}
+                                        setSelection={setSelection}
+                                        handleGenerate={handleGenerate}
                                     />
                                 </div>
                             </div>
@@ -638,10 +809,22 @@ function WebBuilderContent() {
                         showToast(`🚀 Proyecto vinculado a ${name || 'repositorio'}`, 'success');
                     }
                 }}
-                handleSync={handlePublish}
-                isSyncing={isPublishing}
+                handleSync={handleGitSync}
+                isSyncing={isCommiting}
                 hasChanges={hasChanges}
                 onCheckChanges={() => checkChanges(repoUrl || activeProject?.repoUrl)}
+                supabaseUrl={activeProject?.supabaseUrl}
+                supabaseAnonKey={activeProject?.supabaseAnonKey}
+                onSaveDatabaseConfig={async (config) => {
+                    if (activeProjectId) {
+                        await updateProject(activeProjectId, {
+                            supabaseUrl: config.url,
+                            supabaseAnonKey: config.key,
+                            databaseMode: 'manual'
+                        });
+                        showToast("Configuración de base de datos guardada", "success");
+                    }
+                }}
             />
 
             <NewProjectModal

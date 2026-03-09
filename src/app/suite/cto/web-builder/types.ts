@@ -24,6 +24,9 @@ export interface ChatMessage {
     steps?: ChatStep[];
     images?: string[];
     thinkingTime?: number;
+    approved?: boolean;
+    showCloudSetup?: boolean;
+    supabaseConfig?: { url: string; key: string };
 }
 
 export interface PreviewAreaProps {
@@ -51,6 +54,10 @@ export interface WebProject {
     customDomain?: string;
     description?: string;
     visibility?: 'public' | 'private';
+    // Database Integration (Supabase)
+    supabaseUrl?: string;
+    supabaseAnonKey?: string;
+    databaseMode?: 'none' | 'manual' | 'automatic';
 }
 
 export interface GitHubUser {

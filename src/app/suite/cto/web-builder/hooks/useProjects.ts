@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { WebProject } from "../types";
-import { db } from "@/lib/firebase";
+import { db, auth } from "@/lib/firebase";
 import {
     collection,
     addDoc,
@@ -68,6 +68,7 @@ export const useProjects = (initialFiles: Record<string, string>) => {
         try {
             const newProject = {
                 name,
+                authorId: auth.currentUser?.uid,
                 createdAt: Date.now(),
                 lastModified: Date.now(),
                 repoUrl: '',

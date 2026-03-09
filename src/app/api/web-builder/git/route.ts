@@ -25,6 +25,10 @@ function logToFile(msg: string) {
 // Helper to write project files to disk
 async function filesToDisk(files: Record<string, string>, diskPath: string) {
     for (const [filePath, content] of Object.entries(files)) {
+        if (content === "__ASSET_ON_DISK__") {
+            logToFile(`[Git API] Skipping physical write for existing asset: ${filePath}`);
+            continue;
+        }
         const absolutePath = path.join(diskPath, filePath);
         const dir = path.dirname(absolutePath);
         await fsPromises.mkdir(dir, { recursive: true });
@@ -96,6 +100,9 @@ export async function POST(req: Request) {
         if (repoUrl && dbRepoUrl && repoUrl !== dbRepoUrl) {
             logToFile(`[Git API] WARNING: Client provided repoUrl (${repoUrl}) mismatches DB (${dbRepoUrl}). Favoring DB.`);
             effectiveRepoUrl = dbRepoUrl;
+        } else if (!dbRepoUrl && repoUrl) {
+            logToFile(`[Git API] DB lookup failed or empty. Falling back to client-provided repoUrl: ${repoUrl}`);
+            effectiveRepoUrl = repoUrl;
         }
 
         if (!effectiveRepoUrl) {

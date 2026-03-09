@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { ChatMessage, ChatStep, ConversationState, ReasoningLevel, ChatConversation } from "../types";
 import { generateCodePrompt, detectIndustry, generateDesignSpec } from "../ai/promptTemplates";
 import { db } from "@/lib/firebase";
@@ -24,6 +24,8 @@ interface AIResponse {
         theme: string;
     };
     files?: { path: string; content: string }[];
+    showCloudSetup?: boolean;
+    supabaseConfig?: { url: string; key: string };
 }
 
 export const useChatAI = (
@@ -34,7 +36,8 @@ export const useChatAI = (
     setGeneratedTheme: (theme: 'default' | 'art' | 'tech' | 'cosmetics') => void,
     showToast: (msg: string, type?: 'success' | 'info') => void,
     selectedModel: string,
-    reasoningLevel: ReasoningLevel
+    reasoningLevel: ReasoningLevel,
+    supabaseConfig?: { url: string; key: string }
 ) => {
     const [isGenerating, setIsGenerating] = useState(false);
     const [conversations, setConversations] = useState<ChatConversation[]>([]);
@@ -43,6 +46,7 @@ export const useChatAI = (
     const [conversationState, setConversationState] = useState<ConversationState>('idle');
     const [statusMessage, setStatusMessage] = useState<string>("");
     const [abortController, setAbortController] = useState<AbortController | null>(null);
+    const statusIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
     // Fetch Conversations when project changes
     useEffect(() => {
@@ -91,6 +95,83 @@ export const useChatAI = (
         return () => unsubscribe();
     }, [activeProjectId, activeConversationId]);
 
+    const handleCloudProvision = useCallback(async (msgId: string, region: string) => {
+        if (!activeProjectId) return;
+
+        const controller = new AbortController();
+        setAbortController(controller);
+        setIsGenerating(true);
+        setStatusMessage("Habilitando infraestructura en la nube (Backend)...");
+
+        try {
+            const res = await fetch('/api/web-builder/cloud/provision', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ projectId: activeProjectId, region }),
+                signal: controller.signal
+            });
+
+            const data = await res.json();
+            if (res.ok) {
+                showToast("¡Nube habilitada con éxito!", "success");
+
+                // Update the message state to hide the card
+                setMessages(prev => prev.map(m =>
+                    m.id === msgId ? { ...m, showCloudSetup: false, approved: true } : m
+                ));
+
+                // Persist the change in Firestore (Messages)
+                if (activeConversationId) {
+                    const msgRef = doc(db, "web-projects", activeProjectId, "conversations", activeConversationId, "messages", msgId);
+                    await setDoc(msgRef, { showCloudSetup: false, approved: true }, { merge: true });
+                }
+
+                // Force a project data refresh or assume parent will handle it via onSnapshot
+                // Inform AI to continue
+                const aiResponse: ChatMessage = {
+                    id: `ai-${Date.now()}`,
+                    role: 'ai',
+                    content: "¡Perfecto! He activado el backend y la base de datos para tu proyecto. ¿Qué tabla o funcionalidad te gustaría crear primero?",
+                    timestamp: Date.now()
+                };
+                await saveChatMessage(activeProjectId, activeConversationId!, aiResponse);
+            } else {
+                showToast(`Error: ${data.error}`, "info");
+            }
+        } catch (e: any) {
+            if (e.name === 'AbortError') {
+                console.log('[AI] Cloud provision cancelled by user');
+                return;
+            }
+            console.error("Cloud provision tool failure", e);
+            showToast("Error al conectar con el servicio de nube", "info");
+        } finally {
+            setIsGenerating(false);
+            setStatusMessage("");
+            setAbortController(null);
+        }
+    }, [activeProjectId, activeConversationId, showToast]);
+
+    useEffect(() => {
+        const onApprove = (e: any) => {
+            const { msgId, config } = e.detail;
+            handleCloudProvision(msgId, config.region);
+        };
+
+        const onReject = (e: any) => {
+            const { msgId } = e.detail;
+            setMessages(prev => prev.map(m => m.id === msgId ? { ...m, showCloudSetup: false } : m));
+            // Optional: Persist in DB
+        };
+
+        window.addEventListener('approve-cloud', onApprove);
+        window.addEventListener('reject-cloud', onReject);
+        return () => {
+            window.removeEventListener('approve-cloud', onApprove);
+            window.removeEventListener('reject-cloud', onReject);
+        };
+    }, [handleCloudProvision]);
+
     const saveChatMessage = async (projectId: string, convoId: string, message: ChatMessage) => {
         try {
             // Firestore doesn't like undefined fields
@@ -129,6 +210,7 @@ export const useChatAI = (
         }
     }, [activeProjectId]);
 
+
     const deleteConversation = useCallback(async (convoId: string) => {
         if (!activeProjectId) return;
         try {
@@ -145,9 +227,14 @@ export const useChatAI = (
         if (abortController) {
             abortController.abort('User cancelled generation');
             setAbortController(null);
-            setIsGenerating(false);
-            showToast('Generación cancelada', 'info');
         }
+        if (statusIntervalRef.current) {
+            clearInterval(statusIntervalRef.current);
+            statusIntervalRef.current = null;
+        }
+        setIsGenerating(false);
+        setStatusMessage("");
+        showToast('Generación cancelada', 'info');
     }, [abortController, showToast]);
 
     const handleGenerate = useCallback(async (userMsg: string, images?: { id: string, url: string, file?: File }[]) => {
@@ -192,7 +279,14 @@ export const useChatAI = (
             return null;
         })) : [];
 
-        const validImages = processedImages.filter(Boolean) as { data: string; mimeType: string }[];
+        const validImages = (processedImages.filter(Boolean) as { data: string; mimeType: string }[]).map((img, idx) => {
+            const ext = img.mimeType.split('/')[1] || 'jpg';
+            const timestamp = Date.now();
+            return {
+                ...img,
+                path: `public/lovable-uploads/img_${timestamp}_${idx}.${ext}`
+            };
+        });
         const startTime = Date.now();
 
         // Auto-ingest images into the project filesystem
@@ -200,11 +294,10 @@ export const useChatAI = (
             console.log("[useChatAI] Auto-ingesting images into project assets...");
             await updateFiles(prevFiles => {
                 const newFiles = { ...prevFiles };
-                validImages.forEach((img, idx) => {
-                    const ext = img.mimeType.split('/')[1] || 'jpg';
-                    const timestamp = Date.now();
-                    const path = `public/assets/uploads/img_${timestamp}_${idx}.${ext}`;
-                    newFiles[path] = img.data; // Store base64 data
+                validImages.forEach((img) => {
+                    // Use a placeholder for the virtual filesystem state to avoid Firestore size limits
+                    // The real data is sent to the AI via apiFiles below.
+                    newFiles[img.path] = "__ASSET_ON_DISK__";
                 });
                 return newFiles;
             });
@@ -215,7 +308,10 @@ export const useChatAI = (
             id: crypto.randomUUID(),
             role: 'user' as const,
             content: userMsg,
-            images: images?.map(img => img.url) // Save URLs for UI
+            // Save project paths instead of blob URLs for UI persistence
+            images: validImages.length > 0
+                ? validImages.map(img => `/${img.path.replace('public/', '')}`)
+                : images?.map(img => img.url)
         };
         await saveChatMessage(activeProjectId, convoId, userChatMessage);
 
@@ -240,11 +336,8 @@ export const useChatAI = (
             // Prepare current files with the newly ingested images for the AI call
             let apiFiles = { ...files };
             if (validImages.length > 0) {
-                validImages.forEach((img, idx) => {
-                    const ext = img.mimeType.split('/')[1] || 'jpg';
-                    const timestamp = Date.now();
-                    const path = `public/assets/uploads/img_${timestamp}_${idx}.${ext}`;
-                    apiFiles[path] = img.data;
+                validImages.forEach((img) => {
+                    apiFiles[img.path] = img.data;
                 });
             }
 
@@ -258,42 +351,69 @@ export const useChatAI = (
                 setStatusMessage("Utilizando Gemini 1.5 Pro para estructuración premium...");
             }
 
-            // Add status cycle for multi-agent
-            let statusInterval: NodeJS.Timeout | null = null;
-            if (modelToUse === 'Multipass Agentic (Vertex)') {
-                let step = 0;
-                const steps = [
-                    "Vertex AI: Arquitecto planificando estructura...",
-                    "Vertex AI: Programador generando código reactivo...",
-                    "Vertex AI: Pulidor visual aplicando animaciones y estilos premium...",
-                    "Vertex AI: Finalizando ensamblaje del proyecto..."
-                ];
-                statusInterval = setInterval(() => {
-                    if (step < steps.length - 1) {
-                        step++;
-                        setStatusMessage(steps[step]);
-                    }
-                }, 8000);
+            // Sequential Status Cycle
+            if (statusIntervalRef.current) clearInterval(statusIntervalRef.current);
+            const constructionSteps = [
+                "Analizando arquitectura del proyecto...",
+                "Buscando dependencias y componentes...",
+                "Estructurando código base (Arquitecto)...",
+                "Diseñadora de UI: Creando interfaz premium...",
+                "Diseñadora de UI: Aplicando animaciones y efectos...",
+                "Diseñadora de UI: Optimizando visuales y assets...",
+                "Validando coherencia final del diseño...",
+                "Ensamblando proyecto final..."
+            ];
+
+            let step = 0;
+            setStatusMessage(constructionSteps[0]);
+
+            statusIntervalRef.current = setInterval(() => {
+                step = (step + 1) % constructionSteps.length;
+                setStatusMessage(constructionSteps[step]);
+            }, 5000);
+
+            let res;
+            let attempts = 0;
+            const maxClientAttempts = 2;
+
+            while (attempts < maxClientAttempts) {
+                try {
+                    attempts++;
+                    res = await fetch('/api/web-builder/ai', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            messages: [...messages, userChatMessage].map(m => {
+                                const payload: any = { role: m.role, content: m.content };
+                                if (m.id === userChatMessage.id && validImages.length > 0) {
+                                    payload.images = validImages;
+                                }
+                                return payload;
+                            }),
+                            currentFiles: apiFiles,
+                            model: attempts === 1 ? modelToUse : "Gemini 2.0 Flash",
+                            projectId: activeProjectId,
+                            supabaseConfig
+                        }),
+                        signal: controller.signal
+                    });
+
+                    if (res.ok) break;
+                    else throw new Error(`HTTP Error ${res.status}`);
+                } catch (e: any) {
+                    if (e.name === 'AbortError') throw e;
+                    if (attempts >= maxClientAttempts) throw e;
+                    console.warn(`[useChatAI] Attempt ${attempts} failed. Retrying with Flash...`, e);
+                    setStatusMessage("Reintentando con modelo de respaldo (Resiliencia Phase 3)...");
+                    await new Promise(r => setTimeout(r, 1000));
+                }
             }
 
-            const res = await fetch('/api/web-builder/ai', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    messages: [...messages, userChatMessage].map(m => {
-                        const payload: any = { role: m.role, content: m.content };
-                        if (m.id === userChatMessage.id && validImages.length > 0) {
-                            payload.images = validImages;
-                        }
-                        return payload;
-                    }),
-                    currentFiles: apiFiles,
-                    model: modelToUse
-                }),
-                signal: controller.signal
-            });
-
-            if (statusInterval) clearInterval(statusInterval);
+            if (statusIntervalRef.current) {
+                clearInterval(statusIntervalRef.current);
+                statusIntervalRef.current = null;
+            }
+            if (!res) throw new Error("No response from AI API after retries");
 
             const data: AIResponse = await res.json();
             const endTime = Date.now();
@@ -335,8 +455,8 @@ export const useChatAI = (
                 generatedSteps.push(
                     { id: '1', label: 'Análisis de diferencias (Diffing)', status: 'done', type: 'laboral' },
                     { id: '2', label: 'Aplicar parches quirúrgicos', status: 'done', type: 'laboral' },
-                    { id: '3', label: 'Ensamblar archivos modificados', status: 'current', type: 'laboral' },
-                    { id: '4', label: 'Sincronizar visor y editor', status: 'pending', type: 'proximo' }
+                    { id: '3', label: 'Ensamblar archivos modificados', status: 'done', type: 'laboral' },
+                    { id: '4', label: 'Sincronizar visor y editor', status: 'done', type: 'laboral' }
                 );
             } else {
                 generatedSteps.push(
@@ -382,7 +502,8 @@ export const useChatAI = (
                     content: finalData.content || `He preparado un plan para "${finalData.plan.summary}".`,
                     plan: finalData.plan,
                     thinkingTime,
-                    steps: finalSteps
+                    steps: finalSteps,
+                    showCloudSetup: finalData.showCloudSetup
                 };
             }
             else if (finalData.type === 'code_update' && finalData.files) {
@@ -390,9 +511,9 @@ export const useChatAI = (
                     id: crypto.randomUUID(),
                     role: 'ai' as const,
                     content: finalData.content || "Mejoras aplicadas correctamente.",
-                    checklist: finalData.files.map(f => ({ label: `Actualizado ${f.path}`, completed: true })),
                     thinkingTime,
-                    steps: finalSteps
+                    steps: finalSteps,
+                    showCloudSetup: finalData.showCloudSetup
                 };
             }
             else {
@@ -401,7 +522,9 @@ export const useChatAI = (
                     role: 'ai' as const,
                     content: finalData.content || "",
                     thinkingTime,
-                    steps: finalSteps
+                    steps: finalSteps,
+                    showCloudSetup: finalData.showCloudSetup,
+                    supabaseConfig: finalData.supabaseConfig
                 };
             }
 
@@ -436,8 +559,26 @@ export const useChatAI = (
             setIsGenerating(false);
             setStatusMessage("");
             setAbortController(null);
+            if (statusIntervalRef.current) {
+                clearInterval(statusIntervalRef.current);
+                statusIntervalRef.current = null;
+            }
+            setAbortController(null);
         }
     }, [activeProjectId, activeConversationId, messages, files, selectedModel, updateFiles, setActiveFile, showToast, conversations]);
+
+    const approvePlan = useCallback(async (msgId: string) => {
+        if (!activeProjectId || !activeConversationId || !msgId) return;
+        try {
+            const msgRef = doc(db, "web-projects", activeProjectId, "conversations", activeConversationId, "messages", msgId);
+            await setDoc(msgRef, { approved: true }, { merge: true });
+
+            // Trigger the AI to proceed
+            handleGenerate("Plan aprobado. Procede a generar el código.");
+        } catch (e) {
+            console.error("Failed to approve plan in Firestore", e);
+        }
+    }, [activeProjectId, activeConversationId, handleGenerate]);
 
     return {
         isGenerating,
@@ -448,7 +589,8 @@ export const useChatAI = (
         setActiveConversationId,
         handleGenerate,
         handleNewConversation,
+        approvePlan,
         deleteConversation,
         cancelGeneration
     };
-};
+}
