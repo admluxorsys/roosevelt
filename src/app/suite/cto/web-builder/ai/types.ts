@@ -112,4 +112,5 @@ export interface IndustryPattern {
     commonSections: SectionLayout[];
     iconSuggestions: string[];
     typography: Typography;
+    behaviors?: string[];
 }

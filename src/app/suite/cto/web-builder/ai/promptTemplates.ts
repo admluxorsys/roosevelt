@@ -6,17 +6,17 @@ export { detectIndustry, generateDesignSpec };
  */
 
 export interface PromptContext {
-    userRequest: string;
-    industry?: string;
-    pageType?: string;
-    designSpec?: any;
+  userRequest: string;
+  industry?: string;
+  pageType?: string;
+  designSpec?: any;
 }
 
 /**
  * Stage 1: Research & Analysis Prompt
  */
 export function generateResearchPrompt(context: PromptContext): string {
-    return `You are an expert web designer analyzing a project request.
+  return `You are an expert web designer analyzing a project request.
 
 USER REQUEST: "${context.userRequest}"
 
@@ -38,10 +38,10 @@ Be specific and professional. Think about modern web design trends for this indu
  * Stage 2: Design Specification Prompt
  */
 export function generateDesignPrompt(context: PromptContext): string {
-    const industry = detectIndustry(context.userRequest);
-    const designSpec = generateDesignSpec(industry, context.pageType || 'landing');
+  const industry = detectIndustry(context.userRequest);
+  const designSpec = generateDesignSpec(industry, context.pageType || 'landing');
 
-    return `You are an expert UI/UX designer creating a comprehensive design system.
+  return `You are an expert UI/UX designer creating a comprehensive design system.
 
 PROJECT CONTEXT:
 - Industry: ${industry.name}
@@ -69,10 +69,10 @@ Respond with a detailed design spec in JSON format.`;
  * Stage 3: Code Generation Prompt (Enhanced)
  */
 export function generateCodePrompt(context: PromptContext): string {
-    const industry = detectIndustry(context.userRequest);
-    const designSpec = generateDesignSpec(industry, context.pageType || 'landing');
+  const industry = detectIndustry(context.userRequest);
+  const designSpec = generateDesignSpec(industry, context.pageType || 'landing');
 
-    return `You are an expert React developer creating a modern, professional web application.
+  return `You are an expert React developer creating a modern, professional web application.
 
 PROJECT REQUIREMENTS:
 ${context.userRequest}
@@ -142,7 +142,20 @@ CRITICAL: Generate COMPLETE, PRODUCTION-READY code. Every component should be:
 - Have smooth animations
 - Use the specified color palette
 
-Generate ALL necessary files:
+🚨 CRITICAL RULES (ZERO ERRORS ALLOWED) 🚨
+1. ATOMIC PERFECTION: Provide ZERO "stubs" or "placeholders". All functions, interfaces, and UI code must be 100% complete and fully implemented.
+2. NO HALLUCINATIONS: Do NOT use imaginary components or libraries. If you need a UI element (like a Dialog or Dropdown), build it inline using raw Tailwind CSS and standard React state. Do NOT import from "@/components/ui/xyz" unless you write that exact file.
+3. ABSOLUTE RESILIENCE (ANTI-UNDEFINED):
+   - ALWAYS use optional chaining (?.) for all data access (e.g., \`user?.profile?.name\`).
+   - ALWAYS use fallback arrays (|| []) when mapping or filtering (e.g., \`(items || []).map(...)\`).
+   - ALWAYS initialize state with valid defaults (e.g., \`useState([])\` instead of \`useState()\`).
+   - For Zustand stores, always define nested defaults to prevent null reference errors on boot.
+4. ROUTING INTEGRITY & LINKAGE:
+   - Ensure EXACT path matching between \`<Route path="...">\` in App.tsx and all \`<Link to="...">\` usages in navigation menus or buttons.
+   - App.tsx MUST import every single page/component it references. No missing imports.
+5. LUCIDE ICONS: Use only standard lucide-react icons.
+
+Generate ALL necessary files in a logical sequence (Structure -> Pages -> Logic):
 1. src/App.tsx - Main app component with routing
 2. src/components/sections/Hero.tsx - Hero section with gradient background
 3. src/components/sections/Features.tsx - Features grid with icons
@@ -168,7 +181,7 @@ Make it BEAUTIFUL, MODERN, and PROFESSIONAL. This should look like a premium web
  * Stage 4: Enhancement Prompt
  */
 export function generateEnhancementPrompt(files: Record<string, string>): string {
-    return `You are a senior web developer reviewing code for quality and aesthetics.
+  return `You are a senior web developer reviewing code for quality and aesthetics.
 
 REVIEW THE FOLLOWING CODE:
 ${JSON.stringify(files, null, 2)}
@@ -208,45 +221,45 @@ Only include files that need changes. Make the design MORE visually appealing.`;
  * Main orchestration function for multi-stage generation
  */
 export async function generateProjectWithAI(
-    userRequest: string,
-    aiFunction: (prompt: string) => Promise<string>
+  userRequest: string,
+  aiFunction: (prompt: string) => Promise<string>
 ): Promise<Record<string, string>> {
 
-    // Stage 1: Research & Analysis
-    const researchPrompt = generateResearchPrompt({ userRequest });
-    const researchResponse = await aiFunction(researchPrompt);
-    const analysis = JSON.parse(researchResponse);
+  // Stage 1: Research & Analysis
+  const researchPrompt = generateResearchPrompt({ userRequest });
+  const researchResponse = await aiFunction(researchPrompt);
+  const analysis = JSON.parse(researchResponse);
 
-    // Stage 2: Design Specification
-    const designPrompt = generateDesignPrompt({
-        userRequest,
-        industry: analysis.industry,
-        pageType: analysis.pageType,
-    });
-    const designResponse = await aiFunction(designPrompt);
-    const designSpec = JSON.parse(designResponse);
+  // Stage 2: Design Specification
+  const designPrompt = generateDesignPrompt({
+    userRequest,
+    industry: analysis.industry,
+    pageType: analysis.pageType,
+  });
+  const designResponse = await aiFunction(designPrompt);
+  const designSpec = JSON.parse(designResponse);
 
-    // Stage 3: Code Generation
-    const codePrompt = generateCodePrompt({
-        userRequest,
-        industry: analysis.industry,
-        pageType: analysis.pageType,
-        designSpec,
-    });
-    const codeResponse = await aiFunction(codePrompt);
-    const filesArray = JSON.parse(codeResponse);
+  // Stage 3: Code Generation
+  const codePrompt = generateCodePrompt({
+    userRequest,
+    industry: analysis.industry,
+    pageType: analysis.pageType,
+    designSpec,
+  });
+  const codeResponse = await aiFunction(codePrompt);
+  const filesArray = JSON.parse(codeResponse);
 
-    // Convert array to object
-    const files: Record<string, string> = {};
-    filesArray.forEach((file: any) => {
-        files[file.path] = file.content;
-    });
+  // Convert array to object
+  const files: Record<string, string> = {};
+  filesArray.forEach((file: any) => {
+    files[file.path] = file.content;
+  });
 
-    // Stage 4: Enhancement (optional, can be skipped for speed)
-    // const enhancementPrompt = generateEnhancementPrompt(files);
-    // const enhancementResponse = await aiFunction(enhancementPrompt);
-    // const enhancements = JSON.parse(enhancementResponse);
-    // Apply enhancements...
+  // Stage 4: Enhancement (optional, can be skipped for speed)
+  // const enhancementPrompt = generateEnhancementPrompt(files);
+  // const enhancementResponse = await aiFunction(enhancementPrompt);
+  // const enhancements = JSON.parse(enhancementResponse);
+  // Apply enhancements...
 
-    return files;
+  return files;
 }

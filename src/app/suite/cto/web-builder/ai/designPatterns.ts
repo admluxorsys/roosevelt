@@ -89,6 +89,12 @@ export const industryPatterns: Record<string, IndustryPattern> = {
         commonSections: [heroSection, featuresSection, ctaSection, footerSection],
         iconSuggestions: ['Rocket', 'Zap', 'Shield', 'Code', 'Cloud', 'Cpu', 'Database', 'Lock'],
         typography: modernTypography,
+        behaviors: [
+            'Implement linear-gradient backgrounds that animate on scroll',
+            'Add "active" states to navigation links using Framer Motion',
+            'Connect the CTA button to a lead-capture modal with validation',
+            'Use skeleton loaders for feature cards during initial mount'
+        ]
     },
 
     ecommerce: {
@@ -98,11 +104,18 @@ export const industryPatterns: Record<string, IndustryPattern> = {
         commonSections: [
             heroSection,
             { name: 'Products', type: 'gallery', columns: 4, spacing: 'py-16' },
+            { name: 'CartPreview', type: 'features', spacing: 'py-12' },
             { name: 'Testimonials', type: 'testimonials', spacing: 'py-16' },
             footerSection,
         ],
         iconSuggestions: ['ShoppingCart', 'Package', 'Truck', 'CreditCard', 'Star', 'Heart', 'Tag'],
         typography: modernTypography,
+        behaviors: [
+            'Maintain a local "cart" state using React context or Zustand',
+            'Add "Add to Cart" functionality with success toasts',
+            'Implement product filtering using URL search params',
+            'Use heavy shadows and hover scales for product cards'
+        ]
     },
 
     portfolio: {
@@ -113,10 +126,17 @@ export const industryPatterns: Record<string, IndustryPattern> = {
             { name: 'Hero', type: 'hero', spacing: 'py-24 md:py-40' },
             { name: 'Work', type: 'gallery', columns: 3, spacing: 'py-20' },
             { name: 'About', type: 'features', spacing: 'py-16' },
+            { name: 'ContactForm', type: 'cta', spacing: 'py-20' },
             footerSection,
         ],
         iconSuggestions: ['Palette', 'Camera', 'Pen', 'Layers', 'Grid', 'Image', 'Award'],
         typography: modernTypography,
+        behaviors: [
+            'Use custom cursor effects with Framer Motion',
+            'Implement a robust contact form with email validation and success message',
+            'Add smooth-scroll behavior for section navigation',
+            'Create a lightbox effect for gallery images'
+        ]
     },
 
     landing: {
@@ -126,13 +146,19 @@ export const industryPatterns: Record<string, IndustryPattern> = {
         commonSections: [
             heroSection,
             featuresSection,
-            { name: 'Pricing', type: 'pricing', columns: 3, spacing: 'py-16' },
+            { name: 'PricingTable', type: 'pricing', columns: 3, spacing: 'py-16' },
             { name: 'Testimonials', type: 'testimonials', spacing: 'py-16' },
             ctaSection,
             footerSection,
         ],
         iconSuggestions: ['TrendingUp', 'Users', 'CheckCircle', 'Star', 'Award', 'Target'],
         typography: modernTypography,
+        behaviors: [
+            'Implement a sticky header that changes background on scroll',
+            'Add a discount countdown timer with local state',
+            'Ensure all CTAs trigger a consistent action (scroll or modal)',
+            'Use staggered entrance animations for feature lists'
+        ]
     },
 
     dashboard: {
@@ -140,11 +166,18 @@ export const industryPatterns: Record<string, IndustryPattern> = {
         keywords: ['dashboard', 'admin', 'panel', 'analytics', 'management'],
         colorSchemes: [techColorPalette],
         commonSections: [
-            { name: 'Stats', type: 'features', columns: 4, spacing: 'py-8' },
-            { name: 'Charts', type: 'features', columns: 2, spacing: 'py-8' },
+            { name: 'StatsGrid', type: 'features', columns: 4, spacing: 'py-8' },
+            { name: 'AnalyticsCharts', type: 'features', columns: 2, spacing: 'py-8' },
+            { name: 'DataTable', type: 'features', columns: 1, spacing: 'py-4' },
         ],
         iconSuggestions: ['BarChart', 'PieChart', 'Activity', 'Users', 'Settings', 'Bell', 'Search'],
         typography: modernTypography,
+        behaviors: [
+            'Implement sorting and pagination for the data table',
+            'Use real-time chart animations with framer-motion',
+            'Add search functionality that filters items in memory',
+            'Implement a collapsable sidebar with persistent state'
+        ]
     },
 };
 
@@ -223,5 +256,6 @@ export function generateDesignSpec(industry: IndustryPattern, pageType: string):
             },
             mobileFirst: true,
         },
+        behaviors: industry.behaviors,
     };
 }

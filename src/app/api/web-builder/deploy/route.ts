@@ -1,118 +1,45 @@
-import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
+import { NextRequest, NextResponse } from 'next/server';
+import { FirebaseHostingService } from '@/lib/hosting';
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
     try {
-        const cookieStore = await cookies();
-        const githubToken = cookieStore.get('github_token')?.value;
+        const { siteId, files } = await req.json();
 
-        if (!githubToken) {
-            return NextResponse.json({ error: 'Not authenticated with GitHub' }, { status: 401 });
-        }
-
-        const { projectId, repoUrl, projectName } = await req.json();
-
-        if (!projectId || !repoUrl) {
-            return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
-        }
-
-        const vercelToken = process.env.VERCEL_TOKEN;
-
-        if (!vercelToken) {
+        if (!siteId || !files || typeof files !== 'object') {
             return NextResponse.json({
-                error: 'Vercel token not configured. Add VERCEL_TOKEN to your .env.local file.'
-            }, { status: 500 });
+                error: 'Faltan parámetros: siteId y files son requeridos.'
+            }, { status: 400 });
         }
 
-        // Extract repo owner and name from GitHub URL
-        // Example: https://github.com/user/repo -> user/repo
-        const repoPath = repoUrl.replace('https://github.com/', '');
+        console.log(`[Deploy API] Iniciando despliegue para el sitio: ${siteId}`);
+        const hostingService = new FirebaseHostingService();
 
-        // Create deployment on Vercel
-        const deploymentResponse = await fetch('https://api.vercel.com/v13/deployments', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${vercelToken}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                name: `web-builder-${projectId}`,
-                gitSource: {
-                    type: 'github',
-                    repo: repoPath,
-                    ref: 'main'
-                },
-                projectSettings: {
-                    framework: 'vite',
-                    buildCommand: 'npm run build',
-                    outputDirectory: 'dist',
-                    installCommand: 'npm install'
-                }
-            })
-        });
+        // 1. Crear el sitio (si no existe)
+        await hostingService.createSite(siteId);
 
-        if (!deploymentResponse.ok) {
-            const errorData = await deploymentResponse.json();
-            console.error('[Deploy] Vercel API error:', errorData);
-            throw new Error(errorData.error?.message || 'Deployment failed');
-        }
+        // 2. Desplegar los archivos
+        const result = await hostingService.deployFiles(siteId, files);
 
-        const deployment = await deploymentResponse.json();
-
-        // Get deployment URL
-        const deploymentUrl = `https://${deployment.url}`;
+        console.log(`[Deploy API] Despliegue exitoso: ${result.url}`);
 
         return NextResponse.json({
             success: true,
-            url: deploymentUrl,
-            deploymentId: deployment.id,
-            status: deployment.readyState
+            siteId,
+            url: result.url,
+            version: result.version
         });
 
     } catch (error: any) {
-        console.error('[Deploy] Error:', error);
-        return NextResponse.json({
-            error: error.message || 'Deployment failed'
-        }, { status: 500 });
-    }
-}
+        console.error('[Deploy API] Error durante el despliegue:', error);
 
-// Get deployment status
-export async function GET(req: Request) {
-    try {
-        const { searchParams } = new URL(req.url);
-        const deploymentId = searchParams.get('deploymentId');
-
-        if (!deploymentId) {
-            return NextResponse.json({ error: 'Deployment ID required' }, { status: 400 });
-        }
-
-        const vercelToken = process.env.VERCEL_TOKEN;
-
-        if (!vercelToken) {
-            return NextResponse.json({ error: 'Vercel token not configured' }, { status: 500 });
-        }
-
-        const response = await fetch(`https://api.vercel.com/v13/deployments/${deploymentId}`, {
-            headers: {
-                'Authorization': `Bearer ${vercelToken}`
-            }
-        });
-
-        if (!response.ok) {
-            throw new Error('Failed to fetch deployment status');
-        }
-
-        const deployment = await response.json();
+        // Manejo de errores específicos de la API de Google
+        const errorMessage = error.response?.data?.error?.message || error.message;
+        const statusCode = error.response?.status || 500;
 
         return NextResponse.json({
-            status: deployment.readyState,
-            url: `https://${deployment.url}`,
-            createdAt: deployment.createdAt
-        });
-
-    } catch (error: any) {
-        console.error('[Deploy Status] Error:', error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+            success: false,
+            error: 'Falló el despliegue programático.',
+            details: errorMessage
+        }, { status: statusCode });
     }
 }
