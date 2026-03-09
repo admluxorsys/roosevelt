@@ -111,22 +111,30 @@ export const ChatInput = ({
     };
 
     return (
-        <div className="p-4 bg-[#09090b] relative z-20 border-t border-[#1a1a1a]" ref={containerRef}>
+        <div className="p-3 bg-[#09090b] relative z-20 border-t border-[#1a1a1a]" ref={containerRef}>
             <div className={`flex flex-col bg-[#1e1e1e] rounded-2xl border border-[#333] focus-within:border-[#444] transition-all duration-300 shadow-lg ${!projectOpen ? 'opacity-40 grayscale blur-[0.5px] pointer-events-none' : ''
                 }`}>
 
                 {/* Text Area - Pure content, grows upwards */}
-                <textarea
-                    ref={inputRef}
-                    rows={1}
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={onKeyDown}
-                    onPaste={handlePaste}
-                    placeholder="Describe los cambios que necesitas..."
-                    className="w-full bg-transparent border-none focus:ring-0 outline-none text-sm text-[#d1d1d1] resize-none p-4 custom-scrollbar placeholder:text-[#525252]"
-                    disabled={isGenerating || !projectOpen}
-                />
+                <div className="relative">
+                    <textarea
+                        ref={inputRef}
+                        rows={1}
+                        value={input}
+                        onChange={(e) => setInput(e.target.value)}
+                        onKeyDown={onKeyDown}
+                        onPaste={handlePaste}
+                        placeholder="Describe los cambios que necesitas..."
+                        className="w-full bg-transparent border-none focus:ring-0 outline-none text-sm text-[#d1d1d1] resize-none p-3 custom-scrollbar placeholder:text-[#525252] min-h-[44px]"
+                        disabled={isGenerating || !projectOpen}
+                    />
+
+                    {/* Hard Lock Overlay */}
+                    {isGenerating && (
+                        <div className="absolute inset-0 bg-[#1e1e1e]/20 backdrop-blur-[1px] z-50 cursor-not-allowed flex items-center justify-center rounded-t-2xl">
+                        </div>
+                    )}
+                </div>
 
                 {/* Image Previews */}
                 {selectedImages.length > 0 && (
@@ -160,7 +168,7 @@ export const ChatInput = ({
 
                 {/* Fixed Control Bar - At the bottom, never covered by text */}
                 <div className="flex items-center justify-between px-3 py-2 bg-[#161618] border-t border-[#2a2a2c] relative">
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1">
                         <input
                             type="file"
                             ref={fileInputRef}
@@ -182,11 +190,11 @@ export const ChatInput = ({
                         <div className="relative">
                             <button
                                 onClick={toggleModelDropdown}
-                                className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold text-[#a1a1aa] hover:bg-white/5 rounded-lg transition-all uppercase tracking-tight"
+                                className="flex items-center gap-1 pr-1.5 py-1 text-[9px] font-bold text-[#a1a1aa] hover:bg-white/5 rounded-lg transition-all uppercase tracking-tight"
                             >
-                                <Sparkles className="w-3 h-3 text-blue-400" />
-                                {selectedModel}
-                                <ChevronDown className="w-3 h-3 opacity-30" />
+                                <Sparkles className="w-2.5 h-2.5 text-blue-400" />
+                                {selectedModel.split(' ')[0]}
+                                <ChevronDown className="w-2.5 h-2.5 opacity-30" />
                             </button>
                             {showModelDropdown && (
                                 <div className="absolute bottom-full left-0 mb-3 w-64 bg-[#18181b] border border-[#27272a] rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] py-1 z-[100] animate-in fade-in slide-in-from-bottom-2">
@@ -221,10 +229,10 @@ export const ChatInput = ({
                         <div className="relative">
                             <button
                                 onClick={toggleReasoningDropdown}
-                                className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold text-[#a1a1aa] hover:bg-white/5 rounded-lg transition-all uppercase tracking-tight"
+                                className="flex items-center gap-1 px-1.5 py-1 text-[9px] font-bold text-[#a1a1aa] hover:bg-white/5 rounded-lg transition-all uppercase tracking-tight"
                             >
                                 {reasoningLevel}
-                                <ChevronDown className="w-3 h-3 opacity-30" />
+                                <ChevronDown className="w-2.5 h-2.5 opacity-30" />
                             </button>
                             {showReasoningDropdown && (
                                 <div className="absolute bottom-full left-0 mb-3 w-32 bg-[#18181b] border border-[#27272a] rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] py-1 z-[100] animate-in fade-in slide-in-from-bottom-2">

@@ -3,13 +3,15 @@ import { ChatMessage, ChatStep } from "../types";
 import { Check, CheckCircle2, ChevronRight, Loader2, Sparkles } from "lucide-react";
 import { PlanCard } from "./PlanCard";
 import { ReasoningBlock } from "./ReasoningBlock";
+import { CloudSetupCard } from "./CloudSetupCard";
 
 interface ChatMessageListProps {
     messages: ChatMessage[];
     isGenerating: boolean;
+    statusMessage?: string;
 }
 
-export const ChatMessageList = ({ messages, isGenerating }: ChatMessageListProps) => {
+export const ChatMessageList = ({ messages, isGenerating, statusMessage }: ChatMessageListProps) => {
     const scrollRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -36,9 +38,9 @@ export const ChatMessageList = ({ messages, isGenerating }: ChatMessageListProps
             ) : (
                 messages.map((msg, idx) => (
                     <div key={msg.id} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
-                        <div className={`max-w-[100%] rounded-2xl p-3 shadow-sm ${msg.role === 'user'
-                            ? 'bg-blue-600 text-white rounded-tr-none'
-                            : 'bg-[#18181b] border border-[#27272a] text-gray-200 rounded-tl-none'
+                        <div className={`max-w-[100%] rounded-2xl ${msg.role === 'user'
+                            ? 'bg-blue-600 text-white rounded-tr-none p-3 shadow-sm'
+                            : 'bg-transparent text-gray-200'
                             }`}>
 
                             {/* Reasoning Block (Dyad/Adorable port) */}
@@ -48,12 +50,18 @@ export const ChatMessageList = ({ messages, isGenerating }: ChatMessageListProps
                                     steps={msg.steps}
                                     thinkingTime={msg.thinkingTime}
                                     isGenerating={isGenerating && idx === messages.length - 1}
+                                    msgId={msg.id}
+                                    approved={msg.approved}
                                 />
                             )}
 
                             {/* Message Content */}
                             <div className={msg.role === 'ai' && msg.steps?.some(s => s.status === 'current') ? 'opacity-50 blur-[0.5px]' : ''}>
                                 {(() => {
+                                    // If there is a plan that is NOT approved, we skip the content here 
+                                    // because the PlanCard will show the summary in a premium box.
+                                    if (msg.plan && !msg.approved) return null;
+
                                     const cleaned = msg.role === 'ai' ? cleanContent(msg.content) : msg.content.trim();
                                     if (cleaned === "" && msg.images && msg.images.length > 0) {
                                         return null;
@@ -80,7 +88,7 @@ export const ChatMessageList = ({ messages, isGenerating }: ChatMessageListProps
                                 )}
 
                                 {/* PLAN CARD (New In-Chat Approval) */}
-                                {msg.plan && (
+                                {msg.plan && !msg.approved && (
                                     <PlanCard
                                         plan={msg.plan}
                                         onApprove={() => window.dispatchEvent(new CustomEvent('approve-plan', { detail: { msgId: msg.id } }))}
@@ -88,11 +96,19 @@ export const ChatMessageList = ({ messages, isGenerating }: ChatMessageListProps
                                     />
                                 )}
 
+                                {/* CLOUD SETUP CARD */}
+                                {msg.showCloudSetup && (
+                                    <CloudSetupCard
+                                        onApprove={(config) => window.dispatchEvent(new CustomEvent('approve-cloud', { detail: { msgId: msg.id, config } }))}
+                                        onCancel={() => window.dispatchEvent(new CustomEvent('reject-cloud', { detail: { msgId: msg.id } }))}
+                                    />
+                                )}
+
                             </div>
 
                         </div>
                         <span className="text-[9px] text-gray-600 mt-1 mx-1 font-mono uppercase tracking-tighter">
-                            {msg.role === 'user' ? 'T├║' : 'AI Assistant'}
+                            {msg.role === 'user' ? 'Tú' : 'AI Assistant'}
                         </span>
                     </div>
                 ))
@@ -100,7 +116,9 @@ export const ChatMessageList = ({ messages, isGenerating }: ChatMessageListProps
             {isGenerating && messages[messages.length - 1]?.role !== 'ai' && (
                 <div className="flex items-center gap-3 text-gray-500 animate-pulse px-4">
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    <span className="text-[10px] font-medium uppercase tracking-widest">Generando...</span>
+                    <span className="text-[10px] font-medium uppercase tracking-widest">
+                        {statusMessage || "Generando..."}
+                    </span>
                 </div>
             )}
         </div>

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { RefreshCw, Loader2, Terminal as TerminalIcon } from 'lucide-react';
+import { RefreshCw, Loader2, Terminal as TerminalIcon, ChevronRight, Sparkles, X as XIcon } from 'lucide-react';
 import { TerminalPanel, LogEntry } from './TerminalPanel';
 
 interface PreviewAreaProps {
@@ -11,17 +11,21 @@ interface PreviewAreaProps {
     setShowTerminal?: (show: boolean) => void;
     refreshSignal?: number;
     onLoadingChange?: (loading: boolean) => void;
+    handleGenerate?: (msg: string) => void;
 }
 
 export const PreviewArea = ({
     files, activeFile, setRuntimeErrors,
-    showTerminal, setShowTerminal, refreshSignal, onLoadingChange
+    showTerminal, setShowTerminal, refreshSignal, onLoadingChange,
+    handleGenerate
 }: PreviewAreaProps) => {
     const iframeRef = useRef<HTMLIFrameElement>(null);
     const [loading, setLoading] = useState(true);
     const [previewHTML, setPreviewHTML] = useState<string>('');
     const [error, setError] = useState<string>('');
     const [logs, setLogs] = useState<LogEntry[]>([]);
+    const [runtimeError, setRuntimeError] = useState<{ message: string; stack: string } | null>(null);
+    const [errorCollapsed, setErrorCollapsed] = useState(true);
 
     useEffect(() => {
         onLoadingChange?.(loading);
@@ -40,16 +44,23 @@ export const PreviewArea = ({
         addLog("Detectando dependencias y assets virtuales...", 'debug');
 
         try {
-            const response = await fetch('/api/web-builder/preview', {
+            const response = await fetch('/api/web-builder/preview-v4', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ files })
             });
 
             if (!response.ok) {
-                const errorData = await response.json();
-                addLog(`Error en el servidor: ${errorData.error}`, 'error');
-                throw new Error(errorData.error || 'Preview generation failed');
+                let errorMsg = 'Preview generation failed';
+                try {
+                    const errorData = await response.json();
+                    errorMsg = errorData.error || errorMsg;
+                } catch (e) {
+                    const text = await response.text();
+                    errorMsg = `Server Error (${response.status}): ${text.substring(0, 50)}...`;
+                }
+                addLog(`Error en el servidor: ${errorMsg}`, 'error');
+                throw new Error(errorMsg);
             }
 
             addLog("Babel transpilation iniciada en el cliente...", 'info');
@@ -94,8 +105,35 @@ export const PreviewArea = ({
         }
     }, [previewHTML]);
 
+    // Listen for console logs and runtime errors from the iframe
+    useEffect(() => {
+        const handleIframeMessage = (event: MessageEvent) => {
+            if (event.source !== iframeRef.current?.contentWindow) return;
+
+            if (event.data?.type === 'console-log') {
+                const { level, args } = event.data;
+                const message = args.join(' ');
+                const logType: LogEntry['type'] =
+                    level === 'error' ? 'error' : level === 'warn' ? 'warn' : level === 'debug' ? 'debug' : 'info';
+                addLog(`[${level.toUpperCase()}] ${message}`, logType);
+            }
+
+            if (event.data?.type === 'runtime-error') {
+                const { message, stack, file } = event.data;
+                setRuntimeError({ message, stack: stack || '' });
+                addLog(`Runtime Error [${file || 'unknown'}]: ${message}`, 'error');
+                if (setRuntimeErrors) {
+                    setRuntimeErrors(prev => ({ ...prev, [file || '__runtime__']: message }));
+                }
+            }
+        };
+
+        window.addEventListener('message', handleIframeMessage);
+        return () => window.removeEventListener('message', handleIframeMessage);
+    }, []);
+
     return (
-        <div className="w-full h-full bg-[#050505] relative overflow-hidden flex flex-col">
+        <div className="w-full h-full bg-white relative overflow-hidden flex flex-col">
             <div className="flex-1 relative overflow-hidden">
                 {/* Loading Overlay */}
                 {loading && (
@@ -112,6 +150,7 @@ export const PreviewArea = ({
                         </div>
                     </div>
                 )}
+
 
                 {/* Error Display */}
                 {error && !loading && (

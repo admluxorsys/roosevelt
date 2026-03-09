@@ -29,12 +29,26 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
                 {this.state.error?.message || "Unknown Error"}
               </p>
             </div>
-            <button 
-              onClick={() => window.location.reload()}
-              className="mt-6 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors text-sm font-medium"
-            >
-              Reload Preview
-            </button>
+            <div className="flex items-center gap-3 mt-6">
+              <button 
+                onClick={() => window.location.reload()}
+                className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-white rounded-lg transition-colors text-sm font-medium"
+              >
+                Reload Preview
+              </button>
+              <button 
+                onClick={() => {
+                  window.parent.postMessage({ 
+                    type: 'ask-ai-fix', 
+                    error: this.state.error?.message, 
+                    file: 'App' 
+                  }, '*');
+                }}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors text-sm font-medium flex items-center gap-2"
+              >
+                <span>✨</span> Corregir con IA
+              </button>
+            </div>
           </div>
         </div>
       );

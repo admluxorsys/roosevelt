@@ -13,6 +13,7 @@ interface CodeEditorProps {
     expandedFolders: Set<string>;
     setExpandedFolders: React.Dispatch<React.SetStateAction<Set<string>>>;
     runtimeErrors?: Record<string, string>;
+    setRuntimeErrors?: (errs: Record<string, string> | ((prev: Record<string, string>) => Record<string, string>)) => void;
 }
 
 export const CodeEditor = ({
@@ -24,7 +25,8 @@ export const CodeEditor = ({
     setActiveFile,
     expandedFolders,
     setExpandedFolders,
-    runtimeErrors = {}
+    runtimeErrors = {},
+    setRuntimeErrors
 }: CodeEditorProps) => {
     const [openFiles, setOpenFiles] = useState<string[]>([]);
     const [isMaxEditor, setIsMaxEditor] = useState(false);
@@ -168,6 +170,7 @@ export const CodeEditor = ({
                         setActiveFile={setActiveFile}
                         expandedFolders={expandedFolders}
                         setExpandedFolders={setExpandedFolders}
+                        runtimeErrors={runtimeErrors}
                     />
                 </div>
 
@@ -211,17 +214,44 @@ export const CodeEditor = ({
                                     defaultLanguage="typescript"
                                     theme="vs-dark"
                                     value={codeContent}
-                                    onMount={(editor) => { editorRef.current = editor; }}
                                     beforeMount={(monaco: Monaco) => {
-                                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
                                         const ts = (monaco as any).languages?.typescript;
-                                        ts?.typescriptDefaults?.setDiagnosticsOptions({
-                                            noSemanticValidation: true,
-                                            noSyntaxValidation: true,
+                                        ts?.typescriptDefaults?.setCompilerOptions({
+                                            target: monaco.languages.typescript.ScriptTarget.ESNext,
+                                            allowNonTsExtensions: true,
+                                            moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs,
+                                            module: monaco.languages.typescript.ModuleKind.CommonJS,
+                                            noEmit: true,
+                                            typeRoots: ["node_modules/@types"],
+                                            jsx: monaco.languages.typescript.JsxEmit.React,
+                                            allowJs: true,
                                         });
-                                        ts?.javascriptDefaults?.setDiagnosticsOptions({
-                                            noSemanticValidation: true,
-                                            noSyntaxValidation: true,
+                                        ts?.typescriptDefaults?.setDiagnosticsOptions({
+                                            noSemanticValidation: false,
+                                            noSyntaxValidation: false,
+                                        });
+                                    }}
+                                    onMount={(editor, monaco) => {
+                                        editorRef.current = editor;
+
+                                        // Sync editor markers (errors/warnings) to the file tree
+                                        monaco.editor.onDidChangeMarkers(() => {
+                                            const markers = monaco.editor.getModelMarkers({ resource: editor.getModel()?.uri });
+                                            const highestSeverity = markers.reduce((max, m) => Math.max(max, m.severity), 0);
+
+                                            if (highestSeverity >= monaco.MarkerSeverity.Error) {
+                                                const firstError = markers.find(m => m.severity === monaco.MarkerSeverity.Error);
+                                                if (firstError && activeFile && setRuntimeErrors) {
+                                                    setRuntimeErrors(prev => ({ ...prev, [activeFile]: firstError.message }));
+                                                }
+                                            } else if (activeFile && setRuntimeErrors && runtimeErrors[activeFile]) {
+                                                // Clear error if resolved (and it was a code-time error)
+                                                setRuntimeErrors(prev => {
+                                                    const next = { ...prev };
+                                                    delete next[activeFile];
+                                                    return next;
+                                                });
+                                            }
                                         });
                                     }}
                                     onChange={(val) => {
@@ -247,12 +277,12 @@ export const CodeEditor = ({
                     )}
 
                     {/* Footer Info */}
-                    <div className={`h-6 flex items-center px-4 justify-between text-[11px] font-medium transition-colors ${runtimeErrors[activeFile] ? 'bg-red-900/50 text-red-200' : 'bg-[#007acc] text-white'}`}>
+                    <div className={`h-6 flex items-center px-4 justify-between text-[11px] font-medium transition-colors ${(runtimeErrors[activeFile] || runtimeErrors['__runtime__']) ? 'bg-red-900/50 text-red-200' : 'bg-[#007acc] text-white'}`}>
                         <div className="flex items-center gap-4">
-                            {runtimeErrors[activeFile] ? (
+                            {(runtimeErrors[activeFile] || runtimeErrors['__runtime__']) ? (
                                 <span className="font-bold flex items-center gap-1">
                                     <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
-                                    Error: {runtimeErrors[activeFile]}
+                                    Error: {runtimeErrors[activeFile] || runtimeErrors['__runtime__']}
                                 </span>
                             ) : (
                                 <>

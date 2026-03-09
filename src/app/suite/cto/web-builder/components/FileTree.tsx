@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ChevronDown, ChevronRight, Folder, FileCode, FileType, FileJson, Search, FolderOpen } from "lucide-react";
+import { ChevronDown, ChevronRight, Folder, FileCode, FileType, FileJson, Search, FolderOpen, Image as FileImage } from "lucide-react";
 
 interface FileTreeItemProps {
     name: string;
@@ -10,9 +10,11 @@ interface FileTreeItemProps {
     onToggle: () => void;
     onClick: () => void;
     activeFile: string;
+    runtimeErrors?: Record<string, string>;
 }
 
-const FileTreeItem = ({ name, path, isFolder, level, isOpen, onToggle, onClick, activeFile }: FileTreeItemProps) => {
+const FileTreeItem = ({ name, path, isFolder, level, isOpen, onToggle, onClick, activeFile, runtimeErrors = {} }: FileTreeItemProps) => {
+    const hasError = !isFolder && runtimeErrors[path];
     return (
         <div className="relative group/item">
             {/* Nesting lines */}
@@ -49,10 +51,18 @@ const FileTreeItem = ({ name, path, isFolder, level, isOpen, onToggle, onClick, 
                                 name.endsWith('css') ? <FileType className="w-4 h-4 text-[#42a5f5]" /> :
                                     name.endsWith('json') ? <FileJson className="w-4 h-4 text-[#cbcb41]" /> :
                                         name.endsWith('md') ? <FileCode className="w-4 h-4 text-[#e37933]" /> :
-                                            <FileType className="w-4 h-4 text-[#969696]" />}
+                                            name.match(/\.(png|jpg|jpeg|gif|svg|webp)$/i) ? <FileImage className="w-4 h-4 text-[#ce9178]" /> :
+                                                <FileType className="w-4 h-4 text-[#969696]" />}
                     </>
                 )}
                 <span className={`truncate ${isFolder ? 'font-medium text-[#cccccc]' : ''}`}>{name}</span>
+                {hasError && (
+                    <div className="ml-auto pr-1">
+                        <div className="flex items-center justify-center w-4 h-4 rounded-full bg-red-500/20 animate-pulse" title={runtimeErrors[path]}>
+                            <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]" />
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );
@@ -65,9 +75,10 @@ interface FileTreeProps {
     setActiveFile: (path: string) => void;
     expandedFolders: Set<string>;
     setExpandedFolders: React.Dispatch<React.SetStateAction<Set<string>>>;
+    runtimeErrors?: Record<string, string>;
 }
 
-export const FileTree = ({ files, activeFile, setActiveFile, expandedFolders, setExpandedFolders }: FileTreeProps) => {
+export const FileTree = ({ files, activeFile, setActiveFile, expandedFolders, setExpandedFolders, runtimeErrors = {} }: FileTreeProps) => {
     const [searchQuery, setSearchQuery] = useState("");
 
     const renderFileTree = () => {
@@ -111,6 +122,7 @@ export const FileTree = ({ files, activeFile, setActiveFile, expandedFolders, se
                                     level={level}
                                     isOpen={isOpen}
                                     activeFile={activeFile}
+                                    runtimeErrors={runtimeErrors}
                                     onToggle={() => {
                                         const newExpanded = new Set(expandedFolders);
                                         if (isOpen) newExpanded.delete(folderPath);
@@ -131,6 +143,7 @@ export const FileTree = ({ files, activeFile, setActiveFile, expandedFolders, se
                             isFolder={false}
                             level={level + 0.5}
                             activeFile={activeFile}
+                            runtimeErrors={runtimeErrors}
                             isOpen={false}
                             onToggle={() => { }}
                             onClick={() => setActiveFile(item.path)}

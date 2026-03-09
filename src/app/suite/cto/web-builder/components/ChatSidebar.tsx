@@ -1,6 +1,6 @@
 
 import React, { useState } from "react";
-import { MoreHorizontal, Plus, History, MessageSquare, Trash2, X, Sparkles } from "lucide-react";
+import { MoreHorizontal, Plus, History, MessageSquare, Trash2, X, Sparkles, Globe } from "lucide-react";
 import { ChatMessageList } from "./ChatMessageList";
 import { ChatInput } from "./ChatInput";
 import { ChatConversation, ChatMessage, ReasoningLevel, WebProject } from "../types";
@@ -23,13 +23,15 @@ interface ChatSidebarProps {
     handleNewConversation: () => void;
     deleteConversation: (id: string) => void;
     cancelGeneration?: () => void;
+    approvePlan?: (msgId: string) => void;
+    onOpenSettings?: () => void;
 }
 
 export const ChatSidebar = ({
     messages, isGenerating, handleGenerate, projectOpen,
     selectedModel, setSelectedModel, reasoningLevel, setReasoningLevel,
     conversations, activeConversationId, setActiveConversationId, handleNewConversation, deleteConversation,
-    cancelGeneration, statusMessage
+    cancelGeneration, statusMessage, onOpenSettings, approvePlan
 }: ChatSidebarProps) => {
     const [input, setInput] = useState("");
     const [selectedImages, setSelectedImages] = useState<{ id: string, url: string, file?: File }[]>([]);
@@ -44,11 +46,20 @@ export const ChatSidebar = ({
 
     // Listen for Approval Events from ChatMessageList
     React.useEffect(() => {
-        const handleApprove = () => {
-            handleGenerate("Plan aprobado. Procede a generar el código.");
+        const handleApprove = (e: any) => {
+            const msgId = e.detail?.msgId;
+            if (approvePlan && msgId) {
+                approvePlan(msgId);
+            } else {
+                handleGenerate("Plan aprobado. Procede a generar el código.");
+            }
         };
         const handleReject = () => {
-            handleGenerate("No me convence el plan. Propón otra cosa.");
+            // Fill input with a modification prompt instead of direct message
+            setInput("Quiero modificar el plan propuesto: ");
+            // Focus textarea if possible
+            const textarea = document.querySelector('textarea');
+            if (textarea) textarea.focus();
         };
 
         window.addEventListener('approve-plan', handleApprove);
@@ -61,7 +72,7 @@ export const ChatSidebar = ({
     }, [handleGenerate]);
 
     return (
-        <div className="w-[320px] border-r border-white/5 flex flex-col bg-[#09090b]/90 backdrop-blur-xl relative z-20 shadow-[10px_0_30px_rgba(0,0,0,0.5)]">
+        <div className="w-[260px] border-r border-white/5 flex flex-col bg-[#09090b]/90 backdrop-blur-xl relative z-20 shadow-[10px_0_30px_rgba(0,0,0,0.5)] font-sans">
             {/* Header with Actions */}
             <div className="h-14 border-b border-white/[0.03] bg-white/[0.01] flex items-center justify-between px-4 shrink-0">
                 <div className="flex items-center gap-2.5">
@@ -72,6 +83,13 @@ export const ChatSidebar = ({
                 </div>
 
                 <div className="flex items-center gap-0.5">
+                    <button
+                        onClick={onOpenSettings}
+                        className="p-2 text-gray-500 hover:text-white hover:bg-white/5 rounded-xl transition-all active:scale-90"
+                        title="Integraciones y Base de Datos"
+                    >
+                        <Globe className="w-4 h-4" />
+                    </button>
                     <button
                         onClick={handleNewConversation}
                         className="p-2 text-gray-500 hover:text-white hover:bg-white/5 rounded-xl transition-all active:scale-90"
@@ -140,6 +158,7 @@ export const ChatSidebar = ({
                     <ChatMessageList
                         messages={messages}
                         isGenerating={isGenerating}
+                        statusMessage={statusMessage}
                     />
 
                     <ChatInput

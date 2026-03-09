@@ -2,7 +2,7 @@ import React from "react";
 import {
     MousePointer2, Hand, ZoomIn, Undo2, Redo2, Globe, MonitorCheck,
     Smartphone, Tablet, Monitor, Code2, GitCommit, Loader2, History, Settings, ChevronDown, LayoutGrid, Upload, Rocket, Package,
-    RefreshCw, Terminal as TerminalIcon, ExternalLink, Home
+    RefreshCw, Terminal as TerminalIcon, ExternalLink, Home, Sparkles
 } from "lucide-react";
 import { ReasoningLevel } from "../types";
 import { GitHubSyncButton } from "./GitHubSyncButton";
@@ -53,6 +53,8 @@ interface ToolbarProps {
     setShowTerminal?: (show: boolean) => void;
     onRefresh?: () => void;
     isPreviewLoading?: boolean;
+    isAutoFixEnabled?: boolean;
+    setIsAutoFixEnabled?: (enabled: boolean) => void;
 }
 
 export const Toolbar = ({
@@ -64,7 +66,8 @@ export const Toolbar = ({
     syncStatus, triggerSync,
     activeProjectName, files, onSyncComplete, onDeployComplete,
     resetPan, setZoom, isConfigured, handleCloseProject,
-    showTerminal, setShowTerminal, onRefresh, isPreviewLoading
+    showTerminal, setShowTerminal, onRefresh, isPreviewLoading,
+    isAutoFixEnabled, setIsAutoFixEnabled
 }: ToolbarProps) => {
     const [showPublishMenu, setShowPublishMenu] = React.useState(false);
     const publishMenuRef = React.useRef<HTMLDivElement>(null);
@@ -79,7 +82,7 @@ export const Toolbar = ({
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
     return (
-        <div className="h-14 border-b border-[#222] bg-[#09090b] flex items-center justify-between px-4 z-[90] shrink-0">
+        <div className="h-14 border-b border-[#222] bg-[#09090b] flex items-center justify-between px-4 z-[90] shrink-0 font-sans">
             {/* Left: Exit & Dashboard */}
             <div className="flex items-center gap-4">
                 <button
@@ -285,8 +288,15 @@ export const Toolbar = ({
                     </div>
                 )}
 
-                {/* Preview Controls (Terminal & Refresh) */}
+                {/* Preview Controls (Terminal & Refresh & Auto-Fix) */}
                 <div className="flex items-center gap-1 bg-[#111] p-1 rounded-xl border border-[#222]">
+                    <button
+                        onClick={() => setIsAutoFixEnabled?.(!isAutoFixEnabled)}
+                        className={`p-1.5 rounded-lg transition-all ${isAutoFixEnabled ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}
+                        title={isAutoFixEnabled ? "Auto-Fix AI Habilitado" : "Habilitar Auto-Fix AI"}
+                    >
+                        <Sparkles className={`w-3.5 h-3.5 ${isAutoFixEnabled ? 'animate-pulse' : ''}`} />
+                    </button>
                     <button
                         onClick={() => setShowTerminal?.(!showTerminal)}
                         className={`p-1.5 rounded-lg transition-all ${showTerminal ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}
