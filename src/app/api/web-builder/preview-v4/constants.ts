@@ -9,14 +9,13 @@
 
 export const BOOTSTRAP_SCRIPT = (filesJSON: string) => `
     (function () {
-        console.log("[v8.5.1-R] Classic OmniShield Active");
+        console.log("[v8.5.2-Z] Classic OmniShield Active");
 
         // PROJECT ISOLATION: Clean boot for new projects
-        if (!sessionStorage.getItem('visor_project_isolated_v851')) {
-            console.log("[v8.5.1-R] Isolation: Purging generic storage keys...");
-            const keysToPurge = ['cart-storage', 'user-storage', 'auth-storage'];
-            keysToPurge.forEach(k => localStorage.removeItem(k));
-            sessionStorage.setItem('visor_project_isolated_v851', 'true');
+        if (!sessionStorage.getItem('visor_project_isolated_v852_final')) {
+            console.log("%c [v8.5.2-Z] PURGE: Resetting local environment for stability... ", "background: #7f1d1d; color: #fff; font-weight: bold;");
+            localStorage.clear(); // Total purge to remove poisoned keys like 'vropa-cart-storage'
+            sessionStorage.setItem('visor_project_isolated_v852_final', 'true');
         }
 
         function logToSurvival(msg, type) {
@@ -47,23 +46,55 @@ export const BOOTSTRAP_SCRIPT = (filesJSON: string) => `
 
         window.onerror = function(msg, url, line, col, error) {
             var fullMsg = String(msg);
-            console.error("[v8.5.1-R] ERROR:", fullMsg, error);
+            window.__visor_last_msg = fullMsg;
+            window.__visor_last_err = error;
+            console.error("[v8.5.2-Z] ERROR:", fullMsg, error);
             logToSurvival("ERR: " + fullMsg, 'error');
             var loader = document.getElementById('loader');
             if (loader) {
                 loader.style.opacity = '1'; loader.style.pointerEvents = 'auto';
-                loader.innerHTML = '<div style="background:#050000; color:#fca5a5; padding:40px; border:1px solid #7f1d1d; border-radius:48px; font-family:sans-serif; max-width:650px; text-align:center; box-shadow: 0 0 100px rgba(239, 68, 68, 0.5);">' +
-                                 '<h2 style="color:#ef4444; margin:0 0 10px; font-size:24px;">⛔ ESCUDO v8.5.1-R</h2>' +
+                loader.style.display = 'flex'; loader.style.inset = '0'; loader.style.position = 'fixed';
+                loader.style.background = '#000'; loader.style.borderRadius = '0';
+                loader.style.width = '100vw'; loader.style.height = '100vh';
+                loader.innerHTML = '<div style="background:#050000; color:#fca5a5; padding:40px; border:1px solid #7f1d1d; border-radius:48px; font-family:sans-serif; max-width:650px; text-align:center; box-shadow: 0 0 100px rgba(239, 68, 68, 0.5); position:relative;">' +
+                                 '<button onclick="window.__visor_minimize()" style="position:absolute; top:-10px; right:-10px; background:#ef4444; color:white; border:none; width:30px; height:30px; border-radius:15px; cursor:pointer; font-weight:bold; display:flex; items-center; justify-content:center; box-shadow:0 5px 15px rgba(0,0,0,0.5);">×</button>' +
+                                 '<h2 style="color:#ef4444; margin:0 0 10px; font-size:24px;">⛔ ERROR DE EJECUCIÓN</h2>' +
                                  '<div style="background:rgba(0,0,0,0.6); padding:20px; border-radius:16px; font-family:monospace; font-size:12px; text-align:left; margin-bottom:25px; border:1px solid rgba(255,255,255,0.05); overflow:auto; max-height:100px;">' + fullMsg + '</div>' +
                                  '<div style="display:flex; justify-content:center; gap:10px;">' +
                                  '<button onclick="window.location.reload()" style="background:#1a1a1a; color:#fff; border:1px solid #333; padding:12px 25px; border-radius:16px; cursor:pointer;">🔄 Reintentar</button>' +
-                                 '<button id="fix-btn-851" style="background:#dc2626; color:white; border:none; padding:12px 25px; border-radius:16px; cursor:pointer; font-weight:bold;">🚀 Reparar IA</button>' +
+                                 '<button id="fix-btn-851" style="background:#dc2626; color:white; border:none; padding:12px 25px; border-radius:16px; cursor:pointer; font-weight:bold;">🚀 Solicitar Corrección a IA</button>' +
                                  '</div>' +
                                  '</div>';
                 var btn = document.getElementById('fix-btn-851');
                 if (btn) btn.onclick = function() { window.parent.postMessage({ type: 'ask-ai-fix', error: fullMsg, file: 'App.tsx' }, '*'); btn.innerHTML = "⏳ Enviando..."; };
             }
             return false;
+        };
+
+        window.__visor_minimize = function() {
+            var loader = document.getElementById('loader');
+            if (loader) {
+                loader.style.all = 'unset';
+                loader.style.position = 'fixed';
+                loader.style.top = '20px';
+                loader.style.right = '20px';
+                loader.style.width = '50px';
+                loader.style.height = '50px';
+                loader.style.borderRadius = '25px';
+                loader.style.background = 'rgba(239, 68, 68, 0.9)';
+                loader.style.display = 'flex';
+                loader.style.alignItems = 'center';
+                loader.style.justifyContent = 'center';
+                loader.style.cursor = 'pointer';
+                loader.style.zIndex = '999999';
+                loader.style.boxShadow = '0 10px 25px rgba(239, 68, 68, 0.4)';
+                loader.style.border = '2px solid rgba(255,255,255,0.2)';
+                loader.innerHTML = '<span style="font-size:24px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));">🛡️</span>';
+                loader.title = "Click para ver error";
+                loader.onclick = function() {
+                    window.onerror(window.__visor_last_msg, "boot", 0, 0, window.__visor_last_err);
+                };
+            }
         };
 
         var files = {}; try { files = JSON.parse(document.getElementById('files-data').textContent); } catch(e) {}
@@ -73,7 +104,7 @@ export const BOOTSTRAP_SCRIPT = (filesJSON: string) => `
         function createOmniProxy(name, initial) {
             if (initial && (initial[OMNI_SYMBOL] || initial.$$typeof)) return initial;
             var Mock = function() { 
-                console.warn("[v8.5.1-R Omni] Placeholder: " + name); 
+                console.warn("[v8.5.2-Z Omni] Placeholder: " + name); 
                 return React.createElement('div', { 
                     style: { padding: '10px', border: '1px dashed #333', borderRadius: '12px', background: 'rgba(255,255,255,0.02)', textAlign: 'center', color: '#444', fontSize: '10px' } 
                 }, "Comp: " + name);
@@ -129,6 +160,8 @@ export const BOOTSTRAP_SCRIPT = (filesJSON: string) => `
 
                     // 6. Final Infinite Proxy (SKIP INTERNALS $)
                     if (typeof key === 'string' && !key.startsWith('$$') && !key.startsWith('_') && key !== 'prototype') {
+                        // If the target is a simple value (like a CSS string), don't proxy deeper
+                        if (typeof target !== 'object' && typeof target !== 'function') return target;
                         return createOmniProxy(name + "." + key);
                     }
                     return target[key];
@@ -139,7 +172,7 @@ export const BOOTSTRAP_SCRIPT = (filesJSON: string) => `
                     var fn = (typeof target === 'function') ? target : (target && target.default && typeof target.default === 'function' ? target.default : null);
                     
                     if (!fn) {
-                        console.warn("[v8.5.1-R Omni] Non-callable target:", name);
+                        console.warn("[v8.5.2-Z Omni] Non-callable target:", name);
                         return createOmniProxy(name + "()");
                     }
                     try { 
@@ -169,21 +202,93 @@ export const BOOTSTRAP_SCRIPT = (filesJSON: string) => `
             var ecosystem = {
                 'react-router-dom': window.ReactRouterDOM, 'react-router': window.ReactRouterDOM,
                 'framer-motion': window.Motion || window.framerMotion, 'zustand': window.zustand,
-                '@tanstack/react-query': window.ReactQuery, 'lucide-react': window.lucide
+                '@tanstack/react-query': window.ReactQuery, 'lucide-react': window.lucide,
+                'firebase/app': window.firebase, 'firebase/auth': window.firebase, 'firebase/firestore': window.firebase
             };
 
             if (ecosystem[p]) {
                 var l = ecosystem[p];
                 
-                // Specific Zustand handling to ensure 'create' is always available 
-                // regardless of whether the CDN exposed it as a default function or an object property.
-                if (p === 'zustand' && l) {
-                    var createFn = typeof l === 'function' ? l : (l.create || l.default || (function() { return createOmniProxy('zustand.create'); }));
-                    return createOmniProxy(p, Object.assign({}, l, {
-                        create: createFn,
-                        default: createFn
-                    }));
-                }
+            // ─── ZUSTAND: Handled BEFORE ecosystem map (CDN UMD crashes on load due to ───
+            // useSyncExternalStoreWithSelector being undefined, so window.zustand is NEVER set)
+            if (p === 'zustand/middleware') {
+                var zMiddleware = {
+                    createJSONStorage: function(getStorage) {
+                        var storage = { getItem: function(){return null;}, setItem: function(){}, removeItem: function(){} };
+                        try { storage = typeof getStorage === 'function' ? getStorage() : localStorage; } catch(e){}
+                        return {
+                            getItem: function(name) { try { var v = storage.getItem(name); return v ? JSON.parse(v) : null; } catch(e){ return null; } },
+                            setItem: function(name, value) { try { storage.setItem(name, JSON.stringify(value)); } catch(e){} },
+                            removeItem: function(name) { try { storage.removeItem(name); } catch(e){} }
+                        };
+                    },
+                    persist: function(config, options) {
+                        return function(set, get, api) {
+                            var storeName = (options && options.name) || 'zustand-store';
+                            var storage = { getItem: function(){return null;}, setItem: function(){}, removeItem: function(){} };
+                            try { storage = { getItem: function(n) { try { var v = localStorage.getItem(n); return v ? JSON.parse(v) : null; } catch(e){ return null; } }, setItem: function(n, v) { try { localStorage.setItem(n, JSON.stringify(v)); } catch(e){} }, removeItem: function(n) { try { localStorage.removeItem(n); } catch(e){} } }; } catch(e){}
+                            if (options && options.storage) storage = options.storage;
+                            var persistedSet = function(partial, replace) { set(partial, replace); try { storage.setItem(storeName, get ? get() : {}); } catch(e){} };
+                            var state = config(persistedSet, get, api);
+                            try { var persisted = storage.getItem(storeName); if (persisted && typeof persisted === 'object') Object.assign(state, persisted); } catch(e){}
+                            return state;
+                        };
+                    },
+                    subscribeWithSelector: function(config) { return config; },
+                    devtools: function(config) { return config; },
+                    immer: function(config) { return config; },
+                    combine: function(initial, creator) { return function(set, get, api) { return Object.assign({}, initial, creator(set, get, api)); }; }
+                };
+                return createOmniProxy(p, zMiddleware);
+            }
+
+            if (p === 'zustand') {
+                // Pure-JS Zustand create implementation (CDN UMD is unreliable — crashes on useSyncExternalStoreWithSelector)
+                var zustandCreate = function(creatorOrMiddleware) {
+                    // Logic to handle curried form: create<T>()(...)
+                    if (creatorOrMiddleware === undefined) {
+                        return function(actualCreator) { return zustandCreate(actualCreator); };
+                    }
+
+                    // Store core logic
+                    return (function(creator) {
+                        var stateHolder = { current: {} }; // Initialize with empty object to prevent null get()
+                        var subscribers = [];
+
+                        var set = function(partial, replace) {
+                            var next = typeof partial === 'function' ? partial(stateHolder.current) : partial;
+                            if (replace) { stateHolder.current = next; }
+                            else { stateHolder.current = Object.assign({}, stateHolder.current, next); }
+                            subscribers.forEach(function(s){ try { s(stateHolder.current); } catch(e){} });
+                        };
+                        var get = function() { return stateHolder.current; };
+                        var api = { getState: get, setState: set, subscribe: function(fn) { subscribers.push(fn); return function() { subscribers = subscribers.filter(function(s){ return s !== fn; }); }; }, destroy: function() { subscribers = []; } };
+
+                        // creator might be a persist-wrapped function (returns a function),
+                        // or a direct state creator (returns an object)
+                        var created = typeof creator === 'function' ? creator(set, get, api) : creator;
+                        
+                        // Merge created state into the holder (ensures object reference stability)
+                        Object.assign(stateHolder.current, created || {});
+
+                        // The actual hook used in components
+                        var hook = function(selector) {
+                            // React-compatible mock (minimal)
+                            var [s, ss] = React.useState(selector ? selector(stateHolder.current) : stateHolder.current);
+                            React.useLayoutEffect(() => {
+                                return api.subscribe(() => { ss(selector ? selector(stateHolder.current) : stateHolder.current); });
+                            }, []);
+                            return s;
+                        };
+                        hook.getState = get;
+                        hook.setState = set;
+                        hook.subscribe = api.subscribe;
+                        hook.destroy = api.destroy;
+                        return hook;
+                    })(creatorOrMiddleware);
+                };
+                return createOmniProxy(p, { create: zustandCreate, default: zustandCreate });
+            }
 
                 if (p === 'framer-motion' && l) {
                     var m = l.motion || l;
@@ -224,10 +329,26 @@ export const BOOTSTRAP_SCRIPT = (filesJSON: string) => `
                 });
             }
 
-            if (p === 'sonner') return createOmniProxy(p, { toast: createOmniProxy('toast') });
+            if (p === 'sonner') {
+                var Toaster = function() { return React.createElement('div', { id: 'sonner-toaster', style: { display: 'none' } }); };
+                var s = { toast: createOmniProxy('toast'), Toaster: Toaster };
+                return createOmniProxy(p, Object.assign({}, s, { default: s }));
+            }
+            if (p === 'recharts') {
+                var RM = function(props) { return React.createElement('div', { style: { width: '100%', height: '300px', background: 'rgba(255,255,255,0.03)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#444', fontSize: '10px' } }, "Chart: " + (props?.name || 'Data Visualization')); };
+                var rc = { 
+                    ResponsiveContainer: function(p) { return React.createElement('div', { style: { width:'100%', height:'100%' } }, p.children); },
+                    BarChart: RM, LineChart: RM, PieChart: RM, AreaChart: RM, RadarChart: RM,
+                    XAxis: function() { return null; }, YAxis: function() { return null; }, CartesianGrid: function() { return null; },
+                    Tooltip: function() { return null; }, Legend: function() { return null; }, Bar: function() { return null; },
+                    Line: function() { return null; }, Pie: function() { return null; }, Area: function() { return null; },
+                    Cell: function() { return null; }, Radar: function() { return null; }, PolarGrid: function() { return null; }
+                };
+                return createOmniProxy(p, rc);
+            }
             if (p === 'clsx' || p === 'tailwind-merge' || p === 'class-variance-authority' || p.includes('utils')) {
                 var cn = function() { return Array.from(arguments).flat().filter(Boolean).join(' '); };
-                return createOmniProxy(p, { default: cn, clsx: cn, twMerge: cn, cn: cn, cva: ()=>()=>'', cx: cn });
+                return createOmniProxy(p, { default: cn, clsx: cn, twMerge: cn, cn: cn, cva: function(){ return function(){ return ""; }; }, cx: cn });
             }
 
             var res = (function resolve(path, from) {
@@ -251,6 +372,7 @@ export const BOOTSTRAP_SCRIPT = (filesJSON: string) => `
             }
 
             if (res) {
+                // If it was successfully loaded OR replaced by a Safe Proxy
                 if (loadedModules[res]) return loadedModules[res];
                 if (typeof modules[res] !== 'function') {
                     // ESM Asset support: Return raw string for images/uploads
@@ -259,14 +381,20 @@ export const BOOTSTRAP_SCRIPT = (filesJSON: string) => `
                     }
                     return createOmniProxy(res);
                 }
-                var m = { exports: {} }; loadedModules[res] = m.exports;
+                var m = { exports: {} }; 
+                // Delay caching until after successful execution to prevent empty object bugs
                 try { 
                     modules[res](function(x){return require(x, res);}, m, m.exports); 
+                    loadedModules[res] = m.exports; // Cache only if successful
                     return createOmniProxy(res, m.exports); 
                 }
                 catch(e) { 
                     window.parent.postMessage({ type: 'runtime-error', message: e.message, file: res, stack: e.stack }, '*');
-                    return createOmniProxy(res); 
+                    
+                    // Critical Fix: Store the OmniProxy in the cache so subsequent calls get the resilient proxy
+                    var safeProxy = createOmniProxy(res);
+                    loadedModules[res] = safeProxy;
+                    return safeProxy; 
                 }
             }
             return createOmniProxy(p);
@@ -288,11 +416,17 @@ export const BOOTSTRAP_SCRIPT = (filesJSON: string) => `
         function start() {
             mountEnvOptions();
             Object.keys(files).forEach(p => {
-                if (!p.match(/\\.(tsx|ts|jsx|js)$/)) return;
+                if (!p.match(/\.(tsx|ts|jsx|js)$/)) return;
                 try {
                     var codeToTranspile = files[p].replace(/import\.meta\.env/g, 'window.__VITE_ENV_MOCK__');
+
                     var r = Babel.transform(codeToTranspile, { 
-                        presets: [['react', { runtime: 'classic' }], 'typescript', ['env', { modules: 'commonjs' }]], 
+                        presets: [
+                            ['react', { runtime: 'classic', development: true }], 
+                            ['typescript', { isTSX: true, allExtensions: true }], 
+                            ['env', { modules: 'commonjs', targets: { browsers: ['last 2 versions'] } }]
+                        ], 
+                        plugins: [],
                         filename: p 
                     });
                     modules[p] = new Function('require', 'module', 'exports', r.code);
@@ -318,18 +452,19 @@ export const BOOTSTRAP_SCRIPT = (filesJSON: string) => `
                 }
                 document.getElementById('loader').style.opacity = '0';
                 document.getElementById('loader').style.pointerEvents = 'none';
-            } catch(e) { window.onerror("Boot v8.5.1-R: " + e.message, "boot", 0, 0, e); }
+            } catch(e) { window.onerror("Boot v8.5.2-Z: " + e.message, "boot", 0, 0, e); }
         }
 
-        if (sessionStorage.getItem('visor_cdn_ok_851r')) start();
+        if (sessionStorage.getItem('visor_cdn_ok_852z')) start();
         else {
             var checkCount = 0;
             var check = setInterval(function() {
                 checkCount++;
-                var ok = window.React && window.ReactDOM && window.Babel && window.lucide && window.Motion && window.ReactRouterDOM && window.zustand;
-                if (ok) { clearInterval(check); sessionStorage.setItem('visor_cdn_ok_851r', 'true'); start(); }
-                else if (checkCount > 150) { clearInterval(check); start(); }
-                else if (checkCount > 20) { showLoaderForError(); logToSurvival("Restaurando Entorno v8.5.1...", 'info'); }
+                // Zustand removed — UMD crashes on useSyncExternalStoreWithSelector; handled in pure JS instead
+                var ok = window.React && window.ReactDOM && window.Babel && window.lucide && window.Motion && window.ReactRouterDOM;
+                if (ok) { clearInterval(check); sessionStorage.setItem('visor_cdn_ok_852z', 'true'); start(); }
+                else if (checkCount > 80) { clearInterval(check); start(); }
+                else if (checkCount > 40) { showLoaderForError(); logToSurvival("Restaurando Entorno v8.5.2...", 'info'); }
             }, 100);
         }
     })();

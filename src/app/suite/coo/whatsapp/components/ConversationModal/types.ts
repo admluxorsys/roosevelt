@@ -7,6 +7,7 @@ export interface Message {
     fileUrl?: string;
     fileType?: string;
     fileName?: string;
+    status?: 'sending' | 'sent' | 'failed';
 }
 
 export interface CheckIn {
@@ -186,6 +187,15 @@ export interface CardData {
     mutedUntil?: Timestamp | null;
     extraData?: { [key: string]: any };
     propertyOrder?: string[];
+    
+    // Omnichannel / UI Metadata
+    assignedTo?: string;
+    unreadCount?: number;
+    lastMessage?: string;
+    description?: string;
+    updatedAt?: Timestamp;
+    labels?: string[];
+    presence?: 'typing' | 'recording' | null;
 }
 
 export interface ConversationModalProps {

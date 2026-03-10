@@ -124,6 +124,6 @@ export const useConversationLogic = (props: ConversationModalProps) => {
         ...senderLogic, // newMessage, isSending, handleSendMessage, etc.
 
         // Operations
-        ...operationsLogic // handleSaveNote, handleSaveCheckIn, etc.
+        ...operationsLogic, // handleSaveNote, handleSaveCheckIn, handleAddLabel, etc.
     };
 };

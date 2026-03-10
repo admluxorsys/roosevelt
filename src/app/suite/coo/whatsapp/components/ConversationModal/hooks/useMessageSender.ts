@@ -64,10 +64,13 @@ export const useMessageSender = ({
 
         setIsSending(true);
 
-        const tempMessage: Message = {
+        const tempMsgId = Date.now().toString() + Math.random().toString(36).substring(7);
+        const tempMessage: Message & { id?: string } = {
+            id: tempMsgId,
             text: newMessage,
             sender: 'agent',
-            timestamp: Timestamp.now()
+            timestamp: Timestamp.now(),
+            status: 'sending'
         };
 
         // 1. Optimistic UI Update
@@ -94,11 +97,9 @@ export const useMessageSender = ({
                 toNumber: phoneNumber,
                 cardId: apiCardId,
                 groupId: currentGroupId,
-                platform: activePlatform // Add platform support if API supports it
+                platform: activePlatform
             };
 
-            // If outside 24h window (for WhatsApp specifically), send as Template
-            // Note: Other platforms might not have this restriction or use different logic
             if (activePlatform === 'WhatsApp' && !isWithin24Hours) {
                 payload = {
                     ...payload,
@@ -113,44 +114,52 @@ export const useMessageSender = ({
                 };
             }
 
-            // Using generic/WhatsApp endpoint for now - should be unified backend
             const response = await fetch('/api/whatsapp/send', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.suggestion || errorData.error || 'Failed to send');
-            }
-
             const result = await response.json();
+
+            if (!response.ok) {
+                const errorMsg = result.error || 'Error al enviar';
+                const details = result.details ? `\nDetalles: ${JSON.stringify(result.details)}` : '';
+                toast.error(`${errorMsg}${details}`);
+                
+                // Mark message as failed instead of removing it
+                setLiveCardData(prev => {
+                    if (!prev) return null;
+                    return {
+                        ...prev,
+                        messages: prev.messages?.map(m => (m as any).id === tempMsgId ? { ...m, status: 'failed' } : m)
+                    };
+                });
+                setNewMessage(messageToSend);
+                setIsSending(false);
+                return;
+            }
 
             if (result.success) {
                 toast.success(`Mensaje enviado a ${result.sentTo}`);
-            } else {
-                throw new Error('API returned non-success response');
-            }
-
-            if (result.cardId && result.groupId) {
-                if (result.cardId !== currentCardId || result.groupId !== currentGroupId) {
-                    setForcedGroupId(result.groupId);
-                    setForcedCardId(result.cardId);
+                if (result.cardId && result.groupId) {
+                    if (result.cardId !== currentCardId || result.groupId !== currentGroupId) {
+                        setForcedGroupId(result.groupId);
+                        setForcedCardId(result.cardId);
+                    }
                 }
             }
-
         } catch (error: any) {
-            console.error('Error sending message:', error);
-            const msg = typeof error === 'string' ? error : error.message || 'Error al enviar el mensaje.';
-            toast.error(msg);
-
-            // Rollback
+            // Keep console.warn instead of error to avoid Next.js overlay in dev
+            console.warn('[MessageSender] Caught error:', error);
+            toast.error('Error de conexión o de red.');
+            
+            // Mark message as failed
             setLiveCardData(prev => {
                 if (!prev) return null;
                 return {
                     ...prev,
-                    messages: prev.messages?.filter(m => m !== tempMessage)
+                    messages: prev.messages?.map(m => (m as any).id === tempMsgId ? { ...m, status: 'failed' } : m)
                 };
             });
             setNewMessage(messageToSend);
@@ -248,6 +257,25 @@ export const useMessageSender = ({
         setFilePreviewUrl(null);
     };
 
+    const retryMessage = async (msgToRetry: Message & { id?: string }) => {
+        if (!msgToRetry.id || !msgToRetry.text) return;
+        setNewMessage(msgToRetry.text);
+        
+        // Remove failed message from UI before retrying
+        setLiveCardData(prev => {
+            if (!prev) return null;
+            return {
+                ...prev,
+                messages: prev.messages?.filter(m => (m as any).id !== msgToRetry.id)
+            };
+        });
+
+        // Small delay to ensure state updates before sending
+        setTimeout(() => {
+            handleSendMessage();
+        }, 50);
+    };
+
     return {
         newMessage,
         setNewMessage,
@@ -263,6 +291,7 @@ export const useMessageSender = ({
         sendTemplateMessage,
         handleDisplayFileSend,
         handleCancelPreview,
+        retryMessage,
         open,
         getRootProps,
         getInputProps,

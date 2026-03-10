@@ -283,6 +283,12 @@ export const useFileSystem = (activeProjectId: string | null, updateProjectLastM
             nextState = newFilesOrFn;
         }
 
+        // SAFEGUARD: Reject invalid updates to prevent accidental wipe of the project
+        if (!nextState || typeof nextState !== 'object' || Object.keys(nextState).length === 0) {
+            console.error("[FileSystem] Rejected attempt to update files with an empty or invalid object:", nextState);
+            return;
+        }
+
         // Update Ref immediately
         filesRef.current = nextState;
 

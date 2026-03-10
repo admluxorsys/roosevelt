@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { db } from '@/lib/firebase';
-import { doc, updateDoc, arrayUnion, Timestamp, addDoc, collection, serverTimestamp, getDocs, query, where } from 'firebase/firestore';
+import { doc, updateDoc, arrayUnion, arrayRemove, Timestamp, addDoc, collection, serverTimestamp, getDocs, query, where } from 'firebase/firestore';
 import { toast } from 'sonner';
 import { CardData, CheckIn, Note, PaymentMethod } from '../types';
 import { normalizePhoneNumber } from '@/lib/phoneUtils';
@@ -279,6 +279,67 @@ export const useCardOperations = ({
         toast.success(duration ? 'Silenciado' : 'Reactivado');
     };
 
+    const handleUpdateAssignee = async (agentName: string) => {
+        if (!currentCardId || !currentGroupId || currentCardId.startsWith('temp-')) return;
+        
+        try {
+            await updateDoc(doc(db, 'kanban-groups', currentGroupId, 'cards', currentCardId), {
+                assignedTo: agentName,
+                history: arrayUnion({
+                    id: `hist_${Date.now()}`,
+                    type: 'edit',
+                    content: `Asignado a: ${agentName}`,
+                    timestamp: Timestamp.now(),
+                    author: 'Sistemas'
+                })
+            });
+            toast.success(`Asignado a ${agentName}`);
+        } catch (error) {
+            console.error(error);
+            toast.error('Error al asignar agente');
+        }
+    };
+
+    const handleAddLabel = async (label: string) => {
+        if (!currentCardId || !currentGroupId || currentCardId.startsWith('temp-')) return;
+        try {
+            await updateDoc(doc(db, 'kanban-groups', currentGroupId, 'cards', currentCardId), {
+                labels: arrayUnion(label),
+                history: arrayUnion({
+                    id: `hist_${Date.now()}`,
+                    type: 'edit',
+                    content: `Etiqueta añadida: ${label}`,
+                    timestamp: Timestamp.now(),
+                    author: 'Agente'
+                })
+            });
+            toast.success(`Etiqueta añadida: ${label}`);
+        } catch (error) {
+            console.error(error);
+            toast.error('Error al añadir etiqueta');
+        }
+    };
+
+    const handleRemoveLabel = async (label: string) => {
+        if (!currentCardId || !currentGroupId || currentCardId.startsWith('temp-')) return;
+        try {
+            await updateDoc(doc(db, 'kanban-groups', currentGroupId, 'cards', currentCardId), {
+                labels: arrayRemove(label),
+                history: arrayUnion({
+                    id: `hist_${Date.now()}`,
+                    type: 'edit',
+                    content: `Etiqueta eliminada: ${label}`,
+                    timestamp: Timestamp.now(),
+                    author: 'Agente'
+                })
+            });
+            toast.success(`Etiqueta eliminada: ${label}`);
+        } catch (error) {
+            console.error(error);
+            toast.error('Error al eliminar etiqueta');
+        }
+    };
+
     return {
         isAddingNote, setIsAddingNote, newNote, setNewNote,
         isAddingCheckIn, setIsAddingCheckIn, newCheckIn, setNewCheckIn,
@@ -288,7 +349,8 @@ export const useCardOperations = ({
         newHistoryComment, setNewHistoryComment,
         handleInfoChange, handleInfoSave, handleSaveNote, handleSaveCheckIn, toggleChecklistItem,
         handleToggleCheckIn, handleSavePaymentMethod, handleDeleteNote, handleDeleteCheckIn,
-        handleSaveHistoryComment, handleSaveMute,
-        handleEditCheckIn, handleSaveEditedCheckIn, handleEditNote, handleSaveEditedNote
+        handleSaveHistoryComment, handleSaveMute, handleUpdateAssignee,
+        handleEditCheckIn, handleSaveEditedCheckIn, handleEditNote, handleSaveEditedNote,
+        handleAddLabel, handleRemoveLabel
     };
 };

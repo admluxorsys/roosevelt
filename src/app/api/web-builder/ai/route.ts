@@ -636,7 +636,13 @@ export async function POST(req: Request) {
     const hasHomePage = codeFiles.some(([p]) => p.toLowerCase().includes('home') || p.toLowerCase().includes('landing'));
     const isFreshProject = codeFiles.length <= 5; // Only boilerplate files exist
 
-    let generationStrategy = "";
+    let generationStrategy = `
+🚨 CRITICAL RULE: NO DESTRUCTIVE CHANGES 🚨
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+You must NEVER delete, empty, or break the existing project files when adding new features like Supabase, Firebase, or complex logic.
+Modify ONLY the files required for the new feature and KEEP ALL OTHER FILES INTACT.
+Returning an empty JSON or emitting destructive changes will instantly crash the project. NEVER do this.
+`;
     if (isFreshProject && !hasHomePage) {
       // PHASE 1: Fresh project — generate only the foundation
       generationStrategy = `
@@ -647,7 +653,7 @@ This is a BRAND NEW project. To ensure MAXIMUM QUALITY and prevent loading error
 
 1. GENERATE ONLY THESE FILES (no more):
    - src/index.css — Complete design system with CSS variables (colors, fonts, spacing, shadows)
-   - src/App.tsx — HashRouter with routes DEFINED for future pages (Home, Menu/Services, About, Contact) but ONLY HomePage implemented. Import pages using NAMED imports: \`import { HomePage } from './pages/HomePage'\`.
+   - src/App.tsx — HashRouter with routes DEFINED for future pages (Home, Menu/Services, About, Contact) but ONLY HomePage implemented. Import pages using NAMED imports: \`import { HomePage } from './pages/HomePage'\`. ⚡ CRITICAL: App.tsx MUST use \`export default App;\` at the bottom.
    - src/features/Navbar/Navbar.tsx — Premium sticky navbar. Use NAMED EXPORT: \`export const Navbar = ...\`
    - src/features/Footer/Footer.tsx — Rich footer with columns. Use NAMED EXPORT: \`export const Footer = ...\`
    - src/pages/HomePage.tsx — THE MAIN PAGE. Use NAMED EXPORT: \`export const HomePage = ...\`
@@ -775,6 +781,13 @@ NEVER use placeholders like 'your-project-url'. Use the exact values provided ab
 
     // ALL requests now use the Agentic Flow (Architect + Refiner) to ensure quality
     let finalResult = await agenticFlow(messages, fileContext, currentFiles || {}, model || "Gemini 1.5 Flash");
+
+    // SANITY CHECK: Block AI responses that attempt to wipe out the project by returning an empty files array
+    // ONLY block if it's a code_update (plans and questions are fine)
+    if (finalResult && finalResult.type === 'code_update' && (!finalResult.files || finalResult.files.length === 0)) {
+       logToFile("[POST] SANITY CHECK FAILED: AI returned code_update with no files! Blocking response to protect project.");
+       return NextResponse.json({ type: "message", content: "Error de seguridad: La IA generó una respuesta inválida (sin código). Por favor, intenta de nuevo con instrucciones más detalladas." });
+    }
 
     logToFile(`[POST] Returning successful code update with ${finalResult?.files?.length ?? 'N/A'} files.`);
     return NextResponse.json(finalResult ?? { type: 'message', content: 'Error interno: respuesta vacía del modelo.' });

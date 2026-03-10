@@ -5,6 +5,7 @@ import InboxSidebar from './components/InboxSidebar';
 import ChatList from './components/ChatList';
 import ChatArea from './components/ChatArea';
 import ContactPanel from './components/ContactPanel';
+import { useKanbanBoard } from '../whatsapp/hooks/useKanbanBoard';
 
 export default function OmnichannelInboxPage() {
     // State to manage which conversation is active
@@ -12,12 +13,19 @@ export default function OmnichannelInboxPage() {
     const [selectedFolder, setSelectedFolder] = useState<string>('all');
     const [showContactPanel, setShowContactPanel] = useState(true);
 
+    const { cards, groups, loading } = useKanbanBoard();
+    
+    // Find active card data
+    const activeCard = cards.find(c => c.id === activeConversationId) || null;
+    const activeGroupName = groups.find(g => activeCard && g.id === activeCard.groupId)?.name || '';
+
     return (
         <div className="flex h-screen bg-[#0a0a0a] text-white overflow-hidden text-sm">
             {/* 1. Left Sidebar: Folders, Channels, Tags */}
             <InboxSidebar
                 selectedFolder={selectedFolder}
                 setSelectedFolder={setSelectedFolder}
+                cards={cards}
             />
 
             {/* 2. Middle Column: List of conversations */}
@@ -25,21 +33,29 @@ export default function OmnichannelInboxPage() {
                 selectedFolder={selectedFolder}
                 activeConversationId={activeConversationId}
                 setActiveConversationId={setActiveConversationId}
+                cards={cards}
+                loading={loading}
             />
 
             {/* 3. Right Area: Chat history + Contact panel */}
             <div className="flex flex-1 overflow-hidden bg-[#111111]">
-                {activeConversationId ? (
+                {activeCard ? (
                     <>
                         {/* Chat History and Input */}
                         <ChatArea
-                            activeConversationId={activeConversationId}
+                            card={activeCard}
+                            groups={groups}
+                            groupName={activeGroupName}
+                            allConversations={cards}
                             toggleContactPanel={() => setShowContactPanel(!showContactPanel)}
                         />
 
                         {/* Contact Details Panel (Rightmost) */}
                         {showContactPanel && (
-                            <ContactPanel activeConversationId={activeConversationId} />
+                            <ContactPanel 
+                                card={activeCard}
+                                groups={groups}
+                            />
                         )}
                     </>
                 ) : (

@@ -38,40 +38,10 @@ export async function POST(req: Request) {
 
             } else {
                 // --- Default: WhatsApp Logic ---
-                const token = process.env.WHATSAPP_ACCESS_TOKEN;
-                const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
-
-                if (!token || !phoneNumberId) {
-                    throw new Error('Missing WhatsApp configuration');
-                }
-
-                const url = `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`;
-                cleanTo = toNumber.replace(/\D/g, ''); // WhatsApp needs clean phone
-
-                let payload: any = {
-                    messaging_product: 'whatsapp',
-                    recipient_type: 'individual',
-                    to: cleanTo,
-                };
-
-                if (type === 'template' && template) {
-                    payload.type = 'template';
-                    payload.template = {
-                        name: template.name,
-                        language: { code: template.language?.code || 'es' },
-                        components: template.components || []
-                    };
-                } else {
-                    payload.type = 'text';
-                    payload.text = { body: message, preview_url: false };
-                }
-
-                console.log(`[WhatsApp API] Sending to ${cleanTo}`);
-                const response = await axios.post(url, payload, {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
-                responseData = response.data;
+                const { sendWhatsAppMessage } = await import('@/lib/sendProviders');
+                responseData = await sendWhatsAppMessage(toNumber, message, { type, template });
                 messageId = responseData?.messages?.[0]?.id;
+                cleanTo = responseData?.sentTo || toNumber;
             }
 
             console.log(`[Omnichannel API] ✅ SUCCESS! Platform: ${targetPlatform}, ID: ${messageId}`);

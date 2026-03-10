@@ -77,3 +77,46 @@ export async function sendTelegramMessage(chatId: string, text: string): Promise
         text: text
     });
 }
+// --- WhatsApp ---
+
+/**
+ * Sends a message via WhatsApp Business API
+ */
+export async function sendWhatsAppMessage(toNumber: string, message: string, options: { type?: 'text' | 'template', template?: any } = {}): Promise<any> {
+    const token = process.env.WHATSAPP_ACCESS_TOKEN;
+    const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+
+    if (!token || !phoneNumberId) {
+        throw new Error('Missing WhatsApp configuration (Token or Phone ID)');
+    }
+
+    const url = `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`;
+    const cleanTo = toNumber.replace(/\D/g, '');
+
+    let payload: any = {
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to: cleanTo,
+    };
+
+    if (options.type === 'template' && options.template) {
+        payload.type = 'template';
+        payload.template = {
+            name: options.template.name,
+            language: { code: options.template.language?.code || 'es' },
+            components: options.template.components || []
+        };
+    } else {
+        payload.type = 'text';
+        payload.text = { body: message, preview_url: false };
+    }
+
+    const response = await axios.post(url, payload, {
+        headers: { Authorization: `Bearer ${token}` }
+    });
+
+    return {
+        ...response.data,
+        sentTo: cleanTo
+    };
+}

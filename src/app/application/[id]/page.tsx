@@ -153,27 +153,7 @@ export default function ApplicationPage({ params }: ApplicationPageProps) {
                         setRealId(id);
                         setContact(data);
 
-                        // Pre-fill form (only if not already submitted or if you want it to be truly reactive)
-                        setForm(prev => {
-                            // Match country code if phone exists in the NEW data
-                            if (data.phone) {
-                                const matched = ALL_COUNTRY_CODES
-                                    .sort((a, b) => b.code.length - a.code.length)
-                                    .find(c => data.phone.startsWith(c.code));
-                                if (matched) {
-                                    setSelectedCountry(matched);
-                                }
-                            }
-
-                            return {
-                                ...prev,
-                                ...data,
-                                // Handle phone separately because of the country selector split
-                                phone: data.phone && data.phone.startsWith(selectedCountry.code)
-                                    ? data.phone.substring(selectedCountry.code.length)
-                                    : (data.phone || prev.phone)
-                            };
-                        });
+                        // No pre-fill form data to ensure form is blank initially.
                         setLoading(false);
                     } else {
                         // Fallback logic if ID doesn't exist yet (might be a phone number in the URL)
@@ -196,7 +176,7 @@ export default function ApplicationPage({ params }: ApplicationPageProps) {
                             // But for now, let's just set the data
                             const data = snap.docs[0].data();
                             setContact(data);
-                            setForm(prev => ({ ...prev, ...data }));
+                            // Avoid setting form with data to keep fields empty
                             setLoading(false);
                         } else {
                             setLoading(false); // Truly not found
@@ -237,12 +217,29 @@ export default function ApplicationPage({ params }: ApplicationPageProps) {
 
         try {
             const docRef = doc(db, 'contacts', targetId);
-            const fullPhone = `${selectedCountry.code}${form.phone}`;
+            
+            // Only update fields that the user explicitly filled
+            const dataToUpdate: any = {};
+            Object.entries(form).forEach(([key, value]) => {
+                if (typeof value === 'string' && value.trim() !== '') {
+                    dataToUpdate[key] = value.trim();
+                }
+            });
+
+            if (dataToUpdate.phone) {
+                dataToUpdate.phone = `${selectedCountry.code}${dataToUpdate.phone}`;
+            }
+
+            if (dataToUpdate.firstName || dataToUpdate.lastName) {
+                const existingName = contact?.name || '';
+                const baseFirstName = contact?.firstName || existingName.split(' ')[0] || '';
+                const baseLastName = contact?.lastName || existingName.split(' ').slice(1).join(' ') || '';
+                
+                dataToUpdate.name = `${dataToUpdate.firstName || baseFirstName} ${dataToUpdate.lastName || baseLastName}`.trim();
+            }
 
             await updateDoc(docRef, {
-                ...form,
-                phone: fullPhone,
-                name: `${form.firstName} ${form.lastName}`.trim(),
+                ...dataToUpdate,
                 lastUpdated: serverTimestamp(),
                 applicationStatus: 'submitted',
                 applicationDate: serverTimestamp()

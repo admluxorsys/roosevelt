@@ -227,8 +227,11 @@ export const CodeEditor = ({
                                             allowJs: true,
                                         });
                                         ts?.typescriptDefaults?.setDiagnosticsOptions({
-                                            noSemanticValidation: false,
-                                            noSyntaxValidation: false,
+                                            // Disable static analysis — creates false positives for valid
+                                            // TypeScript generics and class components in .tsx files.
+                                            // Real runtime errors are caught by the Visor Engine.
+                                            noSemanticValidation: true,
+                                            noSyntaxValidation: true,
                                         });
                                     }}
                                     onMount={(editor, monaco) => {
