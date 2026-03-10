@@ -11,13 +11,15 @@ interface PreviewAreaProps {
     setShowTerminal?: (show: boolean) => void;
     refreshSignal?: number;
     onLoadingChange?: (loading: boolean) => void;
-    handleGenerate?: (msg: string) => void;
+    handleGenerate?: (msg: string, images?: { id: string; url: string; file?: File }[]) => Promise<void>;
+    selection?: { path: string; loc: string; rect: any } | null;
+    setSelection?: (sel: { path: string; loc: string; rect: any } | null) => void;
 }
 
 export const PreviewArea = ({
     files, activeFile, setRuntimeErrors,
     showTerminal, setShowTerminal, refreshSignal, onLoadingChange,
-    handleGenerate
+    handleGenerate, selection, setSelection
 }: PreviewAreaProps) => {
     const iframeRef = useRef<HTMLIFrameElement>(null);
     const [loading, setLoading] = useState(true);

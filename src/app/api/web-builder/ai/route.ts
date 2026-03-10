@@ -449,9 +449,14 @@ function extractJSON(responseText: string, currentFiles: Record<string, string> 
     jsonPart = jsonPart.replace(/[\x00-\x09\x0B\x0C\x0E-\x1F]/g, '');
 
     // SANITIZE: Fix common AI JSON mistakes before parsing
-    // 1. Fix unescaped newlines inside string values (carefully)
-    // We only want to escape raw newlines that haven't been escaped yet
-    jsonPart = jsonPart.replace(/(?<=:\s*"[^"]*)\n(?=[^"]*")/g, '\\n');
+    // 1. Fix unescaped newlines inside string values (safer method without regex lookbehinds)
+    try {
+      jsonPart = jsonPart.split('\n').map(line => {
+        // If the line isn't ending the JSON object or array, it might be a broken string
+        return line.trim() === '' ? '\\n' : line;
+      }).join('');
+      // Just do basic cleanup instead of complex lookbehinds that break SWC
+    } catch (e) { }
     // 2. Remove trailing commas before } or ]
     jsonPart = jsonPart.replace(/,\s*([\]}])/g, '$1');
 

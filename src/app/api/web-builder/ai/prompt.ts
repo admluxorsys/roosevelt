@@ -975,7 +975,7 @@ CRITICAL: ALWAYS use 'HashRouter' (aliased as Router) in App.tsx.
 The preview environment requires HashRouter to handle navigation correctly without server-side support.
 
 ✅ CORRECT:
-${'\`\`\`'}tsx
+\`\`\`tsx
 import { Routes, Route, HashRouter as Router } from 'react-router-dom'
 
 export const App = () => {
@@ -987,43 +987,23 @@ export const App = () => {
     </Router>
   );
 };
-${'\`\`\`'}
+\`\`\`
 
 ❌ WRONG (Missing Router):
-${'\`\`\`'}tsx
+\`\`\`tsx
 // ⚠️ Crashes because Routes needs a parent Router
 return (
   <Routes>...</Routes>
 )
-${'\`\`\`'}
-${'\`\`\`'}tsx
-import { Routes, Route, Link } from 'react-router-dom'
-import { HomePage } from './pages/HomePage'
-import { AboutPage } from './pages/AboutPage'
-
-export const App = () => {
-  return (
-    <div className="min-h-screen">
-      <nav className="sticky top-0 bg-white/80 backdrop-blur-xl">
-        <Link to="/">Home</Link>
-        <Link to="/about">About</Link>
-      </nav>
-      <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/about" element={<AboutPage />} />
-      </Routes>
-    </div>
-  );
-};
-${'\`\`\`'}
+\`\`\`
 
 ❌ WRONG (Will cause black screen):
-${'\`\`\`'}tsx
+\`\`\`tsx
 import { BrowserRouter as Router } from 'react-router-dom'
 export const App = () => {
   return <Router>...</Router>  // DON'T DO THIS
 };
-${'\`\`\`'}
+\`\`\`
 
 ═══════════════════════════════════════════════════════════════════
 📤 OUTPUT FORMAT (CRITICAL - READ CAREFULLY)

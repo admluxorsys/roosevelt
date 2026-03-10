@@ -217,13 +217,13 @@ export const CodeEditor = ({
                                     beforeMount={(monaco: Monaco) => {
                                         const ts = (monaco as any).languages?.typescript;
                                         ts?.typescriptDefaults?.setCompilerOptions({
-                                            target: monaco.languages.typescript.ScriptTarget.ESNext,
+                                            target: 99 /* ESNext */,
                                             allowNonTsExtensions: true,
-                                            moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs,
-                                            module: monaco.languages.typescript.ModuleKind.CommonJS,
+                                            moduleResolution: 2 /* NodeJs */,
+                                            module: 1 /* CommonJS */,
                                             noEmit: true,
                                             typeRoots: ["node_modules/@types"],
-                                            jsx: monaco.languages.typescript.JsxEmit.React,
+                                            jsx: 2 /* React */,
                                             allowJs: true,
                                         });
                                         ts?.typescriptDefaults?.setDiagnosticsOptions({
