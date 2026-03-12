@@ -2,30 +2,47 @@
 
 import React, { useState, useRef, useCallback } from 'react';
 import { motion, PanInfo, useAnimationFrame } from 'framer-motion';
-import { OrbNode } from './OrbNode';
-import { SUITE_NODES } from '../constants';
-import { CentralVideo } from './CentralVideo';
+// Reusing OrbNode from the suite components
+import { OrbNode } from '../../components/OrbNode';
+import { INITIAL_LIFE_NODES, ICON_MAP } from '../constants';
+import { AddElementModal } from './AddElementModal';
+import { CentralVideo } from '../../components/CentralVideo';
 
 const RADIUS_X = 1100;
 const RADIUS_Z = 700;
 const PERSPECTIVE = 1200;
 const CENTER_Z_INDEX = 700;
 
+// Rotating to the right to match the main suite page format (original was right, changed then reverted)
 const AUTO_ROTATION_SPEED = -0.05;
 const DRAG_SENSITIVITY = 0.15;
 const MOMENTUM_FRICTION = 0.95;
 
-export const Carousel = () => {
+export const LifeCarousel = () => {
     const [rotation, setRotation] = useState(0);
     const [isPaused, setIsPaused] = useState(false);
     const [mounted, setMounted] = useState(false);
     const [radius, setRadius] = useState({ x: RADIUS_X, z: RADIUS_Z });
+    const [customNodes, setCustomNodes] = useState<any[]>([]);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+
+    const allNodes = [
+        ...INITIAL_LIFE_NODES,
+        ...customNodes,
+        {
+            id: 'add-element',
+            iconName: 'Plus',
+            title: 'Add Element',
+            subtitle: 'New Node',
+            color: 'slate',
+            isAction: true
+        }
+    ];
 
     React.useEffect(() => {
         setMounted(true);
         const handleResize = () => {
             const width = window.innerWidth;
-            // Dynamic scaling of radius based on screen width
             const newRadiusX = Math.min(1100, width * 0.45);
             const newRadiusZ = Math.min(700, width * 0.3);
             setRadius({ x: newRadiusX, z: newRadiusZ });
@@ -52,8 +69,8 @@ export const Carousel = () => {
         setRotation(rotationRef.current);
     });
 
-    const nodesWithPosition = SUITE_NODES.map((node, index) => {
-        const angleDeg = (360 / SUITE_NODES.length) * index + rotation;
+    const nodesWithPosition = allNodes.map((node, index) => {
+        const angleDeg = (360 / allNodes.length) * index + rotation;
         const angleRad = (angleDeg * Math.PI) / 180;
 
         const xRaw = Math.sin(angleRad) * radius.x;
@@ -63,13 +80,12 @@ export const Carousel = () => {
         const zIndex = Math.round(zRaw + CENTER_Z_INDEX);
         const opacity = Math.max(0.4, (zRaw + radius.z) / (2 * radius.z) + 0.3);
 
-        // Tilt effect: front items (positive z) move lower
         const tiltOffset = zRaw * 0.4;
 
         return {
             ...node,
             x: xRaw,
-            y: 240 + tiltOffset, // Adjusted for 1000px video presence
+            y: 240 + tiltOffset,
             z: zRaw,
             scale: scaleFactor,
             zIndex,
@@ -100,7 +116,6 @@ export const Carousel = () => {
 
     return (
         <div className="relative w-full h-full flex items-center justify-center perspective-[1200px]">
-            {/* 1. INTERACTION LAYER: Move to background (z-0) so it doesn't block clicks */}
             <motion.div
                 className="fixed inset-0 z-0 cursor-grab active:cursor-grabbing bg-transparent select-none"
                 style={{ touchAction: 'none' }}
@@ -109,42 +124,52 @@ export const Carousel = () => {
                 onPanEnd={handlePanEnd}
             />
 
-            {/* 2. CENTER VIDEO: Perfectly centered vertically */}
             <div
                 className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none select-none"
                 style={{ zIndex: CENTER_Z_INDEX }}
             >
+                {/* Reusing CentralVideo for the moment. We could make a specialized user profile center here. */}
                 <CentralVideo />
             </div>
 
-            {/* 3. ORBITING NODES: Positioned lower in the orbit */}
-            {nodesWithPosition.map((node) => (
-                <motion.div
-                    key={node.title}
-                    className="absolute top-1/2 left-1/2 pointer-events-none"
-                    style={{
-                        zIndex: node.zIndex,
-                    }}
-                    initial={false}
-                    animate={{
-                        x: node.x,
-                        y: node.y,
-                        scale: node.scale,
-                        opacity: node.opacity,
-                    }}
-                    transition={{ type: "tween", duration: 0 }}
-                >
-                    <div className="pointer-events-auto relative z-[1000] -translate-x-1/2 -translate-y-1/2">
-                        <OrbNode
-                            href={node.href}
-                            icon={node.icon}
-                            title={node.title}
-                            subtitle={node.subtitle}
-                            color={node.color}
-                        />
-                    </div>
-                </motion.div>
-            ))}
+            {nodesWithPosition.map((node) => {
+                const IconComponent = ICON_MAP[node.iconName] || ICON_MAP['Activity'];
+                
+                return (
+                    <motion.div
+                        key={node.id}
+                        className="absolute top-1/2 left-1/2 pointer-events-none"
+                        style={{
+                            zIndex: node.zIndex,
+                        }}
+                        initial={false}
+                        animate={{
+                            x: node.x,
+                            y: node.y,
+                            scale: node.scale,
+                            opacity: node.opacity,
+                        }}
+                        transition={{ type: "tween", duration: 0 }}
+                    >
+                        <div className="pointer-events-auto relative z-[1000] -translate-x-1/2 -translate-y-1/2">
+                            <OrbNode
+                                href={node.isAction ? undefined : node.href}
+                                onClick={node.isAction ? () => setIsModalOpen(true) : undefined}
+                                icon={IconComponent}
+                                title={node.title}
+                                subtitle={node.subtitle}
+                                color={node.color}
+                            />
+                        </div>
+                    </motion.div>
+                );
+            })}
+
+            <AddElementModal 
+                isOpen={isModalOpen}
+                onClose={() => setIsModalOpen(false)}
+                onAdd={(newElement) => setCustomNodes(prev => [...prev, newElement])}
+            />
         </div>
     );
 };

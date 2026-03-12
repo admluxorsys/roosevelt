@@ -6,7 +6,8 @@ import { motion } from 'framer-motion';
 import { LucideIcon } from 'lucide-react';
 
 interface OrbNodeProps {
-    href: string;
+    href?: string;
+    onClick?: () => void;
     icon: LucideIcon;
     title: string;
     subtitle: string;
@@ -26,9 +27,9 @@ const shadowColors: Record<string, string> = {
     indigo: 'rgba(99, 102, 241, 0.5)',
 };
 
-export const OrbNode = ({ href, icon: Icon, title, subtitle, color }: Omit<OrbNodeProps, 'index' | 'total'>) => {
-    return (
-        <Link href={href} className="group flex flex-col items-center gap-4">
+export const OrbNode = ({ href, onClick, icon: Icon, title, subtitle, color }: Omit<OrbNodeProps, 'index' | 'total'>) => {
+    const InnerContent = (
+        <>
             <motion.div
                 className="flex items-center justify-center transition-all duration-500 relative"
                 whileHover={{
@@ -42,6 +43,20 @@ export const OrbNode = ({ href, icon: Icon, title, subtitle, color }: Omit<OrbNo
                 <p className="text-sm font-bold text-white uppercase tracking-tight whitespace-nowrap opacity-70 group-hover:opacity-100">{title}</p>
                 <p className="text-[9px] text-neutral-500 uppercase tracking-[0.2em] opacity-50 group-hover:opacity-100">{subtitle}</p>
             </div>
-        </Link>
+        </>
+    );
+
+    if (href && href !== '#') {
+        return (
+            <Link href={href} className="group flex flex-col items-center gap-4">
+                {InnerContent}
+            </Link>
+        );
+    }
+
+    return (
+        <button onClick={onClick} className="group flex flex-col items-center gap-4 cursor-pointer outline-none bg-transparent border-none p-0 inline-flex">
+            {InnerContent}
+        </button>
     );
 };
