@@ -340,6 +340,27 @@ export const useCardOperations = ({
         }
     };
 
+    const handleToggleBlock = async () => {
+        if (!currentCardId || !currentGroupId || currentCardId.startsWith('temp-')) return;
+        const newStatus = !liveCardData?.isBlocked;
+        try {
+            await updateDoc(doc(db, 'kanban-groups', currentGroupId, 'cards', currentCardId), {
+                isBlocked: newStatus,
+                history: arrayUnion({
+                    id: `hist_${Date.now()}`,
+                    type: 'status',
+                    content: `${newStatus ? 'Contacto bloqueado' : 'Contacto desbloqueado'}`,
+                    timestamp: Timestamp.now(),
+                    author: 'Agente'
+                })
+            });
+            toast.success(newStatus ? 'Contacto bloqueado' : 'Contacto desbloqueado');
+        } catch (error) {
+            console.error(error);
+            toast.error('Error al cambiar estado de bloqueo');
+        }
+    };
+
     return {
         isAddingNote, setIsAddingNote, newNote, setNewNote,
         isAddingCheckIn, setIsAddingCheckIn, newCheckIn, setNewCheckIn,
@@ -351,6 +372,6 @@ export const useCardOperations = ({
         handleToggleCheckIn, handleSavePaymentMethod, handleDeleteNote, handleDeleteCheckIn,
         handleSaveHistoryComment, handleSaveMute, handleUpdateAssignee,
         handleEditCheckIn, handleSaveEditedCheckIn, handleEditNote, handleSaveEditedNote,
-        handleAddLabel, handleRemoveLabel
+        handleAddLabel, handleRemoveLabel, handleToggleBlock
     };
 };

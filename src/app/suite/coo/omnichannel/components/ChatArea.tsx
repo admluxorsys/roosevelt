@@ -3,6 +3,8 @@ import { MoreVertical, Info, Send, Paperclip, Smile, Image as ImageIcon, FileTex
 import { useConversationLogic } from '../../whatsapp/components/ConversationModal/hooks/useConversationLogic';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import { db } from '@/lib/firebase';
+import { doc, updateDoc } from 'firebase/firestore';
 
 interface ChatAreaProps {
     card: any;
@@ -102,7 +104,22 @@ export default function ChatArea({ card, groups, groupName, allConversations, to
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
-    
+
+    // Clear unread count when conversation is opened
+    useEffect(() => {
+        const hasUnread = (card?.unreadCount || 0) > 0;
+        const hasFocus = document.hasFocus();
+        
+        if (card?.id && hasUnread && hasFocus) {
+            console.log(`[ChatArea] Resetting unreadCount for ${card.id} (Current: ${card.unreadCount})`);
+            const cardRef = doc(db, 'kanban-groups', card.groupId, 'cards', card.id);
+            updateDoc(cardRef, { unreadCount: 0 }).catch(err => {
+                console.error("[ChatArea] Error clearing unread count:", err);
+            });
+        } else if (card?.id && hasUnread) {
+            console.log(`[ChatArea] Card ${card.id} has unread but NO FOCUS. Skipping reset.`);
+        }
+    }, [card?.id, card?.unreadCount, card?.groupId]);
     const logic = useConversationLogic({
         isOpen: true,
         onClose: () => {},
@@ -111,6 +128,13 @@ export default function ChatArea({ card, groups, groupName, allConversations, to
         groups: groups,
         allConversations: allConversations
     });
+
+    // Auto-scroll to bottom
+    useEffect(() => {
+        if (logic.messagesEndRef.current) {
+            logic.messagesEndRef.current.scrollIntoView({ behavior: 'auto' });
+        }
+    }, [card?.id, logic.liveCardData?.messages?.length]);
 
     const contactName = card?.contactName || card?.contactNumber || 'Desconocido';
     const isOnline = card?.isOnline ?? true; // Use real status if available
@@ -127,9 +151,8 @@ export default function ChatArea({ card, groups, groupName, allConversations, to
     };
 
     const handleBlockContact = () => {
-        toast.error('Contacto bloqueado');
+        logic.handleToggleBlock();
         setShowMoreMenu(false);
-        // Implement logic to block contact
     };
 
     return (
@@ -199,11 +222,11 @@ export default function ChatArea({ card, groups, groupName, allConversations, to
                                         Finalizar Conversación
                                     </button>
                                     <button 
-                                        className="w-full flex items-center px-3 py-2.5 text-xs text-red-400 hover:bg-red-500/10 transition-colors rounded-md group text-left"
+                                        className={`w-full flex items-center px-3 py-2.5 text-xs transition-colors rounded-md group text-left ${logic.liveCardData?.isBlocked ? 'text-green-400 hover:bg-green-500/10' : 'text-red-400 hover:bg-red-500/10'}`}
                                         onClick={handleBlockContact}
                                     >
-                                        <Ban size={14} className="mr-3 text-red-500 group-hover:text-red-400" />
-                                        Bloquear Contacto
+                                        <Ban size={14} className={`mr-3 group-hover:text-current ${logic.liveCardData?.isBlocked ? 'text-green-500' : 'text-red-500'}`} />
+                                        {logic.liveCardData?.isBlocked ? 'Desbloquear Contacto' : 'Bloquear Contacto'}
                                     </button>
                                 </div>
                             </div>
@@ -213,7 +236,7 @@ export default function ChatArea({ card, groups, groupName, allConversations, to
             </div>
 
             {/* Messages Area */}
-            <div className="flex-1 overflow-y-auto p-4 bg-[#0a0a0a] space-y-3">
+            <div className="flex-1 overflow-y-auto p-4 bg-[#0a0a0a] space-y-3 no-scrollbar">
                 {Object.entries(logic.groupedMessages).map(([date, msgs], dateIdx) => (
                     <React.Fragment key={date}>
                         <div className="text-center text-[10px] text-neutral-600 my-4 uppercase tracking-widest font-bold opacity-60">{date}</div>
@@ -261,8 +284,11 @@ export default function ChatArea({ card, groups, groupName, allConversations, to
                                                     <RefreshCw size={10} className="ml-0.5" />
                                                 </div>
                                             ) : (
-                                                <span className={`ml-1 ${logic.isMessageRead(msg) ? 'text-blue-500' : 'text-neutral-700'}`}>
-                                                    {logic.isMessageRead(msg) ? '✓✓' : '✓'}
+                                                <span className={`ml-1 flex items-center ${msg.status === 'read' ? 'text-blue-400' : 'text-neutral-600'}`}>
+                                                    {msg.status === 'sent' && <span>✓</span>}
+                                                    {msg.status === 'delivered' && <span>✓✓</span>}
+                                                    {msg.status === 'read' && <span>✓✓</span>}
+                                                    {!msg.status && <span>✓</span>}
                                                 </span>
                                             )
                                         )}
@@ -338,7 +364,7 @@ export default function ChatArea({ card, groups, groupName, allConversations, to
                             Quick Replies
                             <button onClick={() => setShowQuickReplies(false)} className="hover:text-white">✕</button>
                         </div>
-                        <div className="max-h-60 overflow-y-auto">
+                        <div className="max-h-60 overflow-y-auto no-scrollbar">
                             {QUICK_REPLIES.map(reply => (
                                 <button 
                                     key={reply.id}
@@ -353,11 +379,25 @@ export default function ChatArea({ card, groups, groupName, allConversations, to
                     </div>
                 )}
 
-                <div className="flex items-end bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden focus-within:ring-1 focus-within:ring-blue-500 transition-shadow">
+                <div className="flex items-end bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden focus-within:ring-1 focus-within:ring-blue-500 transition-shadow relative">
+                    
+                    {logic.liveCardData?.isBlocked && (
+                        <div className="absolute inset-0 bg-neutral-900/80 backdrop-blur-[2px] z-20 flex items-center justify-center gap-3 animate-in fade-in duration-300">
+                            <Ban size={16} className="text-red-500" />
+                            <span className="text-[11px] font-bold text-neutral-400 uppercase tracking-widest">Contacto Bloqueado</span>
+                            <button 
+                                onClick={logic.handleToggleBlock}
+                                className="ml-2 text-blue-500 hover:text-blue-400 text-[10px] font-black uppercase tracking-widest border-b border-blue-500/30 transition-all hover:border-blue-400"
+                            >
+                                Desbloquear
+                            </button>
+                        </div>
+                    )}
 
                     <button 
+                        disabled={logic.liveCardData?.isBlocked}
                         onClick={() => setShowQuickReplies(!showQuickReplies)}
-                        className={`p-3 transition-colors ${showQuickReplies ? 'text-blue-500 bg-blue-500/10' : 'text-neutral-400 hover:text-white'}`}
+                        className={`p-3 transition-colors ${showQuickReplies ? 'text-blue-500 bg-blue-500/10' : 'text-neutral-400 hover:text-white'} disabled:opacity-30`}
                         title="Quick Replies"
                     >
                         <Zap size={20} fill={showQuickReplies ? 'currentColor' : 'none'} />
@@ -403,8 +443,9 @@ export default function ChatArea({ card, groups, groupName, allConversations, to
                         </div>
                     ) : (
                         <textarea
-                            className="flex-1 bg-transparent border-none focus:outline-none focus:ring-0 text-white py-3 resize-none max-h-32 min-h-[44px]"
-                            placeholder="Type your reply here... (Shift + Enter for new line)"
+                            disabled={logic.liveCardData?.isBlocked}
+                            className="flex-1 bg-transparent border-none focus:outline-none focus:ring-0 text-white py-3 resize-none max-h-32 min-h-[44px] disabled:opacity-30 no-scrollbar"
+                            placeholder={logic.liveCardData?.isBlocked ? "Contacto bloqueado" : "Type your reply here... (Shift + Enter for new line)"}
                             rows={1}
                             value={logic.newMessage}
                             onChange={(e) => logic.setNewMessage(e.target.value)}

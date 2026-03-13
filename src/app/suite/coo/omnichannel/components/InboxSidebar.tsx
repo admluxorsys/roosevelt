@@ -38,7 +38,7 @@ export default function InboxSidebar({ selectedFolder, setSelectedFolder, cards 
     ];
 
     return (
-        <div className="w-52 bg-[#0a0a0a] border-r border-neutral-900 flex flex-col h-full flex-shrink-0 select-none">
+        <div className="w-[190px] bg-[#0a0a0a] border-r border-neutral-900 flex flex-col h-full flex-shrink-0 select-none">
             {/* Header / Brand */}
             <div className="h-12 flex items-center px-3 border-b border-neutral-900">
                 <div className="w-5 h-5 bg-blue-600 rounded mr-2 flex items-center justify-center">

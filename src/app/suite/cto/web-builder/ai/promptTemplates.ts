@@ -146,14 +146,17 @@ CRITICAL: Generate COMPLETE, PRODUCTION-READY code. Every component should be:
 1. ATOMIC PERFECTION: Provide ZERO "stubs" or "placeholders". All functions, interfaces, and UI code must be 100% complete and fully implemented.
 2. NO HALLUCINATIONS: Do NOT use imaginary components or libraries. If you need a UI element (like a Dialog or Dropdown), build it inline using raw Tailwind CSS and standard React state. Do NOT import from "@/components/ui/xyz" unless you write that exact file.
 3. ABSOLUTE RESILIENCE (ANTI-UNDEFINED):
-   - ALWAYS use optional chaining (?.) for all data access (e.g., \`user?.profile?.name\`).
-   - ALWAYS use fallback arrays (|| []) when mapping or filtering (e.g., \`(items || []).map(...)\`).
+   - ALWAYS use optional chaining (?.) for ALL data access (e.g., \`item?.property\`, \`data?.results\`). This is non-negotiable to prevent production crashes.
+   - ALWAYS use fallback values: \`(items || []).map()\`, \`(data?.name || "Sin Nombre")\`.
    - ALWAYS initialize state with valid defaults (e.g., \`useState([])\` instead of \`useState()\`).
-   - For Zustand stores, always define nested defaults to prevent null reference errors on boot.
-4. ROUTING INTEGRITY & LINKAGE:
-   - Ensure EXACT path matching between \`<Route path="...">\` in App.tsx and all \`<Link to="...">\` usages in navigation menus or buttons.
-   - App.tsx MUST import every single page/component it references. No missing imports.
-5. LUCIDE ICONS: Use only standard lucide-react icons.
+4. SUPABASE INTEGRATION:
+   - You can import and use the Supabase client: \`import { supabase } from "@/lib/supabase"\`.
+   - Use it for fetching real data (products, leads, gallery images).
+   - Ensure every fetch has an \`.error\` check or a try/catch block.
+   - IMPORTANT: If Supabase fails or data is empty, the UI MUST still look beautiful using the fallback/mock data provided. Never show an empty screen or a crash error.
+5. DESIGN INTEGRITY: Do NOT compromise on visuals. Gradients, shadows, micro-animations, and premium layouts must remain as the highest priority alongside technical stability.
+6. ROUTING INTEGRITY: Ensure EXACT path matching between App.tsx and all Link usages.
+7. LUCIDE IMPORTS: Every icon used (e.g., <ArrowRight />, <ShoppingBag />) MUST be explicitly imported from 'lucide-react' at the top of the file. Never use an icon without importing it first.
 
 Generate ALL necessary files in a logical sequence (Structure -> Pages -> Logic):
 1. src/App.tsx - Main app component with routing

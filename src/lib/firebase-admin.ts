@@ -12,7 +12,14 @@ if (!admin.apps.length) {
         // 1. Check for Service Account in Environment Variable (Preferred for security/CI/Vercel)
         const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'udreamms-platform-1';
         const serviceAccountEnv = process.env.FIREBASE_SERVICE_ACCOUNT;
-        const serviceAccountPath = path.join(process.cwd(), 'serviceAccountKey.json');
+        // Search in current dir and parent to be safe (Next.js context can vary)
+        const possiblePaths = [
+            path.join(process.cwd(), 'serviceAccountKey.json'),
+            path.join(__dirname, '..', '..', '..', '..', 'serviceAccountKey.json'), // Inside .next or src
+            '/home/julio_romero/.gemini/antigravity/scratch/autonomous/serviceAccountKey.json' // Hardcoded absolute
+        ];
+
+        let serviceAccountPath = possiblePaths.find(p => fs.existsSync(p));
 
         if (serviceAccountEnv) {
             try {
@@ -21,26 +28,26 @@ if (!admin.apps.length) {
                     credential: admin.credential.cert(serviceAccount),
                     projectId
                 });
-                console.log(`Firebase Admin initialized for ${projectId} from FIREBASE_SERVICE_ACCOUNT`);
+                console.log(`[Firebase Admin] ✅ SUCCESS: Initialized from FIREBASE_SERVICE_ACCOUNT env.`);
             } catch (jsonError) {
                 console.error('Failed to parse FIREBASE_SERVICE_ACCOUNT environment variable. Ensuring it is a valid JSON string.');
                 throw jsonError;
             }
-        } else if (fs.existsSync(serviceAccountPath)) {
+        } else if (serviceAccountPath && fs.existsSync(serviceAccountPath)) {
             const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
 
             admin.initializeApp({
                 credential: admin.credential.cert(serviceAccount),
                 projectId
             });
-            console.log(`Firebase Admin initialized for ${projectId} with serviceAccountKey.json`);
+            console.log(`[Firebase Admin] ✅ SUCCESS: Initialized for project ${projectId} with serviceAccountKey.json at ${serviceAccountPath}`);
         } else {
-            console.warn(`[Firebase Admin] Service account not found in ENV or at ${serviceAccountPath}`);
-            console.warn(`Attempting fallback initialization for project: ${projectId}`);
+            console.warn(`[Firebase Admin] ⚠️ WARNING: Service account file NOT found in possible paths.`);
+            console.warn(`[Firebase Admin] Falling back to default credentials (ADC) for project: ${projectId}`);
             admin.initializeApp({
                 projectId
             });
-            console.log(`Firebase Admin initialized for ${projectId} with default credentials/ADC`);
+            console.log(`[Firebase Admin] Initialized for ${projectId} with default credentials/ADC`);
         }
     } catch (error: any) {
         console.error('CRITICAL: Failed to initialize Firebase Admin:', error.message);

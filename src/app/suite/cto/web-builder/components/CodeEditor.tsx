@@ -258,7 +258,9 @@ export const CodeEditor = ({
                                         });
                                     }}
                                     onChange={(val) => {
-                                        updateFiles(prev => ({ ...prev, [activeFile]: val || "" }));
+                                        if (val !== codeContent) {
+                                            updateFiles(prev => ({ ...prev, [activeFile]: val || "" }));
+                                        }
                                     }}
                                     options={{
                                         minimap: { enabled: false },

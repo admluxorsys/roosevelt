@@ -196,6 +196,7 @@ export interface CardData {
     updatedAt?: Timestamp;
     labels?: string[];
     presence?: 'typing' | 'recording' | null;
+    isBlocked?: boolean;
 }
 
 export interface ConversationModalProps {
