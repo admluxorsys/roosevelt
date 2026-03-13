@@ -13,25 +13,33 @@ const whatsappConfig = functions.config().whatsapp;
 // Updated with user provided keys as primary or fallback
 const accessToken = (whatsappConfig === null || whatsappConfig === void 0 ? void 0 : whatsappConfig.access_token) || 'EAARnTi3ZAPNYBQFC70F28fb9MispCQZAVtfnHhmPsdZBNqyWQZBcA3bE7pU4430ZBzDJxEoHZAbmUD2EWOxZBS9aRirmHvM5luC6U03sIz752oracncCSZCb9WPOtaLaIcAiXkytFuFPF5AuJrmoLvB6leQ09wyOWNfS217JjNZAvjYYxjfEZCtvfxyZChGBkWzZBQZDZD';
 const phoneNumberId = (whatsappConfig === null || whatsappConfig === void 0 ? void 0 : whatsappConfig.phone_number_id) || '676837795516836';
-const WHATSAPP_API_URL = `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`;
 function cleanNumber(phone) {
     return phone.replace(/\D/g, ''); // Solo números, quita el '+'
 }
 async function makeWhatsAppRequest(data, type) {
-    var _a;
-    if (!accessToken || !phoneNumberId) {
-        functions.logger.error('Missing WhatsApp API credentials.');
+    var _a, _b, _c;
+    // Priority: Cloud Config > Environment Variables
+    const apiToken = ((_a = functions.config().whatsapp) === null || _a === void 0 ? void 0 : _a.access_token) || process.env.WHATSAPP_ACCESS_TOKEN || accessToken;
+    const phoneId = ((_b = functions.config().whatsapp) === null || _b === void 0 ? void 0 : _b.phone_number_id) || process.env.WHATSAPP_PHONE_NUMBER_ID || phoneNumberId;
+    if (!apiToken || !phoneId) {
+        functions.logger.error('❌ [WhatsApp API] Missing credentials!', { hasToken: !!apiToken, hasPhoneId: !!phoneId });
         throw new Error('WhatsApp API credentials are not configured.');
     }
+    const url = `https://graph.facebook.com/v19.0/${phoneId}/messages`;
     try {
-        const response = await axios_1.default.post(WHATSAPP_API_URL, data, {
-            headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        const response = await axios_1.default.post(url, data, {
+            headers: { 'Authorization': `Bearer ${apiToken}`, 'Content-Type': 'application/json' },
         });
+        functions.logger.info(`✅ [WhatsApp API] ${type} success`, { recipient: data.to });
         return response.data;
     }
     catch (error) {
-        const errorData = ((_a = error.response) === null || _a === void 0 ? void 0 : _a.data) || error.message;
-        functions.logger.error(`WhatsApp API Error (${type}):`, errorData);
+        const errorData = ((_c = error.response) === null || _c === void 0 ? void 0 : _c.data) || error.message;
+        functions.logger.error(`❌ [WhatsApp API] Error (${type}):`, {
+            error: errorData,
+            payload: data,
+            url: url.replace(phoneId, 'HIDDEN_ID')
+        });
         throw new Error(`WhatsApp API Error: ${JSON.stringify(errorData)}`);
     }
 }

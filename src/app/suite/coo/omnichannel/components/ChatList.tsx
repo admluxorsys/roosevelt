@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { Search, Filter, Clock, MessageCircle, ChevronDown, Check, Mic } from 'lucide-react';
+import { Search, Filter, Clock, MessageCircle, ChevronDown, Check, Mic, Ban } from 'lucide-react';
 
 interface ChatListProps {
     selectedFolder: string;
@@ -75,14 +75,15 @@ export default function ChatList({ selectedFolder, activeConversationId, setActi
             channel: c.channel || c.source || c.primary_channel || 'WhatsApp',
             snippet: c.lastMessage || c.description || 'Nueva conversación',
             time: c.updatedAt ? typeof c.updatedAt.toDate === 'function' ? c.updatedAt.toDate().toLocaleDateString(undefined, {month: 'short', day: 'numeric', hour: '2-digit', minute:'2-digit'}) : 'Reciente' : '',
-            unread: c.unreadCount || 0,
+            unread: (c.unreadCount !== undefined ? c.unreadCount : (c.unread || 0)),
             status: 'open',
-            presence: c.presence || null
+            presence: c.presence || null,
+            isBlocked: !!c.isBlocked
         }));
     }, [cards, selectedFolder, searchQuery, sortBy, filterBy]);
 
     return (
-        <div className="w-[280px] bg-[#0d0d0d] border-r border-neutral-900 flex flex-col h-full flex-shrink-0 text-white">
+        <div className="w-[240px] bg-[#0d0d0d] border-r border-neutral-900 flex flex-col h-full flex-shrink-0 text-white">
             {/* Header & Search */}
             <div className="p-2 border-b border-neutral-900 space-y-2">
                 <div className="flex items-center justify-between relative px-1 pt-1">
@@ -174,6 +175,11 @@ export default function ChatList({ selectedFolder, activeConversationId, setActi
                                     `}>
                                         <MessageCircle size={6} className="text-white fill-current" />
                                     </div>
+                                    {chat.isBlocked && (
+                                        <div className="absolute -top-1 -right-1 bg-red-500 rounded-full p-0.5 shadow-lg z-10 border border-[#0d0d0d]">
+                                            <Ban size={8} className="text-white" />
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div className="flex-1 min-w-0">
@@ -186,8 +192,8 @@ export default function ChatList({ selectedFolder, activeConversationId, setActi
                                         </span>
                                     </div>
                                     <div className="flex items-center gap-1">
-                                        {chat.unread > 0 && <div className="w-1 h-1 rounded-full bg-blue-500 flex-shrink-0" />}
-                                        <div className={`truncate text-[11px] ${chat.unread > 0 ? 'text-neutral-300 font-medium' : 'text-neutral-600'}`}>
+                                        {chat.unread > 0 && <div className="w-1.5 h-1.5 rounded-full bg-[#25D366] flex-shrink-0 animate-pulse shadow-[0_0_8px_rgba(37,211,102,0.4)]" />}
+                                        <div className={`truncate text-[11px] ${chat.unread > 0 ? 'text-neutral-200 font-semibold' : 'text-neutral-600'}`}>
                                             {chat.presence === 'typing' ? (
                                                 <span className="text-blue-500 italic animate-pulse">Escribiendo...</span>
                                             ) : chat.presence === 'recording' ? (
@@ -202,10 +208,11 @@ export default function ChatList({ selectedFolder, activeConversationId, setActi
                                 </div>
 
                                 {chat.unread > 0 && (
-                                    <div className="ml-1 flex-shrink-0 pt-0.5">
-                                        <span className="bg-blue-600 text-white text-[8px] font-bold px-1 py-0 rounded-full inline-block min-w-[0.8rem] text-center">
+                                    <div className="ml-2 flex-shrink-0 flex flex-col items-end gap-1 pt-1">
+                                        <span className="bg-[#25D366] text-black text-[10px] font-black px-1.5 py-0.5 rounded-full min-w-[20px] h-[20px] flex items-center justify-center shadow-[0_0_10px_rgba(37,211,102,0.5)] transform scale-110 border border-[#111]">
                                             {chat.unread}
                                         </span>
+                                        <span className="text-[7px] text-[#25D366] font-bold opacity-60">NEW</span>
                                     </div>
                                 )}
                             </button>

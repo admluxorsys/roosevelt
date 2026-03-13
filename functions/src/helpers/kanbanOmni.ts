@@ -124,6 +124,7 @@ export async function handleKanbanUpdateOmni(message: UnifiedMessage): Promise<a
                 // Keep legacy fields up to date for backward compat
                 contactNumber: (source_platform === 'whatsapp' || source_platform === 'sms') ? external_id : admin.firestore.FieldValue.delete(),
                 contactNumberClean: (source_platform === 'whatsapp' || source_platform === 'sms') ? external_id.replace(/\+/g, '') : admin.firestore.FieldValue.delete(),
+                unreadCount: admin.firestore.FieldValue.increment(1)
             };
 
             if (platform_metadata) {
@@ -138,6 +139,8 @@ export async function handleKanbanUpdateOmni(message: UnifiedMessage): Promise<a
                 platform: source_platform,
                 media_url: message.media_url || null
             });
+
+            updatePayload.unreadCount = admin.firestore.FieldValue.increment(1);
 
             transaction.update(cardRef, updatePayload);
 
@@ -179,6 +182,7 @@ export async function handleKanbanUpdateOmni(message: UnifiedMessage): Promise<a
                     platform: source_platform,
                     media_url: message.media_url || null
                 }],
+                unreadCount: 1,
             };
 
             transaction.set(cardRef, newCardData);

@@ -106,8 +106,25 @@ export const BOOTSTRAP_SCRIPT = (filesJSON: string) => `
             var Mock = function() { 
                 console.warn("[v8.5.2-Z Omni] Placeholder: " + name); 
                 return React.createElement('div', { 
-                    style: { padding: '10px', border: '1px dashed #333', borderRadius: '12px', background: 'rgba(255,255,255,0.02)', textAlign: 'center', color: '#444', fontSize: '10px' } 
-                }, "Comp: " + name);
+                    style: { 
+                        padding: '4px 8px', 
+                        fontSize: '9px',
+                        fontFamily: 'monospace',
+                        color: '#a1a1aa',
+                        background: 'transparent',
+                        border: '1px dashed #e4e4e7',
+                        borderRadius: '4px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        margin: '1px',
+                        whiteSpace: 'nowrap',
+                        fontWeight: '400',
+                        opacity: 0.8
+                    } 
+                }, [
+                    React.createElement('span', { key: 'text' }, '· ' + name.split('.').pop())
+                ]);
             };
             var t = initial || Mock;
             return new Proxy(t, {
@@ -206,9 +223,6 @@ export const BOOTSTRAP_SCRIPT = (filesJSON: string) => `
                 'firebase/app': window.firebase, 'firebase/auth': window.firebase, 'firebase/firestore': window.firebase
             };
 
-            if (ecosystem[p]) {
-                var l = ecosystem[p];
-                
             // ─── ZUSTAND: Handled BEFORE ecosystem map (CDN UMD crashes on load due to ───
             // useSyncExternalStoreWithSelector being undefined, so window.zustand is NEVER set)
             if (p === 'zustand/middleware') {
@@ -289,6 +303,9 @@ export const BOOTSTRAP_SCRIPT = (filesJSON: string) => `
                 };
                 return createOmniProxy(p, { create: zustandCreate, default: zustandCreate });
             }
+
+            if (ecosystem[p]) {
+                var l = ecosystem[p];
 
                 if (p === 'framer-motion' && l) {
                     var m = l.motion || l;

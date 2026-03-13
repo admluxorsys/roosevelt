@@ -82,6 +82,7 @@ export async function POST(req: Request) {
                     whatsappMessageId: messageId || null, // rename this field in future to generic 'messageId'
                     platform: targetPlatform
                 }),
+                unreadCount: 0,
             });
         }
 

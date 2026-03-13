@@ -5,7 +5,7 @@ const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const kanbanOmni_1 = require("../helpers/kanbanOmni");
 const botEngine_1 = require("../helpers/botEngine");
-const TWENTY_FOUR_HOURS_IN_MS = 24 * 60 * 60 * 1000;
+const FORTY_EIGHT_HOURS_IN_MS = 48 * 60 * 60 * 1000;
 exports.whatsappWebhook = functions.https.onRequest(async (req, res) => {
     var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o;
     // --- VERIFICACIÓN DE WEBHOOK (GET) ---
@@ -27,18 +27,44 @@ exports.whatsappWebhook = functions.https.onRequest(async (req, res) => {
     }
     // --- RECEPCIÓN DE EVENTOS (POST) ---
     if (req.method === 'POST') {
+        functions.logger.info('📩 [Webhook] Request received');
         res.status(200).send('EVENT_RECEIVED');
-        const { entry } = req.body;
+        const requestBody = req.body;
+        if (!requestBody || !requestBody.entry) {
+            functions.logger.warn('[Webhook] Empty or invalid body received');
+            return;
+        }
+        const { entry } = requestBody;
         const change = (_d = (_c = (_b = entry === null || entry === void 0 ? void 0 : entry[0]) === null || _b === void 0 ? void 0 : _b.changes) === null || _c === void 0 ? void 0 : _c[0]) === null || _d === void 0 ? void 0 : _d.value;
         if (!change)
             return;
         // --- CASO 1: MANEJO DE ESTADOS (READ, DELIVERED, SENT) ---
         if (change.statuses && change.statuses.length > 0) {
             const statusUpdate = change.statuses[0];
-            if (statusUpdate.status === 'read') {
-                const recipientId = statusUpdate.recipient_id;
-                functions.logger.info(`[Status Update] Message read by ${recipientId}`);
-                await (0, kanbanOmni_1.updateReadStatus)(recipientId, 'whatsapp');
+            const status = statusUpdate.status;
+            const messageId = statusUpdate.id;
+            const recipientId = statusUpdate.recipient_id;
+            functions.logger.info(`[Status Update] ${status} for message ${messageId}`);
+            const db = admin.firestore();
+            const cardQuery = db.collectionGroup('cards').where('platform_ids.whatsapp', '==', recipientId).limit(1);
+            const snap = await cardQuery.get();
+            if (!snap.empty) {
+                const cardDoc = snap.docs[0];
+                const messages = cardDoc.data().messages || [];
+                let changed = false;
+                const updatedMessages = messages.map((m) => {
+                    if (m.whatsappMessageId === messageId) {
+                        changed = true;
+                        return Object.assign(Object.assign({}, m), { status: status });
+                    }
+                    return m;
+                });
+                if (changed) {
+                    await cardDoc.ref.update({ messages: updatedMessages });
+                }
+                if (status === 'read') {
+                    await (0, kanbanOmni_1.updateReadStatus)(recipientId, 'whatsapp');
+                }
             }
             return;
         }
@@ -103,7 +129,7 @@ exports.whatsappWebhook = functions.https.onRequest(async (req, res) => {
             // Since cardId is unique in the subcollection, but we don't know the Group ID easily without querying or returning it.
             // But wait, handleKanbanUpdateOmni creates it, so we can find it.
             // To be safe and fast, let's query by ID across groups
-            const cardQuery = db.collectionGroup('cards').where(admin.firestore.FieldPath.documentId(), '==', cardId);
+            const cardQuery = db.collectionGroup('cards').where('platform_ids.whatsapp', '==', from).limit(1);
             const cardSnap = await cardQuery.get();
             if (!cardSnap.empty) {
                 const cardDoc = cardSnap.docs[0];
@@ -119,7 +145,7 @@ exports.whatsappWebhook = functions.https.onRequest(async (req, res) => {
                         const lastInteraction = cardData.botState.lastInteraction.toDate
                             ? cardData.botState.lastInteraction.toDate()
                             : new Date(0);
-                        if ((now.getTime() - lastInteraction.getTime()) > TWENTY_FOUR_HOURS_IN_MS) {
+                        if ((now.getTime() - lastInteraction.getTime()) > FORTY_EIGHT_HOURS_IN_MS) {
                             shouldRestart = true;
                         }
                     }

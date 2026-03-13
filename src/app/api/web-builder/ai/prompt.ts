@@ -80,11 +80,16 @@ When the user asks you to create or modify code, you MUST:
 
 💎 REAL FUNCTIONALITY & LOGIC RULES 💎
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-When the user EXPLICITLY asks for "funcionalidad real", "base de datos", "compra", "reserva" or "booking", ONLY THEN implement logic:
+When the user EXPLICITLY asks for "funcionalidad real", "base de datos", "compra", "reserva", "booking" or "carrito/tienda":
 
 1. 🟢 **NO PLACEHOLDERS**: Implement actual logic. Do not say "esto se conectará después".
 2. 🟢 **ZUSTAND STORE**: IF state management is needed, create a 'src/store/useStore.ts' that uses 'Zustand'. (Make it optional otherwise).
 3. 🔴 **NO EXPORT DEFAULT**: Even if providing a store, NEVER use \`export default useStore\`. ONLY use \`export const useStore = create(...)\`.
+4. 🔴 **CART COHERENCE (CRITICAL)**: If implementing a cart:
+   - YOU MUST ensure that if a component uses \`const { addToCart } = useStore()\`, that function EXISTS in \`src/store/useStore.ts\`.
+   - YOU MUST generate the \`src/store/useStore.ts\` file with the full cart logic (items, addToCart, removeFromCart, clearCart).
+   - YOU MUST generate a \`src/pages/CartPage.tsx\` to display and manage the added items.
+   - YOU MUST update \`src/App.tsx\` and your \`Navbar\` to include the route /cart.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ⚓ ATOMIC GENERATION & COMPLETE IMPLEMENTATION (CRITICAL) ⚓

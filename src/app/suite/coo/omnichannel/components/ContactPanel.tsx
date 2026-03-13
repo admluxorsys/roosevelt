@@ -158,18 +158,18 @@ export default function ContactPanel({ card, groups }: ContactPanelProps) {
 
                         {/* Custom Attributes */}
                         <div className="pt-2">
-                            <h3 className="text-xs font-bold text-neutral-500 uppercase tracking-widest mb-3">Contact Details</h3>
+                            <h3 className="text-[10px] font-bold text-neutral-600 uppercase tracking-widest mb-3">Contact Details</h3>
                             <div className="space-y-3">
-                                <div className="flex items-center text-sm">
-                                    <Phone size={14} className="text-neutral-500 mr-3" />
+                                <div className="flex items-center text-[12px]">
+                                    <Phone size={13} className="text-neutral-500 mr-3 opacity-70" />
                                     <span className="text-white font-medium">{card?.contactNumber || 'No especificado'}</span>
                                 </div>
-                                <div className="flex items-center text-sm">
-                                    <Globe size={14} className="text-neutral-500 mr-3" />
+                                <div className="flex items-center text-[12px]">
+                                    <Globe size={13} className="text-neutral-500 mr-3 opacity-70" />
                                     <span className="text-white font-medium">{card?.country || 'Desconocido'}</span>
                                 </div>
-                                <div className="flex items-center text-sm">
-                                    <Clock size={14} className="text-neutral-500 mr-3" />
+                                <div className="flex items-center text-[12px]">
+                                    <Clock size={13} className="text-neutral-500 mr-3 opacity-70" />
                                     <span className="text-white font-medium">Activo {card?.source || 'WhatsApp'}</span>
                                 </div>
                             </div>
@@ -177,7 +177,7 @@ export default function ContactPanel({ card, groups }: ContactPanelProps) {
 
                         {/* Labels */}
                         <div className="pt-2 relative" ref={labelContainerRef}>
-                            <h3 className="text-xs font-bold text-neutral-500 uppercase tracking-widest mb-3 flex items-center justify-between">
+                            <h3 className="text-[10px] font-bold text-neutral-600 uppercase tracking-widest mb-3 flex items-center justify-between">
                                 Labels
                                 <button 
                                     onClick={() => {

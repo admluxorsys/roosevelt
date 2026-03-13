@@ -26,10 +26,11 @@ function replaceVariables(text: string, cardData: any): string {
         name: cardData.contactName || 'Amigo',
         nombre: cardData.contactName || 'Amigo',
         phone: cardData.contactNumber || '',
-        ...cardData.customFields
+        ...(cardData.customFields || {})
     };
     for (const [key, value] of Object.entries(variables)) {
-        const regex = new RegExp(`\\{?\\{\\s*${key}\\s*\\}\\}?`, 'gi');
+        // Matches {key}, {{key}}, etc.
+        const regex = new RegExp(`\\{+\\s*${key}\\s*\\}+`, 'gi');
         processedText = processedText.replace(regex, String(value || ''));
     }
     return processedText;
@@ -149,19 +150,43 @@ export async function executeBotFlow(bot: any, to: string, cardData: any, userMe
             return;
         }
 
+        // --- STUCK-NODE RECOVERY: Resend current node message if conversation was interrupted ---
+        // If the bot was waiting (lastInteraction exists) and the user's message doesn't look like
+        // a valid response (e.g., very short/generic), OR if significant time has passed (> 30 min),
+        // resend the current node's prompt to guide the user back.
+        const lastInteractionAt = cardData.botState?.lastInteraction?.toDate
+            ? cardData.botState.lastInteraction.toDate()
+            : null;
+        const thirtyMinutesMs = 30 * 60 * 1000;
+        const wasStuck = lastInteractionAt && (new Date().getTime() - lastInteractionAt.getTime() > thirtyMinutesMs);
+
+        if (wasStuck) {
+            functions.logger.info(`[executeBotFlow] Conversation was stuck for >30 min. Resending current node prompt to ${to}.`);
+            try {
+                if (currentNode.type === 'quickReplyNode') {
+                    const qrText = replaceVariables(currentNode.data?.bodyText || currentNode.data?.text || 'Por favor, elige una opción:', cardData);
+                    const buttons = sanitizeButtonsData(currentNode.data?.buttons || []);
+                    if (buttons.length > 0) await adapter.sendButtonMessage(to, qrText, buttons);
+                    else await adapter.sendMessage(to, qrText);
+                } else if (currentNode.type === 'listMessageNode') {
+                    const listBody = replaceVariables(currentNode.data?.body || currentNode.data?.text || 'Elige una opción:', cardData);
+                    const sections = sanitizeListData(currentNode.data);
+                    if (sections.length > 0) await adapter.sendListMessage(to, listBody, currentNode.data?.buttonText || 'Ver opciones', sections);
+                    else await adapter.sendMessage(to, listBody);
+                } else if (currentNode.type === 'captureInputNode') {
+                    const prompt = replaceVariables(currentNode.data?.content || currentNode.data?.text || '', cardData);
+                    if (prompt) await adapter.sendMessage(to, prompt);
+                }
+            } catch (resendErr: any) {
+                functions.logger.warn(`[executeBotFlow] Could not resend stuck node: ${resendErr.message}`);
+            }
+            await delay(1000);
+        }
+
         try {
-            // markAsRead might fail if userMessage is not a valid ID, we wrap it
-            // For Messenger, 'to' is effectively the ID. For WA, 'userMessage' is the msg ID (usually passed as body in simplified flow? No, webhook passes msg ID if available, but here userMessage seems to be text).
-            // Actually, in whatsappWebhook, executeBotFlow is called with `body` as userMessage.
-            // markAsRead expects a message ID.
-            // If userMessage is just text, markAsRead will likely fail on WA API if it expects an ID.
-            // But we keep it as is for compatibility, wrapping in try-catch.
             if (platform !== 'whatsapp') {
-                // For non-WA, we treat 'to' as the identifier for read receipt context if possible
                 await adapter.markAsRead(to).catch(e => functions.logger.warn('markAsRead failed:', e.message));
             } else {
-                // For WA, if userMessage is text, this call is weird but preserving existing logic.
-                // ideally, we should pass messageId separately.
                 await adapter.markAsRead(userMessage).catch(e => functions.logger.warn('markAsRead failed (non-critical):', e.message));
             }
         } catch (e) { }
@@ -271,7 +296,7 @@ export async function executeBotFlow(bot: any, to: string, cardData: any, userMe
 
         switch (nextNode.type) {
             case 'textMessageNode':
-                const txt = replaceVariables(nextNode.data.content || nextNode.data.text || '', cardData);
+                const txt = replaceVariables(nextNode.data.content || nextNode.data.text || nextNode.data.label || '', cardData);
                 if (txt) {
                     await adapter.sendMessage(to, txt);
                     await logBotMessage(to, txt, cardData.id, cardData.groupId);
@@ -452,6 +477,14 @@ async function logBotMessage(contactNumber: string, message: string, cardId?: st
     }
 
     if (docRef) {
-        await docRef.update({ lastMessage: message, messages: admin.firestore.FieldValue.arrayUnion({ sender: 'agent', text: message, timestamp: new Date() }) });
+        await docRef.update({ 
+            lastMessage: message, 
+            messages: admin.firestore.FieldValue.arrayUnion({ 
+                sender: 'agent', 
+                text: message, 
+                timestamp: new Date() 
+            }),
+            unreadCount: 0
+        });
     }
 }

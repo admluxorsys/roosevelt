@@ -48,6 +48,7 @@ export const useFileSystem = (activeProjectId: string | null, updateProjectLastM
     const [hasChanges, setHasChanges] = useState(false);
     const [loading, setLoading] = useState(true);
     const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const historyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     // Track if we are viewing the correct project's files
     const loadedProjectId = useRef<string | null>(null);
@@ -294,8 +295,13 @@ export const useFileSystem = (activeProjectId: string | null, updateProjectLastM
 
         // Update UI State
         setFiles(nextState);
-        setHistory(h => [files, ...h].slice(0, 50)); // history uses 'files' (rendered) which is fine
-        setFuture([]);
+
+        // Debounced History Update (avoids literal flooding of snapshots)
+        if (historyTimeoutRef.current) clearTimeout(historyTimeoutRef.current);
+        historyTimeoutRef.current = setTimeout(() => {
+            setHistory(h => [files, ...h].slice(0, 50));
+            setFuture([]);
+        }, 1000);
 
         if (activeProjectId) {
             setSyncStatus('pending');
@@ -337,10 +343,30 @@ export const useFileSystem = (activeProjectId: string | null, updateProjectLastM
 
     // Safety: Ensure activeFile always exists
     useEffect(() => {
-        if (!files[activeFile] && Object.keys(files).length > 0) {
+        // Fix: Use undefined check instead of falsy check to allow empty strings ("")
+        if (files[activeFile] === undefined && Object.keys(files).length > 0) {
             setActiveFile(Object.keys(files)[0]);
         }
     }, [files, activeFile]);
+
+    // Global Key Listeners for Undo/Redo
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            const isZ = e.key.toLowerCase() === 'z';
+            const isY = e.key.toLowerCase() === 'y';
+            const ctrl = e.ctrlKey || e.metaKey;
+
+            if (ctrl && isZ) {
+                if (e.shiftKey) handleRedo();
+                else handleUndo();
+            } else if (ctrl && isY) {
+                handleRedo();
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [handleUndo, handleRedo]);
 
     return {
         files,

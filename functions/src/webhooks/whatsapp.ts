@@ -4,7 +4,7 @@ import { handleKanbanUpdateOmni, updateReadStatus } from '../helpers/kanbanOmni'
 import { getActiveBot, executeBotFlow } from '../helpers/botEngine';
 import { UnifiedMessage } from '../types/message';
 
-const TWENTY_FOUR_HOURS_IN_MS = 24 * 60 * 60 * 1000;
+const FORTY_EIGHT_HOURS_IN_MS = 48 * 60 * 60 * 1000;
 
 export const whatsappWebhook = functions.https.onRequest(async (req: functions.https.Request, res: functions.Response) => {
     // --- VERIFICACIÓN DE WEBHOOK (GET) ---
@@ -28,19 +28,52 @@ export const whatsappWebhook = functions.https.onRequest(async (req: functions.h
 
     // --- RECEPCIÓN DE EVENTOS (POST) ---
     if (req.method === 'POST') {
+        functions.logger.info('📩 [Webhook] Request received');
         res.status(200).send('EVENT_RECEIVED');
 
-        const { entry } = req.body;
+        const requestBody = req.body;
+        if (!requestBody || !requestBody.entry) {
+            functions.logger.warn('[Webhook] Empty or invalid body received');
+            return;
+        }
+
+        const { entry } = requestBody;
         const change = entry?.[0]?.changes?.[0]?.value;
         if (!change) return;
 
         // --- CASO 1: MANEJO DE ESTADOS (READ, DELIVERED, SENT) ---
         if (change.statuses && change.statuses.length > 0) {
             const statusUpdate = change.statuses[0];
-            if (statusUpdate.status === 'read') {
-                const recipientId = statusUpdate.recipient_id;
-                functions.logger.info(`[Status Update] Message read by ${recipientId}`);
-                await updateReadStatus(recipientId, 'whatsapp');
+            const status = statusUpdate.status;
+            const messageId = statusUpdate.id;
+            const recipientId = statusUpdate.recipient_id;
+
+            functions.logger.info(`[Status Update] ${status} for message ${messageId}`);
+
+            const db = admin.firestore();
+            const cardQuery = db.collectionGroup('cards').where('platform_ids.whatsapp', '==', recipientId).limit(1);
+            const snap = await cardQuery.get();
+
+            if (!snap.empty) {
+                const cardDoc = snap.docs[0];
+                const messages = cardDoc.data().messages || [];
+                let changed = false;
+
+                const updatedMessages = messages.map((m: any) => {
+                    if (m.whatsappMessageId === messageId) {
+                        changed = true;
+                        return { ...m, status: status };
+                    }
+                    return m;
+                });
+
+                if (changed) {
+                    await cardDoc.ref.update({ messages: updatedMessages });
+                }
+
+                if (status === 'read') {
+                    await updateReadStatus(recipientId, 'whatsapp');
+                }
             }
             return;
         }
@@ -113,7 +146,7 @@ export const whatsappWebhook = functions.https.onRequest(async (req: functions.h
             // But wait, handleKanbanUpdateOmni creates it, so we can find it.
 
             // To be safe and fast, let's query by ID across groups
-            const cardQuery = db.collectionGroup('cards').where(admin.firestore.FieldPath.documentId(), '==', cardId);
+            const cardQuery = db.collectionGroup('cards').where('platform_ids.whatsapp', '==', from).limit(1);
             const cardSnap = await cardQuery.get();
 
             if (!cardSnap.empty) {
@@ -131,7 +164,7 @@ export const whatsappWebhook = functions.https.onRequest(async (req: functions.h
                         const lastInteraction = cardData.botState.lastInteraction.toDate
                             ? cardData.botState.lastInteraction.toDate()
                             : new Date(0);
-                        if ((now.getTime() - lastInteraction.getTime()) > TWENTY_FOUR_HOURS_IN_MS) {
+                        if ((now.getTime() - lastInteraction.getTime()) > FORTY_EIGHT_HOURS_IN_MS) {
                             shouldRestart = true;
                         }
                     } else if (!cardData.botState) {

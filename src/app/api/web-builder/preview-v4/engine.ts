@@ -97,7 +97,7 @@ export function generatePreviewHTML(files: Record<string, string>): string {
         '        html, body { margin: 0; padding: 0; font-family: sans-serif; height: 100%; width: 100%; overflow: auto; }',
         cssContent,
         '        #root { min-height: 100vh; width: 100%; position: relative; }',
-        '        #loader { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: #000; position: fixed; inset: 0; z-index: 999; flex-direction: column; gap:15px; opacity: 1; pointer-events: auto; transition: opacity 0.3s; }',
+        '        #loader { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: #fff; position: fixed; inset: 0; z-index: 999; flex-direction: column; gap:15px; opacity: 1; pointer-events: auto; transition: opacity 0.3s; }',
         '        #survival-logs { font-family:monospace; font-size:10px; color:#555; max-width:500px; text-align:left; background: rgba(0,0,0,0.7); padding:15px; border-radius:12px; border:1px solid rgba(255,255,255,0.05); max-height: 150px; overflow: auto; display: none; }',
         '    </style>',
         '</head>',

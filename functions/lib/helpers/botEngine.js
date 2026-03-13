@@ -25,9 +25,10 @@ function replaceVariables(text, cardData) {
     if (!text)
         return '';
     let processedText = text;
-    const variables = Object.assign({ name: cardData.contactName || 'Amigo', nombre: cardData.contactName || 'Amigo', phone: cardData.contactNumber || '' }, cardData.customFields);
+    const variables = Object.assign({ name: cardData.contactName || 'Amigo', nombre: cardData.contactName || 'Amigo', phone: cardData.contactNumber || '' }, (cardData.customFields || {}));
     for (const [key, value] of Object.entries(variables)) {
-        const regex = new RegExp(`\\{?\\{\\s*${key}\\s*\\}\\}?`, 'gi');
+        // Matches {key}, {{key}}, etc.
+        const regex = new RegExp(`\\{+\\s*${key}\\s*\\}+`, 'gi');
         processedText = processedText.replace(regex, String(value || ''));
     }
     return processedText;
@@ -118,7 +119,7 @@ function extractName(input) {
 }
 // --- MAIN ENGINE ---
 async function executeBotFlow(bot, to, cardData, userMessage) {
-    var _a, _b, _c, _d, _e, _f, _g;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s;
     functions.logger.info(`>>> EXECUTING FLOW: ${bot.name} for ${to} <<<`);
     const platform = cardData.source || 'whatsapp'; // Default to whatsapp if not set
     const adapter = (0, factory_1.getMessagingAdapter)(platform);
@@ -135,20 +136,50 @@ async function executeBotFlow(bot, to, cardData, userMessage) {
             functions.logger.warn(`[executeBotFlow] Node ${currentNodeId} not found in flow.`);
             return;
         }
+        // --- STUCK-NODE RECOVERY: Resend current node message if conversation was interrupted ---
+        // If the bot was waiting (lastInteraction exists) and the user's message doesn't look like
+        // a valid response (e.g., very short/generic), OR if significant time has passed (> 30 min),
+        // resend the current node's prompt to guide the user back.
+        const lastInteractionAt = ((_c = (_b = cardData.botState) === null || _b === void 0 ? void 0 : _b.lastInteraction) === null || _c === void 0 ? void 0 : _c.toDate)
+            ? cardData.botState.lastInteraction.toDate()
+            : null;
+        const thirtyMinutesMs = 30 * 60 * 1000;
+        const wasStuck = lastInteractionAt && (new Date().getTime() - lastInteractionAt.getTime() > thirtyMinutesMs);
+        if (wasStuck) {
+            functions.logger.info(`[executeBotFlow] Conversation was stuck for >30 min. Resending current node prompt to ${to}.`);
+            try {
+                if (currentNode.type === 'quickReplyNode') {
+                    const qrText = replaceVariables(((_d = currentNode.data) === null || _d === void 0 ? void 0 : _d.bodyText) || ((_e = currentNode.data) === null || _e === void 0 ? void 0 : _e.text) || 'Por favor, elige una opción:', cardData);
+                    const buttons = sanitizeButtonsData(((_f = currentNode.data) === null || _f === void 0 ? void 0 : _f.buttons) || []);
+                    if (buttons.length > 0)
+                        await adapter.sendButtonMessage(to, qrText, buttons);
+                    else
+                        await adapter.sendMessage(to, qrText);
+                }
+                else if (currentNode.type === 'listMessageNode') {
+                    const listBody = replaceVariables(((_g = currentNode.data) === null || _g === void 0 ? void 0 : _g.body) || ((_h = currentNode.data) === null || _h === void 0 ? void 0 : _h.text) || 'Elige una opción:', cardData);
+                    const sections = sanitizeListData(currentNode.data);
+                    if (sections.length > 0)
+                        await adapter.sendListMessage(to, listBody, ((_j = currentNode.data) === null || _j === void 0 ? void 0 : _j.buttonText) || 'Ver opciones', sections);
+                    else
+                        await adapter.sendMessage(to, listBody);
+                }
+                else if (currentNode.type === 'captureInputNode') {
+                    const prompt = replaceVariables(((_k = currentNode.data) === null || _k === void 0 ? void 0 : _k.content) || ((_l = currentNode.data) === null || _l === void 0 ? void 0 : _l.text) || '', cardData);
+                    if (prompt)
+                        await adapter.sendMessage(to, prompt);
+                }
+            }
+            catch (resendErr) {
+                functions.logger.warn(`[executeBotFlow] Could not resend stuck node: ${resendErr.message}`);
+            }
+            await delay(1000);
+        }
         try {
-            // markAsRead might fail if userMessage is not a valid ID, we wrap it
-            // For Messenger, 'to' is effectively the ID. For WA, 'userMessage' is the msg ID (usually passed as body in simplified flow? No, webhook passes msg ID if available, but here userMessage seems to be text).
-            // Actually, in whatsappWebhook, executeBotFlow is called with `body` as userMessage.
-            // markAsRead expects a message ID.
-            // If userMessage is just text, markAsRead will likely fail on WA API if it expects an ID.
-            // But we keep it as is for compatibility, wrapping in try-catch.
             if (platform !== 'whatsapp') {
-                // For non-WA, we treat 'to' as the identifier for read receipt context if possible
                 await adapter.markAsRead(to).catch(e => functions.logger.warn('markAsRead failed:', e.message));
             }
             else {
-                // For WA, if userMessage is text, this call is weird but preserving existing logic.
-                // ideally, we should pass messageId separately.
                 await adapter.markAsRead(userMessage).catch(e => functions.logger.warn('markAsRead failed (non-critical):', e.message));
             }
         }
@@ -162,9 +193,9 @@ async function executeBotFlow(bot, to, cardData, userMessage) {
                 await adapter.sendMessage(to, errorMsg);
                 return;
             }
-            let varName = (_b = currentNode.data) === null || _b === void 0 ? void 0 : _b.variableName;
+            let varName = (_m = currentNode.data) === null || _m === void 0 ? void 0 : _m.variableName;
             if (!varName || varName === 'undefined') {
-                const text = (((_c = currentNode.data) === null || _c === void 0 ? void 0 : _c.text) || '').toLowerCase();
+                const text = (((_o = currentNode.data) === null || _o === void 0 ? void 0 : _o.text) || '').toLowerCase();
                 if (text.includes('nombre') || text.includes('name'))
                     varName = 'nombre';
                 else
@@ -247,16 +278,16 @@ async function executeBotFlow(bot, to, cardData, userMessage) {
         // Simulación Humana (Typing Delay) - CONTROLADO POR UI
         if (['textMessageNode', 'mediaMessageNode', 'quickReplyNode', 'listMessageNode'].includes(nextNode.type)) {
             // Por defecto es TRUE (Humano) a menos que se desactive explícitamente en el editor
-            const simulateTyping = ((_d = nextNode.data) === null || _d === void 0 ? void 0 : _d.typingSimulation) !== false;
+            const simulateTyping = ((_p = nextNode.data) === null || _p === void 0 ? void 0 : _p.typingSimulation) !== false;
             if (simulateTyping) {
-                const content = ((_e = nextNode.data) === null || _e === void 0 ? void 0 : _e.content) || ((_f = nextNode.data) === null || _f === void 0 ? void 0 : _f.text) || ((_g = nextNode.data) === null || _g === void 0 ? void 0 : _g.caption) || '';
+                const content = ((_q = nextNode.data) === null || _q === void 0 ? void 0 : _q.content) || ((_r = nextNode.data) === null || _r === void 0 ? void 0 : _r.text) || ((_s = nextNode.data) === null || _s === void 0 ? void 0 : _s.caption) || '';
                 const humanDelay = calculateTypingDelay(content);
                 await delay(humanDelay);
             }
         }
         switch (nextNode.type) {
             case 'textMessageNode':
-                const txt = replaceVariables(nextNode.data.content || nextNode.data.text || '', cardData);
+                const txt = replaceVariables(nextNode.data.content || nextNode.data.text || nextNode.data.label || '', cardData);
                 if (txt) {
                     await adapter.sendMessage(to, txt);
                     await logBotMessage(to, txt, cardData.id, cardData.groupId);
@@ -428,7 +459,15 @@ async function logBotMessage(contactNumber, message, cardId, groupId) {
             docRef = snapshot.docs[0].ref;
     }
     if (docRef) {
-        await docRef.update({ lastMessage: message, messages: admin.firestore.FieldValue.arrayUnion({ sender: 'agent', text: message, timestamp: new Date() }) });
+        await docRef.update({
+            lastMessage: message,
+            messages: admin.firestore.FieldValue.arrayUnion({
+                sender: 'agent',
+                text: message,
+                timestamp: new Date()
+            }),
+            unreadCount: 0
+        });
     }
 }
 //# sourceMappingURL=botEngine.js.map
