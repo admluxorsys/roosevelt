@@ -109,7 +109,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      toast.success('Sesión iniciada correctamente');
+      // toast.success('Sesión iniciada correctamente');
       router.push('/suite/life');
     } catch (error: any) {
       toast.error('Error al iniciar sesión: ' + error.message);

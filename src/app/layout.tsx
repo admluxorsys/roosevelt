@@ -45,7 +45,7 @@ export default function RootLayout({
             <SidebarProvider>
               {children}
               <LogoutButton />
-              <Toaster />
+              {/* <Toaster /> */}
             </SidebarProvider>
           </AuthProvider>
         </ThemeProvider>

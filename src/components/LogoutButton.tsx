@@ -6,7 +6,7 @@ import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
-import { DoorOpen } from 'lucide-react';
+import { LogOut, DoorOpen } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function LogoutButton() {
@@ -15,7 +15,9 @@ export default function LogoutButton() {
   const pathname = usePathname();
   const [isHovered, setIsHovered] = useState(false);
 
-  // If not logged in or on the login page, don't show the button
+  // Debug log to see if the component is alive
+  // console.log("LogoutButton: Current User:", currentUser?.email);
+
   if (!currentUser || pathname === '/login') return null;
 
   const handleLogout = async () => {
@@ -30,28 +32,32 @@ export default function LogoutButton() {
 
   return (
     <>
-      {/* Invisible trigger area in the bottom-left corner */}
+      {/* Main Trigger Area - Corner sensitive zone */}
       <div 
-        className="fixed bottom-0 left-0 w-32 h-32 z-[9998] pointer-events-auto"
+        className="fixed bottom-0 left-0 w-[120px] h-[120px] z-[1000000] pointer-events-auto"
         onMouseEnter={() => setIsHovered(true)}
-      />
-
-      <AnimatePresence>
-        {isHovered && (
-          <motion.button
-            initial={{ opacity: 0, scale: 0.8, x: -20, y: 20 }}
-            animate={{ opacity: 1, scale: 1, x: 0, y: 0 }}
-            exit={{ opacity: 0, scale: 0.8, x: -20, y: 20 }}
-            onMouseEnter={() => setIsHovered(true)}
-            onMouseLeave={() => setIsHovered(false)}
-            onClick={handleLogout}
-            className="fixed bottom-8 left-8 z-[9999] p-4 bg-white/10 backdrop-blur-xl border border-white/20 rounded-full text-white/70 hover:text-white hover:bg-white/20 transition-all shadow-xl group"
-            title="Cerrar Sesión"
-          >
-            <DoorOpen size={24} className="group-hover:translate-x-1 transition-transform" />
-          </motion.button>
-        )}
-      </AnimatePresence>
+        onMouseLeave={() => setIsHovered(false)}
+      >
+        <AnimatePresence>
+          {isHovered && (
+            <motion.button
+              initial={{ opacity: 0, x: -10, y: 10 }}
+              animate={{ opacity: 1, x: 0, y: 0 }}
+              exit={{ opacity: 0, x: -10, y: 10 }}
+              transition={{ duration: 0.2 }}
+              onClick={handleLogout}
+              className="absolute bottom-6 left-6 p-4 flex flex-col items-center gap-2 group outline-none bg-transparent border-none shadow-none"
+            >
+              <div className="transition-all duration-300 group-hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.8)]">
+                <DoorOpen size={28} className="text-white/40 group-hover:text-white transition-all duration-300" />
+              </div>
+              <span className="text-[9px] uppercase font-bold tracking-[0.4em] text-white/20 group-hover:text-white/90 transition-all duration-300">
+                EXIT SYSTEM
+              </span>
+            </motion.button>
+          )}
+        </AnimatePresence>
+      </div>
     </>
   );
 }
