@@ -6,6 +6,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { SidebarProvider } from "@/components/SidebarContext";
 import { Toaster } from "sonner";
 import { AuthProvider } from "@/contexts/AuthContext";
+import LogoutButton from "@/components/LogoutButton";
 
 
 const montserrat = Montserrat({
@@ -43,6 +44,7 @@ export default function RootLayout({
           <AuthProvider>
             <SidebarProvider>
               {children}
+              <LogoutButton />
               <Toaster />
             </SidebarProvider>
           </AuthProvider>
