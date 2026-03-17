@@ -48,7 +48,7 @@ const colors = [
     { name: 'Red', value: 'bg-[#1c1111]', cardColor: 'bg-[#241616]', textColor: 'text-rose-400', pill: 'bg-[#3a1a1a]' },
 ];
 
-interface KanbanColumnProps {
+interface kambanColumnProps {
     group: any;
     cards: any[];
     allGroups?: any[];
@@ -58,7 +58,7 @@ interface KanbanColumnProps {
     isCompact?: boolean;
 }
 
-export const KanbanColumn = ({
+export const kambanColumn = ({
     group,
     cards,
     allGroups = [],
@@ -66,7 +66,7 @@ export const KanbanColumn = ({
     onUpdateColor,
     contacts = [],
     isCompact
-}: KanbanColumnProps) => {
+}: kambanColumnProps) => {
     const [isSelectContactOpen, setIsSelectContactOpen] = useState(false);
     const [isCreateClientOpen, setIsCreateClientOpen] = useState(false);
     const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -93,7 +93,7 @@ export const KanbanColumn = ({
                 updatedAt: serverTimestamp(),
                 messages: [],
             };
-            await addDoc(collection(db, `kanban-groups/${group.id}/cards`), cardData);
+            await addDoc(collection(db, `kamban-groups/${group.id}/cards`), cardData);
             toast.success(contact ? `Contact "${contact.name}" added.` : 'New conversation created.');
             setIsSelectContactOpen(false);
         } catch (error) {
@@ -142,7 +142,7 @@ export const KanbanColumn = ({
                     messages: [],
                 };
 
-                const newCardRef = doc(collection(db, `kanban-groups/${group.id}/cards`));
+                const newCardRef = doc(collection(db, `kamban-groups/${group.id}/cards`));
                 batch.set(newCardRef, cardData);
                 importCount++;
             }
@@ -175,13 +175,13 @@ export const KanbanColumn = ({
         const batch = writeBatch(db);
 
         cards.forEach((card) => {
-            const newCardRef = doc(collection(db, `kanban-groups/${inbox.id}/cards`));
+            const newCardRef = doc(collection(db, `kamban-groups/${inbox.id}/cards`));
             const { id, groupId, ...cardData } = card;
             batch.set(newCardRef, { ...cardData, groupId: inbox.id, updatedAt: serverTimestamp() });
-            batch.delete(doc(db, `kanban-groups/${group.id}/cards`, card.id));
+            batch.delete(doc(db, `kamban-groups/${group.id}/cards`, card.id));
         });
 
-        batch.delete(doc(db, 'kanban-groups', group.id));
+        batch.delete(doc(db, 'kamban-groups', group.id));
 
         try {
             await batch.commit();
@@ -229,7 +229,7 @@ export const KanbanColumn = ({
                                     onClick={() => {
                                         const newName = window.prompt('Editar nombre de la bandeja:', group.name);
                                         if (newName && newName !== group.name) {
-                                            updateDoc(doc(db, 'kanban-groups', group.id), { name: newName });
+                                            updateDoc(doc(db, 'kamban-groups', group.id), { name: newName });
                                         }
                                     }}
                                     className="cursor-pointer hover:bg-neutral-800 rounded-lg py-2"
@@ -353,4 +353,5 @@ export const KanbanColumn = ({
     );
 };
 
-export default KanbanColumn;
+export default kambanColumn;
+

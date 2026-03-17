@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { MoreVertical, Info, Send, Paperclip, Smile, Image as ImageIcon, FileText, Loader2, Zap, User, XCircle, Ban, Mic, X, Plus, MapPin, Contact2, AlertCircle, RefreshCw } from 'lucide-react';
-import { useConversationLogic } from '../../whatsapp/components/ConversationModal/hooks/useConversationLogic';
+import { useConversationLogic } from '../../kamban/components/ConversationModal/hooks/useConversationLogic';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { db } from '@/lib/firebase';
@@ -112,7 +112,7 @@ export default function ChatArea({ card, groups, groupName, allConversations, to
         
         if (card?.id && hasUnread && hasFocus) {
             console.log(`[ChatArea] Resetting unreadCount for ${card.id} (Current: ${card.unreadCount})`);
-            const cardRef = doc(db, 'kanban-groups', card.groupId, 'cards', card.id);
+            const cardRef = doc(db, 'kamban-groups', card.groupId, 'cards', card.id);
             updateDoc(cardRef, { unreadCount: 0 }).catch(err => {
                 console.error("[ChatArea] Error clearing unread count:", err);
             });
@@ -512,3 +512,4 @@ export default function ChatArea({ card, groups, groupName, allConversations, to
         </div>
     );
 }
+

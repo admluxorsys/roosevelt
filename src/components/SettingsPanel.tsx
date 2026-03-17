@@ -20,7 +20,7 @@ import { PollSettings } from './settings/nodes/PollSettings';
 import { ContactSettings } from './settings/nodes/ContactSettings';
 import { LocationSettings } from './settings/nodes/LocationSettings';
 import { PlaceholderSettings } from './settings/nodes/PlaceholderSettings';
-import { WhatsappFlowsSettings } from './settings/nodes/WhatsappFlowsSettings';
+import { kambanFlowsSettings } from './settings/nodes/kambanFlowsSettings';
 import { CheckoutSettings } from './settings/nodes/CheckoutSettings';
 import { StartSettings } from './settings/nodes/StartSettings'; // Importado
 
@@ -71,7 +71,7 @@ const SettingsPanel = ({ selectedNode, updateNodeConfig, deleteNode, isOpen, onT
     delayNode: PlaceholderSettings,
     catalogNode: PlaceholderSettings,
     productNode: PlaceholderSettings,
-    whatsappFlowsNode: WhatsappFlowsSettings,
+    kambanFlowsNode: kambanFlowsSettings,
     checkoutNode: CheckoutSettings,
     generativeAINode: GenerativeAISettings,
     transcriptionNode: TranscriptionSettings,
@@ -131,3 +131,4 @@ const SettingsPanel = ({ selectedNode, updateNodeConfig, deleteNode, isOpen, onT
 };
 
 export default SettingsPanel;
+

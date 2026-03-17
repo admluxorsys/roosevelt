@@ -1,4 +1,4 @@
-// src/components/settings/nodes/WhatsappFlowsSettings.tsx
+// src/components/settings/nodes/kambanFlowsSettings.tsx
 'use client';
 import React, { useCallback, useState, useEffect } from 'react';
 import { Node } from 'reactflow';
@@ -38,7 +38,7 @@ interface NodeSettingsProps {
     updateNodeConfig: (nodeId: string, data: object) => void;
 }
 
-export const WhatsappFlowsSettings = ({ node, updateNodeConfig }: NodeSettingsProps) => {
+export const kambanFlowsSettings = ({ node, updateNodeConfig }: NodeSettingsProps) => {
     const data = node.data || {};
     const [loadingFlows, setLoadingFlows] = useState(false);
     
@@ -208,3 +208,4 @@ export const WhatsappFlowsSettings = ({ node, updateNodeConfig }: NodeSettingsPr
         </div>
     );
 };
+

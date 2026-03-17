@@ -10,7 +10,7 @@ import { functions, db } from '@/lib/firebase';
 import { doc, updateDoc, arrayUnion, Timestamp } from 'firebase/firestore';
 import { toast } from 'sonner';
 
-const sendWhatsappMediaMessage = httpsCallable(functions, 'sendWhatsappMediaMessage');
+const sendkambanMediaMessage = httpsCallable(functions, 'sendkambanMediaMessage');
 
 interface FileUploadOptions {
     cardId: string;
@@ -58,7 +58,7 @@ export const useFileUpload = () => {
                     try {
                         const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
 
-                        await sendWhatsappMediaMessage({
+                        await sendkambanMediaMessage({
                             cardId,
                             groupId,
                             fileUrl: downloadURL,
@@ -76,7 +76,7 @@ export const useFileUpload = () => {
                             uploadedAt: Timestamp.now()
                         };
 
-                        await updateDoc(doc(db, 'kanban-groups', groupId, 'cards', cardId), {
+                        await updateDoc(doc(db, 'kamban-groups', groupId, 'cards', cardId), {
                             documents: arrayUnion(fileData),
                             history: arrayUnion({
                                 id: `hist_${Date.now()}`,
@@ -107,3 +107,4 @@ export const useFileUpload = () => {
 
     return { uploading, progress, uploadFile };
 };
+

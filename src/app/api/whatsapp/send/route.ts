@@ -5,7 +5,7 @@ import { db, admin } from '@/lib/firebase-admin';
 export async function POST(req: Request) {
     try {
         const bodyValue = await req.json();
-        const { message, toNumber, cardId, groupId, type, template, platform = 'whatsapp' } = bodyValue;
+        const { message, toNumber, cardId, groupId, type, template, platform = 'kamban' } = bodyValue;
 
         if (!message || !toNumber) {
             return NextResponse.json(
@@ -37,9 +37,9 @@ export async function POST(req: Request) {
                 messageId = responseData?.result?.message_id?.toString();
 
             } else {
-                // --- Default: WhatsApp Logic ---
-                const { sendWhatsAppMessage } = await import('@/lib/sendProviders');
-                responseData = await sendWhatsAppMessage(toNumber, message, { type, template });
+                // --- Default: kamban Logic ---
+                const { sendkambanMessage } = await import('@/lib/sendProviders');
+                responseData = await sendkambanMessage(toNumber, message, { type, template });
                 messageId = responseData?.messages?.[0]?.id;
                 cleanTo = responseData?.sentTo || toNumber;
             }
@@ -68,18 +68,18 @@ export async function POST(req: Request) {
         }
 
         if (finalCardId && finalGroupId) {
-            const cardRef = db.collection('kanban-groups').doc(finalGroupId).collection('cards').doc(finalCardId);
+            const cardRef = db.collection('kamban-groups').doc(finalGroupId).collection('cards').doc(finalCardId);
 
             await cardRef.update({
                 lastMessage: message.length > 40 ? message.substring(0, 37) + '...' : message,
                 updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-                // Only update contactNumberClean if it's WhatsApp/Phone
-                ...(targetPlatform === 'whatsapp' ? { contactNumberClean: cleanTo } : {}),
+                // Only update contactNumberClean if it's kamban/Phone
+                ...(targetPlatform === 'kamban' ? { contactNumberClean: cleanTo } : {}),
                 messages: admin.firestore.FieldValue.arrayUnion({
                     sender: 'agent',
                     text: message,
                     timestamp: new Date(),
-                    whatsappMessageId: messageId || null, // rename this field in future to generic 'messageId'
+                    kambanMessageId: messageId || null, // rename this field in future to generic 'messageId'
                     platform: targetPlatform
                 }),
                 unreadCount: 0,
@@ -105,4 +105,5 @@ export async function POST(req: Request) {
         );
     }
 }
+
 

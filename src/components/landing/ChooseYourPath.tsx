@@ -170,7 +170,7 @@ export default function ChooseYourPath() {
           <p className="text-gray-500 text-sm font-normal">
             Pagos seguros procesados por Stripe o Zelle. Sin cargos ocultos.
             <br />
-            <span className="text-white/60">¿Tienes dudas? <Link href="/contact" className="text-primary hover:underline">Habla con un asesor por WhatsApp</Link></span>
+            <span className="text-white/60">¿Tienes dudas? <Link href="/contact" className="text-primary hover:underline">Habla con un asesor por kamban</Link></span>
           </p>
         </div>
 
@@ -178,3 +178,4 @@ export default function ChooseYourPath() {
     </section>
   );
 }
+

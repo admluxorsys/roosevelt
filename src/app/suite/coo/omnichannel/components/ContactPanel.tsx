@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { User, Phone, MapPin, Mail, Globe, Tag, Clock, Calendar, ChevronRight, FileText, CheckCircle, Link, Copy, Check, X } from 'lucide-react';
-import { useConversationLogic } from '../../whatsapp/components/ConversationModal/hooks/useConversationLogic';
+import { useConversationLogic } from '../../kamban/components/ConversationModal/hooks/useConversationLogic';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 
@@ -117,7 +117,7 @@ export default function ContactPanel({ card, groups }: ContactPanelProps) {
                                             }
                                         }
                                         if (finalId) {
-                                            const link = `${window.location.origin}/application/${finalId}`;
+                                            const link = `${window.location.origin}/suite/coo/kamban/application/${finalId}`;
                                             navigator.clipboard.writeText(link);
                                             setCopied(true);
                                             setTimeout(() => setCopied(false), 2000);
@@ -170,7 +170,7 @@ export default function ContactPanel({ card, groups }: ContactPanelProps) {
                                 </div>
                                 <div className="flex items-center text-[12px]">
                                     <Clock size={13} className="text-neutral-500 mr-3 opacity-70" />
-                                    <span className="text-white font-medium">Activo {card?.source || 'WhatsApp'}</span>
+                                    <span className="text-white font-medium">Activo {card?.source || 'kamban'}</span>
                                 </div>
                             </div>
                         </div>
@@ -348,3 +348,4 @@ export default function ContactPanel({ card, groups }: ContactPanelProps) {
         </div>
     );
 }
+

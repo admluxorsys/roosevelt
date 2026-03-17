@@ -25,7 +25,7 @@ export default function CampaignsPage() {
                 {/* Campaign Channels */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {[
-                        { icon: <Smartphone />, label: "WhatsApp Masivo", desc: "Integrado con API oficial", color: "from-green-500/10 to-green-600/5", border: "border-green-500/20" },
+                        { icon: <Smartphone />, label: "kamban Masivo", desc: "Integrado con API oficial", color: "from-green-500/10 to-green-600/5", border: "border-green-500/20" },
                         { icon: <Mail />, label: "Email Marketing", desc: "Diseños responsivos e inteligentes", color: "from-blue-500/10 to-blue-600/5", border: "border-blue-500/20" },
                         { icon: <Globe />, label: "Anuncios Dinámicos", desc: "Facebook, Instagram y TikTok", color: "from-purple-500/10 to-purple-600/5", border: "border-purple-500/20" },
                     ].map((channel, i) => (
@@ -83,3 +83,4 @@ export default function CampaignsPage() {
         </div>
     );
 }
+

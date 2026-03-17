@@ -6,7 +6,7 @@ import { AnimatePresence, Variants, motion } from 'framer-motion';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, collectionGroup, setDoc, doc, deleteDoc, serverTimestamp, query, where, updateDoc, addDoc, onSnapshot, orderBy } from 'firebase/firestore';
 import { Plus, Search, X, Users, RefreshCw, Filter, MoreHorizontal, ArrowLeft, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
-import ConversationModal from '../../coo/whatsapp/components/ConversationModal';
+import ConversationModal from '../../coo/kamban/components/ConversationModal';
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Badge } from '@/components/ui/badge';
@@ -38,7 +38,7 @@ const HEADER_MAPPING: { [key: string]: string[] } = {
     // --- Identity & Demographics ---
     name: ['name', 'nombre', 'fullname', 'nombre completo', 'full name', 'client', 'cliente'],
     email: ['email', 'correo', 'mail', 'digital mail', 'correo electrónico'],
-    phone: ['phone', 'teléfono', 'telefono', 'tel', 'celular', 'mobile', 'whatsapp', 'direct line', 'contactnumber'],
+    phone: ['phone', 'teléfono', 'telefono', 'tel', 'celular', 'mobile', 'kamban', 'direct line', 'contactnumber'],
     birthDate: ['birthdate', 'fecha de nacimiento', 'fecha nacimiento', 'nacimiento', 'cumpleaños', 'dob'],
     gender: ['gender', 'género', 'genero', 'sexo', 'sex', 'sexualidad'],
     maritalStatus: ['maritalstatus', 'estado civil', 'civil status', 'situación civil'],
@@ -159,13 +159,13 @@ export default function ContactsPage() {
     const [isEditingProfile, setIsEditingProfile] = useState(false);
     const [isChatOpen, setIsChatOpen] = useState(false);
 
-    // --- KANBAN SYNC LOGIC (Added for ConversationModal consistency) ---
+    // --- kamban SYNC LOGIC (Added for ConversationModal consistency) ---
     const [groups, setGroups] = useState<any[]>([]);
     const [allCards, setAllCards] = useState<any[]>([]);
     const [activeCard, setActiveCard] = useState<any>(null); // To pass to modal
 
     useEffect(() => {
-        const groupsQuery = query(collection(db, 'kanban-groups'), orderBy("order", "asc"));
+        const groupsQuery = query(collection(db, 'kamban-groups'), orderBy("order", "asc"));
         const unsubscribe = onSnapshot(groupsQuery, (snapshot) => {
             const groupsFromDb = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
             setGroups(groupsFromDb);
@@ -178,7 +178,7 @@ export default function ContactsPage() {
         const unsubscribe = onSnapshot(cardsQuery, (snapshot) => {
             const allCardsFromDb = snapshot.docs.map(doc => {
                 // Use Regex to safely extract groupId from path
-                const match = doc.ref.path.match(/kanban-groups\/([^\/]+)\/cards/);
+                const match = doc.ref.path.match(/kamban-groups\/([^\/]+)\/cards/);
                 const groupId = match ? match[1] : undefined;
                 return { ...doc.data(), id: doc.id, groupId: groupId };
             });
@@ -543,7 +543,7 @@ export default function ContactsPage() {
         };
         reader.readAsArrayBuffer(file);
     };
-    const handleSyncWhatsAppContacts = async () => {
+    const handleSynckambanContacts = async () => {
         setIsSyncing(true);
         setSyncStatus('Iniciando sincronización inteligente...');
         try {
@@ -572,7 +572,7 @@ export default function ContactsPage() {
                 const cardGroup = phoneToCardsMap[phone];
                 let primaryCard = cardGroup[0];
 
-                // --- AUTO MERGE KANBAN CARDS IF MULTIPLE EXIST ---
+                // --- AUTO MERGE kamban CARDS IF MULTIPLE EXIST ---
                 if (cardGroup.length > 1) {
                     setSyncStatus(`Fusionando ${cardGroup.length} tarjetas para ${phone}...`);
                     // Sort by message count to pick best primary
@@ -621,7 +621,7 @@ export default function ContactsPage() {
                 const contactData: any = {
                     name: primaryCard.contactName || 'Sin Nombre',
                     email: primaryCard.email || '',
-                    source: 'WhatsApp',
+                    source: 'kamban',
                     stage: 'In Progress',
                     lastUpdated: serverTimestamp(),
                 };
@@ -646,7 +646,7 @@ export default function ContactsPage() {
                         ...contactData,
                         phone: phone,
                         id: primaryCard.id,
-                        importedFrom: 'whatsapp-kanban',
+                        importedFrom: 'kamban-kamban',
                         importedAt: serverTimestamp(),
                         date: new Date().toISOString().split('T')[0],
                         tags: primaryCard.tags || [],
@@ -1013,7 +1013,7 @@ export default function ContactsPage() {
                 <main className="flex-1 overflow-y-auto scrollbar-hide custom-scrollbar p-6 space-y-6">
                     <ContactHeader
                         isChatOpen={isChatOpen}
-                        handleSyncWhatsAppContacts={handleSyncWhatsAppContacts}
+                        handleSynckambanContacts={handleSynckambanContacts}
                         isSyncing={isSyncing}
                         isImportModalOpen={isImportModalOpen}
                         setIsImportModalOpen={setIsImportModalOpen}
@@ -1107,10 +1107,10 @@ export default function ContactsPage() {
                 isOpen={isChatOpen}
                 onClose={() => setIsChatOpen(false)}
                 card={selectedContact ? {
-                    id: `temp-${selectedContact.id}`, // Temporary ID until real Kanban card is found
+                    id: `temp-${selectedContact.id}`, // Temporary ID until real kamban card is found
                     contactName: selectedContact.name,
                     contactNumber: selectedContact.phone,
-                    // Don't pass the CRM contact ID as card.id - let the hook find the real Kanban card
+                    // Don't pass the CRM contact ID as card.id - let the hook find the real kamban card
                 } : null}
                 groups={[]}
                 allConversations={contacts.map(c => ({ id: c.id, contactName: c.name, contactNumber: c.phone }))}
@@ -1174,3 +1174,4 @@ export default function ContactsPage() {
         </div>
     );
 }
+

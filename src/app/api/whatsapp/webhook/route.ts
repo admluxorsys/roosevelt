@@ -21,7 +21,7 @@ export async function GET(req: Request) {
     const token = searchParams.get('hub.verify_token');
     const challenge = searchParams.get('hub.challenge');
 
-    const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN || 'my_verify_token_123';
+    const VERIFY_TOKEN = process.env.kamban_VERIFY_TOKEN || 'my_verify_token_123';
 
     if (mode === 'subscribe' && token === VERIFY_TOKEN) {
         debugLog('Verification successful (GET)');
@@ -55,7 +55,7 @@ export async function POST(req: Request) {
 
             // Find card containing this message
             const cardsRef = db.collectionGroup('cards');
-            const snapshot = await cardsRef.where('platform_ids.whatsapp', '==', recipientId).get();
+            const snapshot = await cardsRef.where('platform_ids.kamban', '==', recipientId).get();
             
             if (!snapshot.empty) {
                 const cardDoc = snapshot.docs[0];
@@ -63,7 +63,7 @@ export async function POST(req: Request) {
                 let changed = false;
                 
                 const updatedMessages = messages.map((m: any) => {
-                    if (m.whatsappMessageId === messageId) {
+                    if (m.kambanMessageId === messageId) {
                         changed = true;
                         return { ...m, status: status };
                     }
@@ -100,7 +100,7 @@ export async function POST(req: Request) {
                 const cleanFrom = from.replace(/\D/g, '');
                 debugLog(`[POST] Searching for card with clean number: ${cleanFrom}`);
                 
-                const groupsSnapshot = await db.collection('kanban-groups').get();
+                const groupsSnapshot = await db.collection('kamban-groups').get();
                 debugLog(`[POST] Groups found: ${groupsSnapshot.size}`);
                 
                 let targetCardDoc: any = null;
@@ -141,8 +141,8 @@ export async function POST(req: Request) {
                     sender: 'user' as const,
                     text: text,
                     timestamp: new Date(),
-                    whatsappMessageId: messageId,
-                    platform: 'whatsapp'
+                    kambanMessageId: messageId,
+                    platform: 'kamban'
                 };
 
                 let cardId = targetCardDoc?.id;
@@ -162,7 +162,7 @@ export async function POST(req: Request) {
                 } else {
                     debugLog(`[POST] Creating NEW card for ${from}`);
                     const defaultGroupId = groupsSnapshot.docs[0]?.id || 'default';
-                    const newCardRef = db.collection('kanban-groups').doc(defaultGroupId).collection('cards').doc();
+                    const newCardRef = db.collection('kamban-groups').doc(defaultGroupId).collection('cards').doc();
                     
                     await newCardRef.set({
                         contactName: value.contacts?.[0]?.profile?.name || from,
@@ -174,8 +174,8 @@ export async function POST(req: Request) {
                         messages: [newMessage],
                         unreadCount: 1,
                         status: 'open',
-                        source: 'WhatsApp',
-                        primary_channel: 'WhatsApp'
+                        source: 'kamban',
+                        primary_channel: 'kamban'
                     });
                     cardId = newCardRef.id;
                     groupId = defaultGroupId;
@@ -210,7 +210,7 @@ async function triggerChatbot(from: string, text: string, groupId: string | null
         debugLog(`[TRACING] Missing groupId (${groupId}) or cardId (${cardId}). Aborting.`);
         return;
     }
-    const { sendWhatsAppMessage } = await import('@/lib/sendProviders');
+    const { sendkambanMessage } = await import('@/lib/sendProviders');
 
     // 1. Fetch active chatbot
     debugLog(`[TRACING] Fetching active chatbot...`);
@@ -233,7 +233,7 @@ async function triggerChatbot(from: string, text: string, groupId: string | null
         const flow = botData.flow || { nodes: [], edges: [] };
         debugLog(`[TRACING] Flow stats: ${flow.nodes?.length || 0} nodes, ${flow.edges?.length || 0} edges.`);
 
-        const cardRef = db.collection('kanban-groups').doc(groupId).collection('cards').doc(cardId);
+        const cardRef = db.collection('kamban-groups').doc(groupId).collection('cards').doc(cardId);
         
         const cardSnap = await cardRef.get();
         if (!cardSnap.exists) {
@@ -287,7 +287,7 @@ async function triggerChatbot(from: string, text: string, groupId: string | null
                 const messageText = replaceVariables(rawText);
                 debugLog(`[TRACING] Text node, sending: "${messageText}" to ${from}`);
                 try {
-                    const sendResult = await sendWhatsAppMessage(from, messageText);
+                    const sendResult = await sendkambanMessage(from, messageText);
                     debugLog(`[TRACING] Send success: ${sendResult.messages?.[0]?.id}`);
                     
                     // Log message
@@ -296,8 +296,8 @@ async function triggerChatbot(from: string, text: string, groupId: string | null
                             sender: 'agent',
                             text: messageText,
                             timestamp: new Date(),
-                            whatsappMessageId: sendResult.messages?.[0]?.id || null,
-                            platform: 'whatsapp'
+                            kambanMessageId: sendResult.messages?.[0]?.id || null,
+                            platform: 'kamban'
                         }),
                         lastMessage: messageText.substring(0, 37) + '...',
                         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -331,7 +331,7 @@ async function triggerChatbot(from: string, text: string, groupId: string | null
                     }
                 })).slice(0, 3);
 
-                const sendResult = await sendWhatsAppMessage(from, messageText, { 
+                const sendResult = await sendkambanMessage(from, messageText, { 
                     type: 'quick_reply',
                     buttons: buttons 
                 } as any);
@@ -341,8 +341,8 @@ async function triggerChatbot(from: string, text: string, groupId: string | null
                         sender: 'agent',
                         text: `${messageText} (Opciones enviadas)`,
                         timestamp: new Date(),
-                        whatsappMessageId: sendResult.messages?.[0]?.id || null,
-                        platform: 'whatsapp'
+                        kambanMessageId: sendResult.messages?.[0]?.id || null,
+                        platform: 'kamban'
                     }),
                     'chatbotState.currentNodeId': node.id,
                     'chatbotState.waitingForInput': true,
@@ -360,14 +360,14 @@ async function triggerChatbot(from: string, text: string, groupId: string | null
                 // If it's the first time reaching this node, we only send the prompt if content exists
                 if (!currentState.waitingForInput && messageText) {
                     debugLog(`[TRACING] Sending capture prompt: "${messageText}"`);
-                    const sendResult = await sendWhatsAppMessage(from, messageText);
+                    const sendResult = await sendkambanMessage(from, messageText);
                     await cardRef.update({
                         messages: admin.firestore.FieldValue.arrayUnion({
                             sender: 'agent',
                             text: messageText,
                             timestamp: new Date(),
-                            whatsappMessageId: sendResult.messages?.[0]?.id || null,
-                            platform: 'whatsapp'
+                            kambanMessageId: sendResult.messages?.[0]?.id || null,
+                            platform: 'kamban'
                         })
                     });
                 }
@@ -392,7 +392,7 @@ async function triggerChatbot(from: string, text: string, groupId: string | null
                 
                 if (url) {
                     try {
-                        const sendResult = await sendWhatsAppMessage(from, caption, {
+                        const sendResult = await sendkambanMessage(from, caption, {
                             type: 'media' as any,
                             url,
                             filename
@@ -403,8 +403,8 @@ async function triggerChatbot(from: string, text: string, groupId: string | null
                                 sender: 'agent',
                                 text: caption || `(Archivo: ${filename})`,
                                 timestamp: new Date(),
-                                whatsappMessageId: sendResult.messages?.[0]?.id || null,
-                                platform: 'whatsapp'
+                                kambanMessageId: sendResult.messages?.[0]?.id || null,
+                                platform: 'kamban'
                             })
                         });
                     } catch (sendError: any) {
@@ -437,7 +437,7 @@ async function triggerChatbot(from: string, text: string, groupId: string | null
                 debugLog(`[TRACING] ListMessage node, message: "${messageText}", sections: ${sections.length}`);
                 
                 try {
-                    const sendResult = await sendWhatsAppMessage(from, messageText, {
+                    const sendResult = await sendkambanMessage(from, messageText, {
                         type: 'list' as any,
                         button: buttonText,
                         sections: sections
@@ -448,8 +448,8 @@ async function triggerChatbot(from: string, text: string, groupId: string | null
                             sender: 'agent',
                             text: `${messageText} (Lista enviada)`,
                             timestamp: new Date(),
-                            whatsappMessageId: sendResult.messages?.[0]?.id || null,
-                            platform: 'whatsapp'
+                            kambanMessageId: sendResult.messages?.[0]?.id || null,
+                            platform: 'kamban'
                         }),
                         'chatbotState.currentNodeId': node.id,
                         'chatbotState.waitingForInput': true,
@@ -590,7 +590,7 @@ async function triggerChatbot(from: string, text: string, groupId: string | null
                     } else {
                         // NO MATCH and NO FALLBACK: Send a helpful message
                         debugLog(`[TRACING] No edge matched for "${text}". Sending help message.`);
-                        await sendWhatsAppMessage(from, "Lo siento, no entendí esa opción. Por favor, selecciona una de las opciones del menú anterior o responde con el texto exacto.");
+                        await sendkambanMessage(from, "Lo siento, no entendí esa opción. Por favor, selecciona una de las opciones del menú anterior o responde con el texto exacto.");
                     }
                 }
             }
@@ -604,3 +604,4 @@ async function triggerChatbot(from: string, text: string, groupId: string | null
         console.error(criticalError);
     }
 }
+

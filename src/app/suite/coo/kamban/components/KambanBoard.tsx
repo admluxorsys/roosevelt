@@ -9,18 +9,17 @@ import {
   DragOverlay,
   defaultDropAnimationSideEffects,
   DragStartEvent,
-  DragOverEvent
 } from '@dnd-kit/core';
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { Plus } from 'lucide-react';
-import { useKanbanBoard } from '../hooks/useKanbanBoard';
-import { KanbanHeader } from './KanbanHeader';
-import KanbanColumn from './KanbanColumn';
+import { useKambanBoard } from '../hooks/useKambanBoard';
+import { KambanHeader } from './KambanHeader';
+import KambanColumn from './KambanColumn';
 import Card from './Card';
 import ConversationModal from './ConversationModal';
 import { useSidebar } from '@/components/SidebarContext';
 
-export default function KanbanBoard() {
+export default function KambanBoard() {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeId, setActiveId] = useState<string | null>(null);
   const [selectedCard, setSelectedCard] = useState<any | null>(null);
@@ -29,7 +28,7 @@ export default function KanbanBoard() {
   const [isCompact, setIsCompact] = useState(true);
 
   const { isCollapsed, toggleSidebar } = useSidebar();
-  const { groups, cards, loading, handleDragEnd, handleUpdateColor, handleAddGroup } = useKanbanBoard(searchTerm);
+  const { groups, cards, loading, handleDragEnd, handleUpdateColor, handleAddGroup } = useKambanBoard(searchTerm);
 
   const onAddGroup = async () => {
     const name = window.prompt('New group name:');
@@ -38,16 +37,12 @@ export default function KanbanBoard() {
 
   const filteredCards = useMemo(() => {
     return cards.filter(card => {
-      // Search filter is already handled by the hook (actually it's not, checking hook again... 
-      // wait, hook declaration: useKanbanBoard(filterTerm: string = '') but it doesn't use it.
-      // So I'll handle search here too just in case.
       const matchesSearch = !searchTerm ||
         card.contactName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         card.lastMessage?.toLowerCase().includes(searchTerm.toLowerCase());
 
       if (!matchesSearch) return false;
 
-      // Type filters
       if (filter === 'unread') return card.unreadCount > 0;
       if (filter === 'unassigned') return !card.assignedTo;
 
@@ -101,7 +96,7 @@ export default function KanbanBoard() {
 
   return (
     <div className="flex flex-col h-full w-full bg-[#0a0a0a] overflow-hidden">
-      <KanbanHeader
+      <KambanHeader
         searchTerm={searchTerm}
         setSearchTerm={setSearchTerm}
         filter={filter}
@@ -120,7 +115,7 @@ export default function KanbanBoard() {
         >
           <div className="flex min-h-full min-w-max p-2 pt-1 pb-4 gap-2">
             {groups.map(group => (
-              <KanbanColumn
+              <KambanColumn
                 key={group.id}
                 group={group}
                 allGroups={groups}
@@ -153,7 +148,7 @@ export default function KanbanBoard() {
         card={selectedCard}
         groupName={groups.find(g => g.id === selectedCard?.groupId)?.name}
         groups={groups}
-        allConversations={cards} // Pass all cards for the internal inbox list
+        allConversations={cards}
         onSelectConversation={(card) => setSelectedCard(card)}
         stats={{ totalConversations: cards.length, totalGroups: groups.length }}
       />

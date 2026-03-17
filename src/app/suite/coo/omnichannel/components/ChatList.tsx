@@ -39,8 +39,8 @@ export default function ChatList({ selectedFolder, activeConversationId, setActi
             filtered = filtered.filter(c => c.assignedTo === 'Mío');
         } else if (selectedFolder === 'unassigned') {
             filtered = filtered.filter(c => !c.assignedTo || c.assignedTo === 'Unassigned');
-        } else if (selectedFolder === 'whatsapp1') {
-            filtered = filtered.filter(c => (c.channel || c.source || '').toLowerCase().includes('whatsapp'));
+        } else if (selectedFolder === 'kamban1') {
+            filtered = filtered.filter(c => (c.channel || c.source || '').toLowerCase().includes('kamban'));
         } else if (selectedFolder === 'ig1') {
             filtered = filtered.filter(c => (c.channel || c.source || '').toLowerCase().includes('instagram'));
         } else if (selectedFolder.startsWith('label:')) {
@@ -72,7 +72,7 @@ export default function ChatList({ selectedFolder, activeConversationId, setActi
         return filtered.map(c => ({
             id: c.id,
             name: c.contactName || c.contactNumber || 'Desconocido',
-            channel: c.channel || c.source || c.primary_channel || 'WhatsApp',
+            channel: c.channel || c.source || c.primary_channel || 'kamban',
             snippet: c.lastMessage || c.description || 'Nueva conversación',
             time: c.updatedAt ? typeof c.updatedAt.toDate === 'function' ? c.updatedAt.toDate().toLocaleDateString(undefined, {month: 'short', day: 'numeric', hour: '2-digit', minute:'2-digit'}) : 'Reciente' : '',
             unread: (c.unreadCount !== undefined ? c.unreadCount : (c.unread || 0)),
@@ -169,7 +169,7 @@ export default function ChatList({ selectedFolder, activeConversationId, setActi
                                         {chat.name.charAt(0).toUpperCase()}
                                     </div>
                                     <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border border-[#0d0d0d] flex items-center justify-center
-                                        ${chat.channel.toLowerCase().includes('whatsapp') ? 'bg-green-500' :
+                                        ${chat.channel.toLowerCase().includes('kamban') ? 'bg-green-500' :
                                             chat.channel.toLowerCase().includes('instagram') ? 'bg-pink-500' :
                                                 chat.channel.toLowerCase().includes('messenger') ? 'bg-blue-500' : 'bg-neutral-500'}
                                     `}>
@@ -223,3 +223,4 @@ export default function ChatList({ selectedFolder, activeConversationId, setActi
         </div>
     );
 }
+

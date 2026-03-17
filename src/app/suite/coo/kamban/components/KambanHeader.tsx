@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import WhatsappIcon from '@/components/icons/WhatsappIcon';
+
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -10,7 +11,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-export const KanbanHeader = ({
+export const KambanHeader = ({
     searchTerm,
     setSearchTerm,
     filter,
@@ -156,3 +157,4 @@ export const KanbanHeader = ({
         </div>
     );
 };
+

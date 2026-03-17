@@ -57,7 +57,7 @@ const nodeTypes = {
     delayNode: nodeComponents.DelayNode,
     catalogNode: nodeComponents.CatalogNode,
     productNode: nodeComponents.ProductNode,
-    whatsappFlowsNode: nodeComponents.WhatsappFlowsNode,
+    kambanFlowsNode: nodeComponents.kambanFlowsNode,
     checkoutNode: nodeComponents.CheckoutNode,
     generativeAINode: nodeComponents.GenerativeAINode,
     transcriptionNode: nodeComponents.TranscriptionNode,
@@ -100,7 +100,7 @@ const sidebarNodeGroups = [
         nodes: [
             { type: 'catalogNode', label: 'Catálogo de Productos', icon: <ShoppingCart className="text-green-400" /> },
             { type: 'productNode', label: 'Producto Único/Múltiple', icon: <CreditCard className="text-green-400" /> },
-            { type: 'whatsappFlowsNode', label: 'WhatsApp Flows', icon: <Rocket className="text-green-400" /> },
+            { type: 'kambanFlowsNode', label: 'kamban Flows', icon: <Rocket className="text-green-400" /> },
             { type: 'checkoutNode', label: 'Nodo de Pago', icon: <ThumbsUp className="text-green-400" /> },
         ]
     },
@@ -366,3 +366,4 @@ const ChatbotCanvasWithProvider = forwardRef<ChatbotCanvasRef, ChatbotCanvasProp
 ChatbotCanvasWithProvider.displayName = 'ChatbotCanvasWithProvider';
 
 export default ChatbotCanvasWithProvider;
+

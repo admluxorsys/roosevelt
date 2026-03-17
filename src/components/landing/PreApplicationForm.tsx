@@ -187,7 +187,7 @@ const PreApplicationForm = ({ onClose }: PreApplicationFormProps) => {
                   render={({ field: { onChange, value } }) => (
                     <FormItem>
                       <FormLabel className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
-                        <Send className="w-4 h-4 rotate-45" /> WhatsApp / Teléfono
+                        <Send className="w-4 h-4 rotate-45" /> kamban / Teléfono
                       </FormLabel>
                       <FormControl>
                         <PhoneInput
@@ -384,3 +384,4 @@ const PreApplicationForm = ({ onClose }: PreApplicationFormProps) => {
 };
 
 export default PreApplicationForm;
+

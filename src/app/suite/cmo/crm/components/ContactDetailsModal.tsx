@@ -261,7 +261,7 @@ export const ContactDetailsModal: React.FC<ContactDetailsModalProps> = ({
                                 </div>
                             </div>
 
-                            {/* Block 3: Kanban Trajectory */}
+                            {/* Block 3: kamban Trajectory */}
                             <div className="bg-white/[0.01] rounded-3xl border border-white/5 p-6 space-y-6 relative h-full">
                                 <div className="absolute top-0 right-0 p-6">
                                     <h3 className="text-neutral-600 font-medium text-[9px] tracking-widest uppercase">Trajectory</h3>
@@ -375,3 +375,4 @@ export const ContactDetailsModal: React.FC<ContactDetailsModalProps> = ({
         </Dialog >
     );
 };
+

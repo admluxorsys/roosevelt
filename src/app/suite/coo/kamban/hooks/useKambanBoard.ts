@@ -5,7 +5,7 @@ import { functions } from '@/lib/firebase';
 import { httpsCallable } from 'firebase/functions';
 import { toast } from 'sonner';
 
-export const useKanbanBoard = (filterTerm: string = '') => {
+export const useKambanBoard = (filterTerm: string = '') => {
     const [groups, setGroups] = useState<any[]>([]);
     const [cards, setCards] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -142,3 +142,4 @@ export const useKanbanBoard = (filterTerm: string = '') => {
         setCards
     };
 };
+

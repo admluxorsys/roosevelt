@@ -266,10 +266,11 @@ export const QuickReplySettings = ({ node, updateNodeConfig }: NodeSettingsProps
                     </Button>
                 ) : (
                     <div className="mt-4 p-2 bg-yellow-900/20 border border-yellow-900/50 rounded text-center">
-                        <p className="text-xs text-yellow-500">Has alcanzado el límite de 3 botones de WhatsApp.</p>
+                        <p className="text-xs text-yellow-500">Has alcanzado el límite de 3 botones de kamban.</p>
                     </div>
                 )}
             </SettingsSection>
         </div>
     );
 };
+

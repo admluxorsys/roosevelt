@@ -80,7 +80,7 @@ export function CreateClientModal({ isOpen, onClose, groups, initialGroupId }: C
             const contactRef = await addDoc(collection(db, 'contacts'), {
                 name: name,
                 phone: fullPhone,
-                source: 'Manual (Kanban)',
+                source: 'Manual (kamban)',
                 stage: groups.find(g => g.id === groupIdToUse)?.name || 'N/A',
                 createdAt: serverTimestamp(),
                 lastUpdated: serverTimestamp()
@@ -97,8 +97,8 @@ export function CreateClientModal({ isOpen, onClose, groups, initialGroupId }: C
                 clientId: derivedClientId
             });
 
-            // 2. Create Kanban Card linked by ID
-            await addDoc(collection(db, 'kanban-groups', groupIdToUse, 'cards'), {
+            // 2. Create kamban Card linked by ID
+            await addDoc(collection(db, 'kamban-groups', groupIdToUse, 'cards'), {
                 contactName: name,
                 contactNumber: fullPhone,
                 contactId: contactId, // LINK BY FIRESTORE ID
@@ -205,3 +205,4 @@ export function CreateClientModal({ isOpen, onClose, groups, initialGroupId }: C
         </Dialog>
     );
 }
+

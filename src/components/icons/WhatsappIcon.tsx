@@ -1,6 +1,6 @@
 import React from 'react';
 
-const WhatsappIcon = (props: React.SVGProps<SVGSVGElement>) => (
+const kambanIcon = (props: React.SVGProps<SVGSVGElement>) => (
   <svg 
     xmlns="http://www.w3.org/2000/svg" 
     viewBox="0 0 24 24" 
@@ -13,4 +13,5 @@ const WhatsappIcon = (props: React.SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
-export default WhatsappIcon;
+export default kambanIcon;
+

@@ -327,8 +327,8 @@ export const ProductNode = ({ data = {} }: NodeProps) => (
     </NodeWrapper>
 );
 
-export const WhatsappFlowsNode = ({ data = {} }: NodeProps) => (
-    <NodeWrapper header="WhatsApp Flows" icon={<Rocket size={16} className="text-green-400" />} label={data.label} color="border-green-500">
+export const kambanFlowsNode = ({ data = {} }: NodeProps) => (
+    <NodeWrapper header="kamban Flows" icon={<Rocket size={16} className="text-green-400" />} label={data.label} color="border-green-500">
         <p className="text-xs text-neutral-400">Inicia un formulario interactivo.</p>
         <HandleStyled type="target" position={Position.Left} />
         <HandleStyled type="source" position={Position.Right} />
@@ -382,3 +382,4 @@ export const HumanHandoffNode = ({ data = {} }: NodeProps) => (
         <HandleStyled type="source" position={Position.Right} />
     </NodeWrapper>
 );
+

@@ -33,7 +33,7 @@ export default function InboxSidebar({ selectedFolder, setSelectedFolder, cards 
     ];
 
     const channels = [
-        { id: 'whatsapp1', label: 'WhatsApp Main', type: 'whatsapp' },
+        { id: 'kamban1', label: 'kamban Main', type: 'kamban' },
         { id: 'ig1', label: 'Instagram CS', type: 'instagram' },
     ];
 
@@ -149,3 +149,4 @@ export default function InboxSidebar({ selectedFolder, setSelectedFolder, cards 
         </div>
     );
 }
+

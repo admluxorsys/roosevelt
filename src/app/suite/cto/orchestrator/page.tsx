@@ -65,7 +65,7 @@ export default function OrchestratorPage() {
                                 <div className="w-48 bg-white/5 border border-white/10 p-4 rounded-2xl backdrop-blur-md opacity-60 grayscale hover:grayscale-0 hover:opacity-100 transition-all cursor-pointer">
                                     <div className="flex items-center gap-2 mb-2">
                                         <Workflow className="w-4 h-4 text-blue-400" />
-                                        <span className="text-xs font-medium">Auto WhatsApp</span>
+                                        <span className="text-xs font-medium">Auto kamban</span>
                                     </div>
                                 </div>
 
@@ -100,3 +100,4 @@ export default function OrchestratorPage() {
         </div>
     );
 }
+

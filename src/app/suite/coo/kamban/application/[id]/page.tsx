@@ -1,13 +1,16 @@
 'use client';
 
 import React, { useState, useEffect, use } from 'react';
-import { db } from '@/lib/firebase';
+import { db, storage, auth } from '@/lib/firebase';
 import { doc, onSnapshot, getDoc, updateDoc, serverTimestamp, Timestamp, query, collection, where, getDocs } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { onAuthStateChanged } from 'firebase/auth';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     User, Mail, Phone, Globe, Languages, Flag, CreditCard,
     CheckCircle2, AlertCircle, X, ChevronDown, Search, Check, Send,
-    MapPin, Calendar, Briefcase, Building, Heart, Activity, Handshake, Users, GraduationCap, Clock, Shield, FileText, DollarSign, IdCard, Library
+    MapPin, Calendar, Briefcase, Building, Heart, Activity, Handshake, Users, GraduationCap, Clock, Shield, FileText, DollarSign, IdCard, Library, Upload, FileUp, Image as ImageIcon,
+    Lock, Unlock, Key
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,6 +25,7 @@ import {
 import { cn } from '@/lib/utils';
 import { ALL_COUNTRY_CODES, CountryCode } from '@/lib/countryCodes';
 import { toast } from 'sonner';
+import { ApplicationLogin } from '@/components/application/ApplicationLogin';
 
 interface ApplicationPageProps {
     params: Promise<{ id: string }>;
@@ -73,6 +77,26 @@ export default function ApplicationPage({ params }: ApplicationPageProps) {
         postalCode: '',
         phone: '',
         email: '',
+
+        // Contacto de Emergencia
+        emContactName1: '',
+        emContactAddress1: '',
+        emContactPostalCode1: '',
+        emContactPhone1: '',
+        emContactEmail1: '',
+        emContactName2: '',
+        emContactAddress2: '',
+        emContactPostalCode2: '',
+        emContactPhone2: '',
+        emContactEmail2: '',
+
+        // 11. Datos F1 Visa (Condicional)
+        f1StudyReason: '',
+        f1StudyDuration: '',
+        f1StartSemester: '',
+        f1PreferredSchedule: '',
+        f1VisaRejected: 'No',
+        f1SchoolName: '',
 
         // 4. Patrocinador (Sponsor)
         hasSponsor: 'No',
@@ -154,8 +178,16 @@ export default function ApplicationPage({ params }: ApplicationPageProps) {
         hasFamilyInUS: 'No',
         languages: '',
         visitedOtherCountries: 'No',
-        militaryService: 'No'
+        militaryService: 'No',
+
+        // 12. Archivos
+        photoFile: null as File | null,
+        passportFile: null as File | null,
+        bankStatementFile: null as File | null,
     });
+
+    const [isLoggedIn, setIsLoggedIn] = useState(false);
+    const [isAdmin, setIsAdmin] = useState(false);
 
     useEffect(() => {
         const fetchContact = () => {
@@ -171,7 +203,13 @@ export default function ApplicationPage({ params }: ApplicationPageProps) {
                         setRealId(id);
                         setContact(data);
 
-                        // No pre-fill form data to ensure form is blank initially.
+                        // Pre-fill form data with existing database values
+                        setForm(prev => ({
+                            ...prev,
+                            ...Object.fromEntries(
+                                Object.entries(data).filter(([_, v]) => typeof v === 'string')
+                            )
+                        }));
                         setLoading(false);
                     } else {
                         // Fallback logic if ID doesn't exist yet (might be a phone number in the URL)
@@ -194,7 +232,13 @@ export default function ApplicationPage({ params }: ApplicationPageProps) {
                             // But for now, let's just set the data
                             const data = snap.docs[0].data();
                             setContact(data);
-                            // Avoid setting form with data to keep fields empty
+                            // Pre-fill form with data from phone search
+                            setForm(prev => ({
+                                ...prev,
+                                ...Object.fromEntries(
+                                    Object.entries(data).filter(([_, v]) => typeof v === 'string')
+                                )
+                            }));
                             setLoading(false);
                         } else {
                             setLoading(false); // Truly not found
@@ -216,6 +260,20 @@ export default function ApplicationPage({ params }: ApplicationPageProps) {
             if (unsubscribe) unsubscribe();
         };
     }, [id]);
+
+    // Bypass para administradores
+    useEffect(() => {
+        const unsubscribe = onAuthStateChanged(auth, (user) => {
+            if (user && user.email === 'udreamms@gmail.com') {
+                console.log('[Application] Admin detected, bypassing login gate.');
+                setIsAdmin(true);
+                setIsLoggedIn(true);
+            } else {
+                setIsAdmin(false);
+            }
+        });
+        return () => unsubscribe();
+    }, []);
 
     const handlePhoneChange = (value: string) => {
         const clean = value.replace(/\D/g, '');
@@ -256,6 +314,32 @@ export default function ApplicationPage({ params }: ApplicationPageProps) {
                 dataToUpdate.name = `${dataToUpdate.firstName || baseFirstName} ${dataToUpdate.lastName || baseLastName}`.trim();
             }
 
+            // Subir archivos a Firebase Storage
+            const uploadFile = async (file: File | null, type: string) => {
+                if (!file) return null;
+                const fileExt = file.name.split('.').pop();
+                const fileName = `${type}_${Date.now()}.${fileExt}`;
+                const fileRef = ref(storage, `applications/${targetId}/${fileName}`);
+                await uploadBytes(fileRef, file);
+                return getDownloadURL(fileRef);
+            };
+
+            if (form.photoFile) {
+                toast.loading('Subiendo foto...', { id: 'upload-photo' });
+                dataToUpdate.photoURL = await uploadFile(form.photoFile, 'photo');
+                toast.dismiss('upload-photo');
+            }
+            if (form.passportFile) {
+                toast.loading('Subiendo pasaporte...', { id: 'upload-passport' });
+                dataToUpdate.passportURL = await uploadFile(form.passportFile, 'passport');
+                toast.dismiss('upload-passport');
+            }
+            if (form.bankStatementFile) {
+                toast.loading('Subiendo estado de cuenta...', { id: 'upload-bank' });
+                dataToUpdate.bankStatementURL = await uploadFile(form.bankStatementFile, 'bank_statement');
+                toast.dismiss('upload-bank');
+            }
+
             await updateDoc(docRef, {
                 ...dataToUpdate,
                 lastUpdated: serverTimestamp(),
@@ -270,6 +354,7 @@ export default function ApplicationPage({ params }: ApplicationPageProps) {
             toast.error('Hubo un error al enviar tu aplicación.');
         }
     };
+
 
     if (loading) {
         return (
@@ -339,19 +424,41 @@ export default function ApplicationPage({ params }: ApplicationPageProps) {
                                 <X size={24} />
                             </button>
 
-                            <div className="flex justify-center mb-8">
-                                <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg transform rotate-[-10deg]">
-                                    <Send size={32} className="text-white ml-1" />
-                                </div>
-                            </div>
+                            {!isLoggedIn ? (
+                                <ApplicationLogin 
+                                    contact={contact} 
+                                    onLoginSuccess={() => setIsLoggedIn(true)} 
+                                />
+                            ) : (
+                                <>
+                                    <div className="flex justify-center mb-8">
+                                        <div className="w-20 h-20 bg-white/10 backdrop-blur-md rounded-2xl flex items-center justify-center shadow-xl overflow-hidden border border-white/20">
+                                            <img src="/assets/USA LOGO.jpg" alt="USA Logo" className="w-full h-full object-cover" />
+                                        </div>
+                                    </div>
 
                             <header className="text-center mb-10 space-y-3">
                                 <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-gradient-to-r from-white via-white to-neutral-500 bg-clip-text text-transparent">
-                                    Comienza tu Aventura
+                                    Inicia tu sueño en Estados Unidos Aquí
                                 </h1>
-                                <p className="text-neutral-400 text-sm md:text-base max-w-md mx-auto leading-relaxed">
-                                    Completa este breve formulario y da el primer paso hacia tu sueño americano. ¡Estamos aquí para ayudarte!
-                                </p>
+                                <div className="space-y-4 max-w-xl mx-auto">
+                                    <p className="text-neutral-400 text-sm md:text-base leading-relaxed">
+                                        Completa este formulario para iniciar tu proceso, si tienes preguntas haz click en el botón con el icono de WhatsApp para hablar con tu agente asignado
+                                    </p>
+                                    <div className="flex justify-center">
+                                        <a
+                                            href="https://wa.me/16507840581"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="group flex items-center gap-3 bg-black border border-white/10 hover:border-emerald-500/50 px-4 py-2 rounded-full transition-all duration-300 shadow-lg"
+                                        >
+                                            <img src="/assets/w.jpg" alt="WhatsApp" className="w-6 h-6 object-contain rounded-full" />
+                                            <span className="text-sm font-bold text-neutral-400 group-hover:text-emerald-400 transition-colors">
+                                                Hablar con mi asesor
+                                            </span>
+                                        </a>
+                                    </div>
+                                </div>
                             </header>
 
                             <form onSubmit={handleSubmit} className="space-y-12">
@@ -405,7 +512,7 @@ export default function ApplicationPage({ params }: ApplicationPageProps) {
                                         <div className="p-2 bg-blue-500/10 rounded-lg text-blue-400">
                                             <User size={20} />
                                         </div>
-                                        <h2 className="text-xl font-bold tracking-tight text-white">1. Información Personal</h2>
+                                        <h2 className="text-xl font-bold tracking-tight text-white">Información Personal</h2>
                                     </div>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         <div className="space-y-2">
@@ -465,7 +572,7 @@ export default function ApplicationPage({ params }: ApplicationPageProps) {
                                         <div className="p-2 bg-blue-500/10 rounded-lg text-blue-400">
                                             <CreditCard size={20} />
                                         </div>
-                                        <h2 className="text-xl font-bold tracking-tight text-white">2. Pasaporte</h2>
+                                        <h2 className="text-xl font-bold tracking-tight text-white">Pasaporte</h2>
                                     </div>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         <div className="space-y-2">
@@ -521,7 +628,7 @@ export default function ApplicationPage({ params }: ApplicationPageProps) {
                                         <div className="p-2 bg-blue-500/10 rounded-lg text-blue-400">
                                             <MapPin size={20} />
                                         </div>
-                                        <h2 className="text-xl font-bold tracking-tight text-white">3. Dirección y Contacto</h2>
+                                        <h2 className="text-xl font-bold tracking-tight text-white">Dirección y Contacto</h2>
                                     </div>
                                     <div className="space-y-6">
                                         <div className="space-y-2">
@@ -565,7 +672,7 @@ export default function ApplicationPage({ params }: ApplicationPageProps) {
                                         <div className="p-2 bg-blue-500/10 rounded-lg text-blue-400">
                                             <Handshake size={20} />
                                         </div>
-                                        <h2 className="text-xl font-bold tracking-tight text-white">4. Patrocinador (Sponsor)</h2>
+                                        <h2 className="text-xl font-bold tracking-tight text-white">Patrocinador (Sponsor)</h2>
                                     </div>
                                     <div className="space-y-4">
                                         <div className="space-y-2">
@@ -613,7 +720,7 @@ export default function ApplicationPage({ params }: ApplicationPageProps) {
                                         <div className="p-2 bg-blue-500/10 rounded-lg text-blue-400">
                                             <Users size={20} />
                                         </div>
-                                        <h2 className="text-xl font-bold tracking-tight text-white">5. Familia</h2>
+                                        <h2 className="text-xl font-bold tracking-tight text-white">Familia</h2>
                                     </div>
                                     <div className="space-y-6">
                                         <div className="space-y-2">
@@ -722,7 +829,7 @@ export default function ApplicationPage({ params }: ApplicationPageProps) {
                                         <div className="p-2 bg-blue-500/10 rounded-lg text-blue-400">
                                             <Briefcase size={20} />
                                         </div>
-                                        <h2 className="text-xl font-bold tracking-tight text-white">6. Empleo Actual</h2>
+                                        <h2 className="text-xl font-bold tracking-tight text-white">Empleo Actual</h2>
                                     </div>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         <div className="space-y-2 col-span-full">
@@ -778,7 +885,7 @@ export default function ApplicationPage({ params }: ApplicationPageProps) {
                                         <div className="p-2 bg-blue-500/10 rounded-lg text-blue-400">
                                             <Briefcase size={20} />
                                         </div>
-                                        <h2 className="text-xl font-bold tracking-tight text-white">7. Empleo Anterior</h2>
+                                        <h2 className="text-xl font-bold tracking-tight text-white">Empleo Anterior</h2>
                                     </div>
                                     <div className="space-y-4">
                                         <div className="space-y-2">
@@ -845,7 +952,7 @@ export default function ApplicationPage({ params }: ApplicationPageProps) {
                                         <div className="p-2 bg-blue-500/10 rounded-lg text-blue-400">
                                             <GraduationCap size={20} />
                                         </div>
-                                        <h2 className="text-xl font-bold tracking-tight text-white">8. Educación Secundaria</h2>
+                                        <h2 className="text-xl font-bold tracking-tight text-white">Educación Secundaria</h2>
                                     </div>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         <div className="space-y-2 col-span-full">
@@ -877,7 +984,7 @@ export default function ApplicationPage({ params }: ApplicationPageProps) {
                                         <div className="p-2 bg-indigo-500/10 rounded-lg text-indigo-400">
                                             <Library size={20} />
                                         </div>
-                                        <h2 className="text-xl font-bold tracking-tight text-white">9. Educación Universitaria</h2>
+                                        <h2 className="text-xl font-bold tracking-tight text-white">Educación Universitaria</h2>
                                     </div>
                                     <div className="space-y-4">
                                         <div className="space-y-2">
@@ -929,7 +1036,7 @@ export default function ApplicationPage({ params }: ApplicationPageProps) {
                                         <div className="p-2 bg-blue-500/10 rounded-lg text-blue-400">
                                             <Globe size={20} />
                                         </div>
-                                        <h2 className="text-xl font-bold tracking-tight text-white">10. Viaje y Otros</h2>
+                                        <h2 className="text-xl font-bold tracking-tight text-white">Viaje y Otros</h2>
                                     </div>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         <div className="space-y-2 col-span-full">
@@ -1023,6 +1130,210 @@ export default function ApplicationPage({ params }: ApplicationPageProps) {
                                     </div>
                                 </div>
 
+                                {/* Contactos de Emergencia */}
+                                <div className="space-y-6">
+                                    <div className="flex items-center gap-3 border-b border-white/10 pb-2">
+                                        <div className="p-2 bg-blue-500/10 rounded-lg text-blue-400">
+                                            <Shield size={20} />
+                                        </div>
+                                        <h2 className="text-xl font-bold tracking-tight text-white">Contactos de Emergencia</h2>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
+                                        {/* Contacto 1 */}
+                                        <div className="space-y-6">
+                                            <h3 className="text-xs font-bold uppercase tracking-widest text-blue-400/60 ml-1">Contacto de Emergencia 1</h3>
+                                            <div className="space-y-4">
+                                                <div className="space-y-2">
+                                                    <Label className="text-xs font-bold text-neutral-500 ml-1">Nombre Completo</Label>
+                                                    <Input value={form.emContactName1} onChange={e => setForm(prev => ({ ...prev, emContactName1: e.target.value }))} placeholder="Ej: Dominique Estefania Guamingo Lara" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label className="text-xs font-bold text-neutral-500 ml-1">Dirección</Label>
+                                                    <Input value={form.emContactAddress1} onChange={e => setForm(prev => ({ ...prev, emContactAddress1: e.target.value }))} placeholder="Ciudadela Ibarra..." className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div className="space-y-2">
+                                                        <Label className="text-xs font-bold text-neutral-500 ml-1">Código Postal</Label>
+                                                        <Input value={form.emContactPostalCode1} onChange={e => setForm(prev => ({ ...prev, emContactPostalCode1: e.target.value }))} placeholder="170707" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <Label className="text-xs font-bold text-neutral-500 ml-1">Teléfono</Label>
+                                                        <Input value={form.emContactPhone1} onChange={e => setForm(prev => ({ ...prev, emContactPhone1: e.target.value }))} placeholder="999955071" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                                    </div>
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label className="text-xs font-bold text-neutral-500 ml-1">Email</Label>
+                                                    <Input type="email" value={form.emContactEmail1} onChange={e => setForm(prev => ({ ...prev, emContactEmail1: e.target.value }))} placeholder="dominiquezarieth@gmail.com" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Contacto 2 */}
+                                        <div className="space-y-6">
+                                            <h3 className="text-xs font-bold uppercase tracking-widest text-blue-400/60 ml-1">Contacto de Emergencia 2</h3>
+                                            <div className="space-y-4">
+                                                <div className="space-y-2">
+                                                    <Label className="text-xs font-bold text-neutral-500 ml-1">Nombre Completo</Label>
+                                                    <Input value={form.emContactName2} onChange={e => setForm(prev => ({ ...prev, emContactName2: e.target.value }))} placeholder="Ej: Kevin Edison Usiña Zhingre" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label className="text-xs font-bold text-neutral-500 ml-1">Dirección</Label>
+                                                    <Input value={form.emContactAddress2} onChange={e => setForm(prev => ({ ...prev, emContactAddress2: e.target.value }))} placeholder="Ontaneda Alta..." className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div className="space-y-2">
+                                                        <Label className="text-xs font-bold text-neutral-500 ml-1">Código Postal</Label>
+                                                        <Input value={form.emContactPostalCode2} onChange={e => setForm(prev => ({ ...prev, emContactPostalCode2: e.target.value }))} placeholder="170805" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <Label className="text-xs font-bold text-neutral-500 ml-1">Teléfono</Label>
+                                                        <Input value={form.emContactPhone2} onChange={e => setForm(prev => ({ ...prev, emContactPhone2: e.target.value }))} placeholder="984293057" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                                    </div>
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label className="text-xs font-bold text-neutral-500 ml-1">Email</Label>
+                                                    <Input type="email" value={form.emContactEmail2} onChange={e => setForm(prev => ({ ...prev, emContactEmail2: e.target.value }))} placeholder="kevin.gt@hotmail.es" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {form.visaType === 'Visa F1' && (
+                                    <motion.div
+                                        initial={{ opacity: 0, y: 20 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        className="space-y-6 pt-4"
+                                    >
+                                        <div className="flex items-center gap-3 border-b border-white/10 pb-2">
+                                            <div className="p-2 bg-blue-500/10 rounded-lg text-blue-400">
+                                                <FileText size={20} />
+                                            </div>
+                                            <h2 className="text-xl font-bold tracking-tight text-white">Información Adicional (F1 Visa)</h2>
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
+                                            <div className="space-y-2 col-span-full">
+                                                <Label className="text-xs font-bold text-neutral-500 ml-1">¿Por qué quieres estudiar inglés?</Label>
+                                                <Input value={form.f1StudyReason} onChange={e => setForm(prev => ({ ...prev, f1StudyReason: e.target.value }))} placeholder="Para seguirme preparando como profesional" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label className="text-xs font-bold text-neutral-500 ml-1">Tiempo deseado de estudio de inglés</Label>
+                                                <Input value={form.f1StudyDuration} onChange={e => setForm(prev => ({ ...prev, f1StudyDuration: e.target.value }))} placeholder="12 meses" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label className="text-xs font-bold text-neutral-500 ml-1">Semestre de inicio deseado</Label>
+                                                <Input value={form.f1StartSemester} onChange={e => setForm(prev => ({ ...prev, f1StartSemester: e.target.value }))} placeholder="Mayo" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label className="text-xs font-bold text-neutral-500 ml-1">Horario deseado</Label>
+                                                <Input value={form.f1PreferredSchedule} onChange={e => setForm(prev => ({ ...prev, f1PreferredSchedule: e.target.value }))} placeholder="Tarde" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label className="text-xs font-bold text-neutral-500 ml-1">¿Te han rechazado la visa antes?</Label>
+                                                <Select value={form.f1VisaRejected} onValueChange={val => setForm(prev => ({ ...prev, f1VisaRejected: val }))}>
+                                                    <SelectTrigger className="h-12 bg-black/40 border-white/10 rounded-xl text-white">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent className="bg-neutral-900 border-white/10 text-white">
+                                                        <SelectItem value="Sí">Sí</SelectItem>
+                                                        <SelectItem value="No">No</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div className="space-y-2 col-span-full">
+                                                <Label className="text-xs font-bold text-neutral-500 ml-1">Nombre de la escuela</Label>
+                                                <Input value={form.f1SchoolName} onChange={e => setForm(prev => ({ ...prev, f1SchoolName: e.target.value }))} placeholder="Lumos Language School" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                            </div>
+                                        </div>
+                                    </motion.div>
+                                )}
+
+                                {/* Sección de Carga de Archivos */}
+                                <div className="space-y-6 pt-8">
+                                    <div className="flex items-center gap-3 border-b border-white/10 pb-2">
+                                        <div className="p-2 bg-blue-500/10 rounded-lg text-blue-400">
+                                            <Upload size={20} />
+                                        </div>
+                                        <h2 className="text-xl font-bold tracking-tight text-white">Documentación requerida</h2>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                        {/* Foto */}
+                                        <div className="space-y-4 p-6 bg-white/5 border border-white/10 rounded-2xl hover:bg-white/[0.07] transition-all group">
+                                            <div className="w-12 h-12 bg-blue-500/10 rounded-xl flex items-center justify-center text-blue-400 mb-2 group-hover:scale-110 transition-transform">
+                                                <ImageIcon size={24} />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <Label className="text-sm font-bold text-white">Foto Personal</Label>
+                                                <p className="text-[10px] text-neutral-500">Formato JPG o PNG (Fondo blanco sugerido)</p>
+                                            </div>
+                                            <div className="relative">
+                                                <Input 
+                                                    type="file" 
+                                                    accept="image/*"
+                                                    onChange={(e) => setForm(prev => ({ ...prev, photoFile: e.target.files?.[0] || null }))}
+                                                    className="opacity-0 absolute inset-0 w-full h-full cursor-pointer z-10" 
+                                                />
+                                                <Button type="button" variant="outline" className="w-full bg-black/40 border-white/10 text-xs h-10 gap-2">
+                                                    <FileUp size={14} /> {form.photoFile ? 'Cambiar foto' : 'Seleccionar archivo'}
+                                                </Button>
+                                            </div>
+                                            {form.photoFile && <p className="text-[10px] text-emerald-400 font-medium truncate">✓ {form.photoFile.name}</p>}
+                                        </div>
+
+                                        {/* Pasaporte */}
+                                        <div className="space-y-4 p-6 bg-white/5 border border-white/10 rounded-2xl hover:bg-white/[0.07] transition-all group">
+                                            <div className="w-12 h-12 bg-blue-500/10 rounded-xl flex items-center justify-center text-blue-400 mb-2 group-hover:scale-110 transition-transform">
+                                                <IdCard size={24} />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <Label className="text-sm font-bold text-white">Pasaporte</Label>
+                                                <p className="text-[10px] text-neutral-500">Copia legible de la página principal</p>
+                                            </div>
+                                            <div className="relative">
+                                                <Input 
+                                                    type="file" 
+                                                    accept=".pdf,image/*"
+                                                    onChange={(e) => setForm(prev => ({ ...prev, passportFile: e.target.files?.[0] || null }))}
+                                                    className="opacity-0 absolute inset-0 w-full h-full cursor-pointer z-10" 
+                                                />
+                                                <Button type="button" variant="outline" className="w-full bg-black/40 border-white/10 text-xs h-10 gap-2">
+                                                    <FileUp size={14} /> {form.passportFile ? 'Cambiar archivo' : 'Seleccionar archivo'}
+                                                </Button>
+                                            </div>
+                                            {form.passportFile && <p className="text-[10px] text-emerald-400 font-medium truncate">✓ {form.passportFile.name}</p>}
+                                        </div>
+
+                                        {/* Estado de Cuenta - Condicional */}
+                                        {form.visaType === 'Visa F1' && (
+                                            <motion.div 
+                                                initial={{ opacity: 0, scale: 0.95 }}
+                                                animate={{ opacity: 1, scale: 1 }}
+                                                className="space-y-4 p-6 bg-blue-500/5 border border-blue-500/20 rounded-2xl hover:bg-blue-500/10 transition-all group"
+                                            >
+                                                <div className="w-12 h-12 bg-blue-500/10 rounded-xl flex items-center justify-center text-blue-400 mb-2 group-hover:scale-110 transition-transform">
+                                                    <DollarSign size={24} />
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <Label className="text-sm font-bold text-white">Estado de Cuenta</Label>
+                                                    <p className="text-[10px] text-neutral-500">Certificado bancario o reporte mensual</p>
+                                                </div>
+                                                <div className="relative">
+                                                    <Input 
+                                                        type="file" 
+                                                        accept=".pdf,image/*"
+                                                        onChange={(e) => setForm(prev => ({ ...prev, bankStatementFile: e.target.files?.[0] || null }))}
+                                                        className="opacity-0 absolute inset-0 w-full h-full cursor-pointer z-10" 
+                                                    />
+                                                    <Button type="button" variant="outline" className="w-full bg-black/40 border-white/10 text-xs h-10 gap-2">
+                                                        <FileUp size={14} /> {form.bankStatementFile ? 'Cambiar archivo' : 'Seleccionar archivo'}
+                                                    </Button>
+                                                </div>
+                                                {form.bankStatementFile && <p className="text-[10px] text-emerald-400 font-medium truncate">✓ {form.bankStatementFile.name}</p>}
+                                            </motion.div>
+                                        )}
+                                    </div>
+                                </div>
+
                                 <div className="pt-8 grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <Button type="button" variant="outline" className="h-14 bg-transparent border-white/10 rounded-2xl text-neutral-300 font-bold tracking-tight hover:bg-white/5 hover:text-white transition-all order-2 md:order-1">
                                         Volver
@@ -1032,6 +1343,8 @@ export default function ApplicationPage({ params }: ApplicationPageProps) {
                                     </Button>
                                 </div>
                             </form>
+                            </>
+                            )}
                         </motion.div>
                     ) : (
                         <motion.div

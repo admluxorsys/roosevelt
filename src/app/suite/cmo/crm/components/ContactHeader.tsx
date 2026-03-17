@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 
 interface ContactHeaderProps {
     isChatOpen: boolean;
-    handleSyncWhatsAppContacts: () => void;
+    handleSynckambanContacts: () => void;
     isSyncing: boolean;
     isImportModalOpen: boolean;
     setIsImportModalOpen: (open: boolean) => void;
@@ -32,7 +32,7 @@ interface ContactHeaderProps {
 
 export const ContactHeader: React.FC<ContactHeaderProps> = ({
     isChatOpen,
-    handleSyncWhatsAppContacts,
+    handleSynckambanContacts,
     isSyncing,
     isImportModalOpen,
     setIsImportModalOpen,
@@ -67,7 +67,7 @@ export const ContactHeader: React.FC<ContactHeaderProps> = ({
                 </Button>
 
                 <Button
-                    onClick={handleSyncWhatsAppContacts}
+                    onClick={handleSynckambanContacts}
                     disabled={isSyncing}
                     variant="outline"
                     className="h-10 bg-neutral-900 border-neutral-800 hover:border-neutral-700 hover:bg-neutral-800 text-white rounded-md px-4 text-xs font-medium transition-all disabled:opacity-50 uppercase tracking-wider"
@@ -107,3 +107,4 @@ export const ContactHeader: React.FC<ContactHeaderProps> = ({
         </motion.div>
     );
 };
+

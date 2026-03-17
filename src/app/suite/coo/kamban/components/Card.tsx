@@ -20,7 +20,6 @@ import {
   FileSpreadsheet
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import WhatsappIcon from '@/components/icons/WhatsappIcon';
 import { countryData } from '@/lib/utils';
 import {
   Dialog,
@@ -74,7 +73,7 @@ const Card = ({ card, groupId, onClick, cardColor = 'bg-neutral-800', contacts =
   const handleDeleteCard = async () => {
     if (deleteConfirmation === 'delete') {
       try {
-        await deleteDoc(doc(db, `kanban-groups/${groupId}/cards`, card.id));
+        await deleteDoc(doc(db, `kamban-groups/${groupId}/cards`, card.id));
         handleCloseDeleteDialog();
       } catch (error) {
         console.error("Error deleting card: ", error);
@@ -136,7 +135,14 @@ const Card = ({ card, groupId, onClick, cardColor = 'bg-neutral-800', contacts =
         )}
       >
         <div className="flex items-center justify-between min-w-0">
-          <h3 className="font-semibold text-[13px] text-white/90 truncate leading-tight tracking-tight">
+          <h3 className="font-semibold text-[13px] text-white/90 truncate leading-tight tracking-tight flex items-center gap-1.5">
+            {(() => {
+              const c = (card.channel || card.source || '').toLowerCase();
+              if (c.includes('instagram')) return <Instagram size={12} className="text-pink-500" />;
+              if (c.includes('messenger') || c.includes('facebook')) return <Facebook size={12} className="text-blue-600" />;
+              if (c.includes('web')) return <Globe2 size={12} className="text-cyan-400" />;
+              return <MessageCircle size={12} className="text-emerald-500" />;
+            })()}
             {(() => {
               const contactId = (card as any).contactId;
               let linkedContact: any = null;
@@ -202,3 +208,4 @@ const Card = ({ card, groupId, onClick, cardColor = 'bg-neutral-800', contacts =
 };
 
 export default Card;
+

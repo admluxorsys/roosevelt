@@ -77,30 +77,30 @@ export async function sendTelegramMessage(chatId: string, text: string): Promise
         text: text
     });
 }
-// --- WhatsApp ---
+// --- kamban ---
 
 /**
- * Sends a message via WhatsApp Business API
+ * Sends a message via kamban Business API
  */
-export async function sendWhatsAppMessage(toNumber: string, message: string, options: { 
+export async function sendkambanMessage(toNumber: string, message: string, options: { 
     type?: 'text' | 'template' | 'quick_reply' | 'list', 
     template?: any,
     buttons?: any[],
     button?: string,
     sections?: any[]
 } = {}): Promise<any> {
-    const token = process.env.WHATSAPP_ACCESS_TOKEN;
-    const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+    const token = process.env.kamban_ACCESS_TOKEN;
+    const phoneNumberId = process.env.kamban_PHONE_NUMBER_ID;
 
     if (!token || !phoneNumberId) {
-        throw new Error('Missing WhatsApp configuration (Token or Phone ID)');
+        throw new Error('Missing kamban configuration (Token or Phone ID)');
     }
 
     const url = `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`;
     const cleanTo = toNumber.replace(/\D/g, '');
 
     let payload: any = {
-        messaging_product: 'whatsapp',
+        messaging_product: 'kamban',
         recipient_type: 'individual',
         to: cleanTo,
     };
@@ -153,14 +153,15 @@ export async function sendWhatsAppMessage(toNumber: string, message: string, opt
             headers: { Authorization: `Bearer ${token}` }
         });
 
-        console.log(`[WhatsApp API] Message sent to ${cleanTo}: ${response.data.messages?.[0]?.id}`);
+        console.log(`[kamban API] Message sent to ${cleanTo}: ${response.data.messages?.[0]?.id}`);
         return {
             ...response.data,
             sentTo: cleanTo
         };
     } catch (error: any) {
         const errorData = error.response?.data || error.message;
-        console.error('[WhatsApp API] Error sending message:', JSON.stringify(errorData, null, 2));
-        throw new Error(`WhatsApp API Error: ${JSON.stringify(errorData)}`);
+        console.error('[kamban API] Error sending message:', JSON.stringify(errorData, null, 2));
+        throw new Error(`kamban API Error: ${JSON.stringify(errorData)}`);
     }
 }
+

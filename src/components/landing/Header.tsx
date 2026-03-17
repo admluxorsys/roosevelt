@@ -73,7 +73,7 @@ const menuData: MenuItemData[] = [
       socials: [
         { label: "Facebook", href: "https://www.facebook.com/udreamms/", imgSrc: "/assets/f.jpg" },
         { label: "Instagram", href: "https://www.instagram.com/udreamms/", imgSrc: "/assets/i.jpg" },
-        { label: "WhatsApp", href: "https://wa.me/16507840581", imgSrc: "/assets/w.jpg" },
+        { label: "kamban", href: "https://wa.me/16507840581", imgSrc: "/assets/w.jpg" },
         { label: "X", href: "https://x.com/udreamms", imgSrc: "/assets/x.jpg" },
         { label: "YouTube", href: "https://www.youtube.com/@udreamms", imgSrc: "/assets/y.jpg" },
         { label: "TikTok", href: "https://www.tiktok.com/@udreamms", imgSrc: "/assets/t.jpg" },
@@ -401,3 +401,4 @@ export default function Header() {
     </>
   );
 }
+

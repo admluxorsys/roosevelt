@@ -77,7 +77,7 @@ const Group = ({ group, allGroups = [], onCardClick, onUpdateColor, contacts = [
 
   useEffect(() => {
     if (!group.id) return;
-    const cardsQuery = query(collection(db, `kanban-groups/${group.id}/cards`));
+    const cardsQuery = query(collection(db, `kamban-groups/${group.id}/cards`));
 
     const unsubscribe = onSnapshot(cardsQuery, (snapshot) => {
       const cardsData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id, groupId: group.id })) as CardData[];
@@ -101,7 +101,7 @@ const Group = ({ group, allGroups = [], onCardClick, onUpdateColor, contacts = [
         messages: [],
       };
 
-      await addDoc(collection(db, `kanban-groups/${group.id}/cards`), cardData);
+      await addDoc(collection(db, `kamban-groups/${group.id}/cards`), cardData);
       toast.success(contact ? `Contacto "${contact.name}" añadido.` : "Nueva conversación creada.");
       setIsSelectContactOpen(false);
     } catch (error) {
@@ -158,7 +158,7 @@ const Group = ({ group, allGroups = [], onCardClick, onUpdateColor, contacts = [
           messages: [],
         };
 
-        const newCardRef = doc(collection(db, `kanban-groups/${group.id}/cards`));
+        const newCardRef = doc(collection(db, `kamban-groups/${group.id}/cards`));
         batch.set(newCardRef, cardData);
         importCount++;
       }
@@ -196,7 +196,7 @@ const Group = ({ group, allGroups = [], onCardClick, onUpdateColor, contacts = [
       // Move all cards to the Inbox
       cards.forEach((card) => {
         // Create new card in Inbox
-        const newCardRef = doc(collection(db, `kanban-groups/${inbox.id}/cards`));
+        const newCardRef = doc(collection(db, `kamban-groups/${inbox.id}/cards`));
         const { id, groupId, ...cardData } = card; // Remove old ID and groupId
         batch.set(newCardRef, {
           ...cardData,
@@ -204,12 +204,12 @@ const Group = ({ group, allGroups = [], onCardClick, onUpdateColor, contacts = [
         });
 
         // Delete old card
-        const oldCardRef = doc(db, `kanban-groups/${group.id}/cards`, card.id);
+        const oldCardRef = doc(db, `kamban-groups/${group.id}/cards`, card.id);
         batch.delete(oldCardRef);
       });
 
       // Delete the group itself
-      const groupRef = doc(db, 'kanban-groups', group.id);
+      const groupRef = doc(db, 'kamban-groups', group.id);
       batch.delete(groupRef);
 
       try {
@@ -255,9 +255,9 @@ const Group = ({ group, allGroups = [], onCardClick, onUpdateColor, contacts = [
                   onClick={() => {
                     const newName = window.prompt("Editar nombre de la bandeja:", group.name);
                     if (newName && newName !== group.name) {
-                      // We'll need to lift this to KanbanBoard or use a local handler if passed via props
+                      // We'll need to lift this to kambanBoard or use a local handler if passed via props
                       // For now, I'll rely on a prop update if available or direct Firestore update
-                      updateDoc(doc(db, 'kanban-groups', group.id), { name: newName });
+                      updateDoc(doc(db, 'kamban-groups', group.id), { name: newName });
                     }
                   }}
                   className="cursor-pointer hover:bg-neutral-800 rounded-lg py-2"
@@ -337,3 +337,4 @@ const Group = ({ group, allGroups = [], onCardClick, onUpdateColor, contacts = [
 };
 
 export default Group;
+

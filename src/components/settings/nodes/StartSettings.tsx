@@ -27,7 +27,7 @@ export const StartSettings: React.FC<StartSettingsProps> = ({ node, updateNodeCo
     }
   }, []);
 
-  // Generar el link de WhatsApp
+  // Generar el link de kamban
   const generateWaLink = () => {
     if (!phoneNumber) return '';
     const cleanPhone = phoneNumber.replace(/\D/g, ''); // Eliminar todo lo que no sea número
@@ -113,7 +113,7 @@ export const StartSettings: React.FC<StartSettingsProps> = ({ node, updateNodeCo
       </div>
 
       <div className="space-y-2">
-        <Label>Número de WhatsApp del Bot</Label>
+        <Label>Número de kamban del Bot</Label>
          <p className="text-xs text-neutral-400">
           Este es el número oficial de tu bot.
         </p>
@@ -163,3 +163,4 @@ export const StartSettings: React.FC<StartSettingsProps> = ({ node, updateNodeCo
     </div>
   );
 };
+

@@ -5,7 +5,7 @@ import InboxSidebar from './components/InboxSidebar';
 import ChatList from './components/ChatList';
 import ChatArea from './components/ChatArea';
 import ContactPanel from './components/ContactPanel';
-import { useKanbanBoard } from '../whatsapp/hooks/useKanbanBoard';
+import { useKambanBoard } from '../kamban/hooks/useKambanBoard';
 
 export default function OmnichannelInboxPage() {
     // State to manage which conversation is active
@@ -13,7 +13,7 @@ export default function OmnichannelInboxPage() {
     const [selectedFolder, setSelectedFolder] = useState<string>('all');
     const [showContactPanel, setShowContactPanel] = useState(true);
 
-    const { cards, groups, loading } = useKanbanBoard();
+    const { cards, groups, loading } = useKambanBoard();
     
     // Find active card data
     const activeCard = cards.find(c => c.id === activeConversationId) || null;
@@ -72,3 +72,4 @@ export default function OmnichannelInboxPage() {
         </div>
     );
 }
+

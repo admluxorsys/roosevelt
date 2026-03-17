@@ -447,7 +447,7 @@ export const PlaceholderSettings = ({ node, updateNodeConfig }: NodeSettingsProp
                         <SettingsSection title="🌐 Configuración Multi-País">
                             <div className="p-3 bg-blue-900/10 border border-blue-900/50 rounded-md text-xs text-blue-300 mb-3 flex gap-2">
                                 <Globe className="w-4 h-4 shrink-0" />
-                                <p>Por defecto se usa el catálogo conectado a la cuenta de WhatsApp (WABA). Usa esto solo si necesitas forzar otro catálogo.</p>
+                                <p>Por defecto se usa el catálogo conectado a la cuenta de kamban (WABA). Usa esto solo si necesitas forzar otro catálogo.</p>
                             </div>
                             <Field label="Catalog ID (Override)" htmlFor="cat-id">
                                 <Input 
@@ -490,3 +490,4 @@ export const PlaceholderSettings = ({ node, updateNodeConfig }: NodeSettingsProp
         </div>
     );
 };
+

@@ -151,7 +151,7 @@ export const DuplicateManager: React.FC<DuplicateManagerProps> = ({
                 await deleteDoc(otherRef).catch(err => console.error("Error deleting duplicate:", err));
             }
 
-            // --- DEEP MERGE: KANBAN DATA (HYBRID: ID + PHONE) ---
+            // --- DEEP MERGE: kamban DATA (HYBRID: ID + PHONE) ---
             const allContactIds = group.map(c => c.id);
             const allPhones = group.map(c => c.phone ? c.phone.replace(/\D/g, '') : '').filter(Boolean);
 
@@ -160,17 +160,17 @@ export const DuplicateManager: React.FC<DuplicateManagerProps> = ({
 
             const cardsToMerge: any[] = [];
 
-            console.log('[DuplicateManager] Searching for Kanban cards...');
+            console.log('[DuplicateManager] Searching for kamban cards...');
             console.log('  Contact IDs:', allContactIds);
             console.log('  Phones (full):', allPhones);
             console.log('  Phones (last 10):', allPhonesLast10);
 
             if (allContactIds.length > 0 || allPhones.length > 0) {
                 // 1. Fetch all groups first (infallible method, no index needed)
-                const groupsSnapshot = await getDocs(collection(db, 'kanban-groups'));
+                const groupsSnapshot = await getDocs(collection(db, 'kamban-groups'));
 
                 for (const groupDoc of groupsSnapshot.docs) {
-                    const cardsSnapshot = await getDocs(collection(db, 'kanban-groups', groupDoc.id, 'cards'));
+                    const cardsSnapshot = await getDocs(collection(db, 'kamban-groups', groupDoc.id, 'cards'));
                     cardsSnapshot.forEach(docSnap => {
                         const cardData = docSnap.data() as any;
 
@@ -544,3 +544,4 @@ const MergeView = ({ group, onMerge, processing }: { group: any[], onMerge: (id:
         </div>
     );
 };
+

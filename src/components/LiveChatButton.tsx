@@ -19,11 +19,11 @@ export const LiveChatButton = () => {
   const encodedMessage = encodeURIComponent(message);
 
   // Construimos el enlace completo
-  const whatsappLink = `https://wa.me/${phoneNumber}?text=${encodedMessage}`;
+  const kambanLink = `https://wa.me/${phoneNumber}?text=${encodedMessage}`;
 
   return (
     <a
-      href={whatsappLink}
+      href={kambanLink}
       target="_blank"
       rel="noopener noreferrer"
       className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 bg-black/40 hover:bg-black/60 backdrop-blur-md text-white transition-all duration-300 transform hover:-translate-y-1 hover:scale-105 group cursor-pointer border border-white/10 shadow-lg ${isInChatbotEditor
@@ -48,3 +48,4 @@ export const LiveChatButton = () => {
 };
 
 export default LiveChatButton;
+
