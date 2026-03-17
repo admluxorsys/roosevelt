@@ -8,9 +8,11 @@ import {
   useSensors,
   DragOverlay,
   defaultDropAnimationSideEffects,
-  DragStartEvent
+  DragStartEvent,
+  DragOverEvent
 } from '@dnd-kit/core';
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
+import { Plus } from 'lucide-react';
 import { useKanbanBoard } from '../hooks/useKanbanBoard';
 import { KanbanHeader } from './KanbanHeader';
 import KanbanColumn from './KanbanColumn';
@@ -27,7 +29,12 @@ export default function KanbanBoard() {
   const [isCompact, setIsCompact] = useState(true);
 
   const { isCollapsed, toggleSidebar } = useSidebar();
-  const { groups, cards, loading, handleDragEnd, handleUpdateColor } = useKanbanBoard(searchTerm);
+  const { groups, cards, loading, handleDragEnd, handleUpdateColor, handleAddGroup } = useKanbanBoard(searchTerm);
+
+  const onAddGroup = async () => {
+    const name = window.prompt('New group name:');
+    if (name) await handleAddGroup(name);
+  };
 
   const filteredCards = useMemo(() => {
     return cards.filter(card => {
@@ -104,14 +111,14 @@ export default function KanbanBoard() {
         toggleSidebar={toggleSidebar}
       />
 
-      <div className="flex-1 overflow-x-auto overflow-y-hidden">
+      <div className="flex-1 overflow-x-auto overflow-y-auto">
         <DndContext
           sensors={sensors}
           collisionDetection={closestCorners}
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
         >
-          <div className="flex h-full min-w-max p-4 pt-1 pb-6 gap-4">
+          <div className="flex min-h-full min-w-max p-2 pt-1 pb-4 gap-2">
             {groups.map(group => (
               <KanbanColumn
                 key={group.id}
@@ -123,6 +130,15 @@ export default function KanbanBoard() {
                 isCompact={isCompact}
               />
             ))}
+
+            {/* Add Group Button */}
+            <button
+              onClick={onAddGroup}
+              className="flex items-center gap-2 px-4 py-3 rounded-2xl border border-dashed border-white/5 text-neutral-500 hover:text-neutral-300 hover:bg-white/5 transition-all h-fit w-72 flex-shrink-0"
+            >
+              <Plus size={16} />
+              <span className="text-[13px] font-medium">Add group</span>
+            </button>
           </div>
 
           <DragOverlay dropAnimation={dropAnimation}>

@@ -180,7 +180,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         }
     };
     return (
-        <div className="flex flex-col h-full w-full bg-neutral-900/40">
+        <div className="flex flex-col h-full w-full bg-black">
             {/* Header - Fixed (Hidden per user request) */}
             <div className="hidden">
                 <h2 className="font-bold text-xs text-neutral-400 uppercase tracking-[0.2em]">
@@ -199,7 +199,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
 
             {/* Content Area - Scrollable */}
-            <div className="flex-1 min-h-0 bg-neutral-950">
+            <div className="flex-1 min-h-0 bg-black">
                 <AnimatePresence initial={false}>
                     {activeTab && (
                         <motion.div

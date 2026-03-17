@@ -63,7 +63,7 @@ export function FloatingOrbitNav({ items, title, colorClass = "bg-purple-600" }:
         >
             {/* 1. Central Trigger zone */}
             <div 
-                className="absolute top-0 left-1/2 -translate-x-1/2 w-[400px] h-20 pointer-events-auto"
+                className="absolute top-0 left-1/2 -translate-x-1/2 w-[400px] h-1 pointer-events-auto"
                 onMouseEnter={() => setIsHovered(true)}
             />
 

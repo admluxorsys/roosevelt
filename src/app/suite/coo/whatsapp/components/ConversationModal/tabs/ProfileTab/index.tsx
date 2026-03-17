@@ -272,7 +272,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
     }, [editingField, contactInfo]);
 
     return (
-        <div className="h-full w-full overflow-y-auto overflow-x-hidden p-6 pt-4 space-y-4 pb-32 bg-[#191919] text-neutral-200 custom-scrollbar">
+        <div className="h-full w-full overflow-y-auto overflow-x-hidden p-6 pt-16 space-y-4 pb-32 bg-black text-neutral-200 custom-scrollbar">
             {/* Header section... (skipped for brevity but included in full) */}
             <div className="space-y-4 px-2">
                 <div className="pt-2">
@@ -341,7 +341,13 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                 <div className="space-y-3">
                     {[
-                        { title: 'RESUMEN', fields: FIXED_FIELDS.map(f => ({ ...f, key: f.key, type: 'fixed' as const })) },
+                        {
+                            title: 'RESUMEN',
+                            fields: [
+                                ...FIXED_FIELDS.map(f => ({ ...f, key: f.key, type: 'fixed' as const })),
+                                ...OPTIONAL_FIELDS.filter(f => f.section === 'Proceso').map(f => ({ ...f, type: 'optional' as const }))
+                            ]
+                        },
                         {
                             title: 'INFORMACIÓN PERSONAL',
                             fields: OPTIONAL_FIELDS.filter(f => ['Info Básica', 'Estudiante', 'Dirección'].includes(f.section || '')).map(f => ({ ...f, type: 'optional' as const }))
@@ -373,7 +379,10 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({
                             if (visibility === 'hide-empty' && !hasData(f.key) && editingField !== (f.type === 'custom' ? `extra-${f.key}` : f.key)) return false;
 
                             if (f.type === 'fixed') return true;
-                            if (f.type === 'optional') return hasData(f.key) || editingField === f.key;
+                            if (f.type === 'optional') {
+                                if (f.section === 'Proceso') return true;
+                                return hasData(f.key) || editingField === f.key;
+                            }
                             return true;
                         });
 

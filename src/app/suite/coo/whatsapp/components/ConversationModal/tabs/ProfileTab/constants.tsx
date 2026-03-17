@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-    Activity, AlertCircle, AlertTriangle, ArrowUpRight, Briefcase, Building, Calendar, Check, CheckCircle, ChevronDown, ChevronRight, ChevronsUpDown, Clock, Copy, CreditCard, DollarSign, Edit2, ExternalLink, Facebook, FileSpreadsheet, FileText, Flag, FolderOpen, Github, Globe, GraduationCap, Handshake, Heart, HelpCircle, Home, IdCard, ImageIcon, Instagram, Languages, LifeBuoy, Link, Mail, MapPin, MessageSquare, MousePointer2, Phone, Plus, RefreshCw, Search, Share2, Shield, Sigma, Square, CheckSquare, Target, TextCursor, User, Users, X
+    Activity, AlertCircle, AlertTriangle, ArrowUpRight, Briefcase, Building, Calendar, Check, CheckCircle, ChevronDown, ChevronRight, ChevronsUpDown, Clock, Copy, CreditCard, DollarSign, Edit2, ExternalLink, Facebook, FileSpreadsheet, FileText, Flag, FolderOpen, Github, Globe, GraduationCap, Handshake, Heart, HelpCircle, Home, IdCard, ImageIcon, Instagram, Languages, LifeBuoy, Link, List, Mail, MapPin, MessageSquare, MousePointer2, Paperclip, Phone, Plus, RefreshCw, Search, Share2, Shield, Sigma, Square, CheckSquare, Target, TextCursor, User, Users, X
 } from 'lucide-react';
 import { FieldConfig, NotionType } from './types';
 
@@ -102,6 +102,27 @@ export const OPTIONAL_FIELDS: FieldConfig[] = [
     { key: 'languages', label: 'IDIOMAS', icon: <Languages size={18} className="text-neutral-500" />, placeholder: 'Español, Inglés...', section: 'Antecedentes' },
     { key: 'allergies', label: 'ALERGIAS', icon: <Activity size={18} className="text-neutral-500" />, placeholder: 'Alergias', section: 'Antecedentes' },
     { key: 'medicalConditions', label: 'CONDICIONES MÉDICAS', icon: <Activity size={18} className="text-neutral-500" />, placeholder: 'Condiciones', section: 'Antecedentes' },
+
+    // 8. Proceso (Configuración de datos)
+    { key: 'procesoStatus', label: '', icon: <List size={18} className="text-neutral-500" />, placeholder: 'Trámite', section: 'Proceso' },
+    { key: 'procesoEscuela', label: 'Escuela', icon: <List size={18} className="text-neutral-500" />, placeholder: 'Escuela', section: 'Proceso' },
+    { key: 'procesoEstado', label: 'Estado', icon: <List size={18} className="text-neutral-500" />, placeholder: 'Estado', section: 'Proceso' },
+    { key: 'procesoFecha', label: 'Fecha', icon: <Calendar size={18} className="text-neutral-500" />, placeholder: '00/00/0000', section: 'Proceso' },
+    { key: 'filePhoto', label: 'PHOTO', icon: <Paperclip size={18} className="text-neutral-500" />, placeholder: 'Vacío', section: 'Proceso' },
+    { key: 'fileExcel', label: 'EXCEL', icon: <Paperclip size={18} className="text-neutral-500" />, placeholder: 'Vacío', section: 'Proceso' },
+    { key: 'filePassport', label: 'PASAPORTE', icon: <Paperclip size={18} className="text-neutral-500" />, placeholder: 'Vacío', section: 'Proceso' },
+    { key: 'fileDs160Study', label: 'DS 160- ESTUDIAR', icon: <Paperclip size={18} className="text-neutral-500" />, placeholder: 'Vacío', section: 'Proceso' },
+    { key: 'fileDs160', label: 'DS 160', icon: <Paperclip size={18} className="text-neutral-500" />, placeholder: 'Vacío', section: 'Proceso' },
+    { key: 'fileBankStatement', label: 'BANK STATEMENT', icon: <Paperclip size={18} className="text-neutral-500" />, placeholder: 'Vacío', section: 'Proceso' },
+    { key: 'fileSevisFee', label: 'TARIFA SEVIS', icon: <Paperclip size={18} className="text-neutral-500" />, placeholder: 'Vacío', section: 'Proceso' },
+    { key: 'fileApptReceipt', label: 'RECIBO CITA', icon: <Paperclip size={18} className="text-neutral-500" />, placeholder: 'Vacío', section: 'Proceso' },
+    { key: 'fileInstructions', label: 'INSTRUCCIONES...', icon: <Paperclip size={18} className="text-neutral-500" />, placeholder: 'Vacío', section: 'Proceso' },
+    { key: 'fileI20Acceptance', label: 'I20 y Carta de Ac...', icon: <Paperclip size={18} className="text-neutral-500" />, placeholder: 'Vacío', section: 'Proceso' },
+    { key: 'fileTouristVisa', label: 'VISA TURISTA', icon: <Paperclip size={18} className="text-neutral-500" />, placeholder: 'Vacío', section: 'Proceso' },
+    { key: 'fileI20Edit', label: 'Edicion I20', icon: <Paperclip size={18} className="text-neutral-500" />, placeholder: 'Vacío', section: 'Proceso' },
+    { key: 'fileSponsorId', label: 'ID del patrocinad...', icon: <Paperclip size={18} className="text-neutral-500" />, placeholder: 'Vacío', section: 'Proceso' },
+    { key: 'commissionList', label: 'Lista Comisión', icon: <CheckSquare size={18} className="text-neutral-500" />, placeholder: 'Pendiente', section: 'Proceso' },
+    { key: 'procesoComments', label: 'Comments', icon: <MessageSquare size={18} className="text-neutral-500" />, placeholder: 'Vacío', section: 'Proceso' },
 ];
 
 export const NOTION_TYPES: NotionType[] = [

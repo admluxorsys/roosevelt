@@ -457,7 +457,7 @@ export const PropertyValue: React.FC<PropertyValueProps> = ({
             ) : (
                 <span className={cn(
                     "text-[13px] font-medium transition-colors truncate",
-                    isEmpty ? "text-neutral-600 italic" : "text-neutral-200",
+                    isEmpty ? "text-neutral-700/50" : "text-neutral-200",
                     fieldType === 'status' ? cn("flex items-center gap-1.5 px-2 py-0.5 rounded border border-transparent text-[10px] font-bold uppercase", STATUS_OPTIONS.find(o => o.label === value)?.color || "bg-neutral-800 text-neutral-400") : (badgeClass ? cn("px-2 py-0.5 rounded text-[12px] font-semibold", badgeClass) : "")
                 )}>
                     {fieldType === 'status' && (

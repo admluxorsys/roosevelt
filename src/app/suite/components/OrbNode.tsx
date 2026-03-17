@@ -37,7 +37,7 @@ export const OrbNode = ({ href, onClick, icon: Icon, title, subtitle, color }: O
                     scale: 1.12
                 }}
             >
-                <Icon className="w-14 h-14 text-white/70 group-hover:text-white transition-colors duration-500" />
+                <Icon className="w-10 h-10 text-white/70 group-hover:text-white transition-colors duration-500" />
             </motion.div>
             <div className="text-center transition-all duration-500">
                 <p className="text-sm font-bold text-white uppercase tracking-tight whitespace-nowrap opacity-70 group-hover:opacity-100">{title}</p>
@@ -48,14 +48,14 @@ export const OrbNode = ({ href, onClick, icon: Icon, title, subtitle, color }: O
 
     if (href && href !== '#') {
         return (
-            <Link href={href} className="group flex flex-col items-center gap-4">
+            <Link href={href} className="group flex flex-col items-center gap-2">
                 {InnerContent}
             </Link>
         );
     }
 
     return (
-        <button onClick={onClick} className="group flex flex-col items-center gap-4 cursor-pointer outline-none bg-transparent border-none p-0 inline-flex">
+        <button onClick={onClick} className="group flex flex-col items-center gap-2 cursor-pointer outline-none bg-transparent border-none p-0 inline-flex">
             {InnerContent}
         </button>
     );

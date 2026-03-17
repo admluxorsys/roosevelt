@@ -126,109 +126,43 @@ const Card = ({ card, groupId, onClick, cardColor = 'bg-neutral-800', contacts =
         ref={setNodeRef}
         style={style}
         data-card-id={card.id}
+        onClick={onClick}
+        {...attributes}
+        {...listeners}
         className={cn(
-          "group relative backdrop-blur-md p-0 rounded-xl border border-white/5 transition-all duration-300 touch-none flex items-stretch select-none overflow-hidden hover:bg-white/5 hover:-translate-y-1 hover:shadow-2xl",
-          cardColor || "bg-neutral-800/60",
-          isCompact ? "max-h-[72px]" : "max-h-[90px]"
+          "group relative p-3 rounded-xl border border-white/5 transition-all duration-200 select-none cursor-pointer mb-2 shadow-sm",
+          cardColor || "bg-[#181818]/50",
+          "hover:bg-white/5 hover:border-white/10"
         )}
       >
-        {/* Full-height Drag Handle Side */}
-        <div
-          {...attributes}
-          {...listeners}
-          className={cn(
-            "flex-shrink-0 flex flex-col items-center justify-center gap-1 cursor-grab text-neutral-600 hover:text-neutral-400 hover:bg-neutral-800/30 transition-all active:cursor-grabbing border-r border-neutral-800/10",
-            isCompact ? "w-3" : "w-4"
-          )}
-        >
-          <GripVertical size={isCompact ? 10 : 12} />
-        </div>
+        <div className="flex items-center justify-between min-w-0">
+          <h3 className="font-semibold text-[13px] text-white/90 truncate leading-tight tracking-tight">
+            {(() => {
+              const contactId = (card as any).contactId;
+              let linkedContact: any = null;
+              if (contactId) linkedContact = (contacts as any[]).find(c => c.id === contactId);
+              if (!linkedContact && card.contactNumber) {
+                const normalizedCardPhone = card.contactNumber.replace(/\D/g, '');
+                if (normalizedCardPhone) linkedContact = (contacts as any[]).find(c => (c.phone || '').replace(/\D/g, '') === normalizedCardPhone);
+              }
+              return linkedContact?.name || `${linkedContact?.firstName || ''} ${linkedContact?.lastName || ''} `.trim() || card.contactName || 'Unknown';
+            })()}
+          </h3>
 
-        {/* Card Content Area */}
-        <div className={cn("flex-grow flex flex-col min-w-0", isCompact ? "p-1.5 gap-0" : "p-2 gap-0.5")}>
-          <div className="flex items-center justify-between relative z-10">
-            <div className="flex items-center gap-1.5 min-w-0">
-              {(() => {
-                const channel = (card.channel || card.source || '').toLowerCase(); // Fallback to source
-
-                if (channel.includes('instagram')) {
-                  return <Instagram className="w-3.5 h-3.5 text-pink-500 flex-shrink-0" />;
-                }
-                if (channel.includes('messenger') || channel.includes('facebook')) {
-                  return <Facebook className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" />;
-                }
-                if (channel.includes('web')) {
-                  return <Globe2 className="w-3.5 h-3.5 text-cyan-400 flex-shrink-0" />;
-                }
-                if (channel.includes('telegram')) {
-                  return <MessageCircle className="w-3.5 h-3.5 text-sky-500 flex-shrink-0" />;
-                }
-                if (channel.includes('x') || channel.includes('twitter')) {
-                  return <Twitter className="w-3.5 h-3.5 text-neutral-200 flex-shrink-0" />;
-                }
-                if (channel.includes('tiktok')) {
-                  return <span className="text-[10px] flex-shrink-0">🎵</span>; // Fallback for TikTok if no icon
-                }
-
-                // Default to WhatsApp
-                return <WhatsappIcon className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />;
-              })()}
-              <h3 className="font-bold text-[11px] text-white truncate leading-none tracking-tight">
-                {(() => {
-                  const contactId = (card as any).contactId;
-                  let linkedContact: any = null;
-
-                  if (contactId) {
-                    linkedContact = (contacts as any[]).find(c => c.id === contactId);
-                  }
-
-                  if (!linkedContact && card.contactNumber) {
-                    const normalizedCardPhone = card.contactNumber.replace(/\D/g, '');
-                    if (normalizedCardPhone) {
-                      linkedContact = (contacts as any[]).find(c => (c.phone || '').replace(/\D/g, '') === normalizedCardPhone);
-                    }
-                  }
-
-                  return linkedContact?.name || `${linkedContact?.firstName || ''} ${linkedContact?.lastName || ''}`.trim() || card.contactName || 'Desconocido';
-                })()}
-              </h3>
-            </div>
-
-            <div className="flex items-center gap-1 flex-shrink-0">
-              <span className={cn("font-medium text-neutral-500 uppercase tracking-tight tabular-nums leading-none", isCompact ? "text-[7px]" : "text-[8px]")}>
-                {formatTimestamp(card.updatedAt || card.createdAt)}
-              </span>
-              {card.unreadCount > 0 && (
-                <Badge className={cn("bg-blue-600 text-white border-transparent flex items-center justify-center p-0 font-medium rounded-sm", isCompact ? "h-3 min-w-[12px] text-[7px]" : "h-3.5 min-w-[14px] text-[9px]")}>
-                  {card.unreadCount}
-                </Badge>
-              )}
-            </div>
-          </div>
-
-          <div onClick={onClick} className="flex-grow cursor-pointer relative z-10 space-y-0.5 min-h-0">
-            <p className={cn("text-neutral-400 font-medium break-words leading-tight line-clamp-1", isCompact ? "text-[8px] mb-0.5" : "text-[9px] mb-1")}>
-              {card.lastMessage || '...'}
-            </p>
-
-            <div className="flex items-center justify-between mt-auto">
-              <div className="flex items-center gap-1.5">
-                <span className={cn("text-neutral-500 font-medium tracking-wide", isCompact ? "text-[7px]" : "text-[9px]")}>
-                  {flag} {card.contactNumber || ''}
-                </span>
-              </div>
-
-              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all transform translate-x-2 group-hover:translate-x-0">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handleOpenDeleteDialog}
-                  className="h-5 w-5 text-neutral-500 hover:text-red-400 hover:bg-red-500/10 rounded-full transition-colors"
-                  aria-label="Eliminar tarjeta"
-                >
-                  <Trash2 size={10} />
-                </Button>
-              </div>
+          <div className="flex items-center gap-2">
+            {card.unreadCount > 0 && (
+              <div className="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
+            )}
+            
+            <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={(e) => { e.stopPropagation(); handleOpenDeleteDialog(e); }}
+                className="h-6 w-6 text-neutral-500 hover:text-red-400 hover:bg-red-500/10 rounded-full"
+              >
+                <Trash2 size={12} />
+              </Button>
             </div>
           </div>
         </div>
@@ -237,38 +171,33 @@ const Card = ({ card, groupId, onClick, cardColor = 'bg-neutral-800', contacts =
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <DialogContent className="sm:max-w-[425px] bg-neutral-900 border-neutral-700 text-white">
           <DialogHeader>
-            <DialogTitle>Confirmar Eliminación</DialogTitle>
+            <DialogTitle>Confirm Deletion</DialogTitle>
             <DialogDescription>
-              Esta acción es irreversible. Para eliminar esta tarjeta, por favor escribe 'delete' en el campo de abajo.
+              To confirm deletion, type 'delete'.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="delete-confirm" className="text-right">
-                Confirmar
-              </Label>
-              <Input
-                id="delete-confirm"
-                value={deleteConfirmation}
-                onChange={(e) => setDeleteConfirmation(e.target.value)}
-                className="col-span-3 bg-neutral-800 border-neutral-600 focus:ring-blue-500"
-                autoComplete="off"
-              />
-            </div>
+          <div className="py-2">
+            <Input
+              value={deleteConfirmation}
+              onChange={(e) => setDeleteConfirmation(e.target.value)}
+              className="bg-neutral-800 border-neutral-600 focus:ring-blue-500"
+              placeholder="Type 'delete'..."
+              autoComplete="off"
+            />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={handleCloseDeleteDialog}>Cancelar</Button>
+            <Button variant="outline" onClick={handleCloseDeleteDialog}>Cancel</Button>
             <Button
               variant="destructive"
               onClick={handleDeleteCard}
               disabled={deleteConfirmation !== 'delete'}
             >
-              Eliminar Tarjeta
+              Delete
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </TooltipProvider >
+    </TooltipProvider>
   );
 };
 

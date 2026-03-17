@@ -80,12 +80,12 @@ export const LifeCarousel = () => {
         const zIndex = Math.round(zRaw + CENTER_Z_INDEX);
         const opacity = Math.max(0.4, (zRaw + radius.z) / (2 * radius.z) + 0.3);
 
-        const tiltOffset = zRaw * 0.4;
-
+        const tiltOffset = zRaw * 0.2;
+        
         return {
             ...node,
             x: xRaw,
-            y: 240 + tiltOffset,
+            y: 120 + tiltOffset,
             z: zRaw,
             scale: scaleFactor,
             zIndex,

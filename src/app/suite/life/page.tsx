@@ -32,8 +32,8 @@ export default function LifeDashboard() {
                 colorClass="bg-rose-600"
             />
 
-            {/* Main scrollable layout - Hidden scrollbars */}
-            <div className="relative z-10 w-full min-h-screen flex flex-col items-center justify-start pt-20 pb-10 overflow-y-auto overflow-x-hidden no-scrollbar">
+            {/* Main layout - Fixed height, no scrolling */}
+            <div className="relative z-10 w-full h-screen flex flex-col items-center justify-between pt-10 pb-6 overflow-hidden no-scrollbar">
 
                 {/* Top Left Suite Hover Trigger Zone */}
                 <div 
@@ -72,16 +72,16 @@ export default function LifeDashboard() {
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: 0.4, duration: 1 }}
-                    className="mt-10 mb-0 text-center relative z-[2000] px-6"
+                    className="mt-4 mb-0 text-center relative z-[2000] px-6"
                 >
-                    <span className="text-xl md:text-3xl font-light text-white/50 tracking-tight block mb-4 uppercase">El Triángulo de la Existencia</span>
-                    <h2 className="text-3xl md:text-5xl font-extralight tracking-tighter text-white leading-tight">
+                    <span className="text-lg md:text-xl font-light text-white/50 tracking-tight block mb-2 uppercase">El Triángulo de la Existencia</span>
+                    <h2 className="text-2xl md:text-4xl font-extralight tracking-tighter text-white leading-tight">
                         Your Personal Dashboard
                     </h2>
                 </motion.div>
 
-                {/* 2. Carousel Area */}
-                <div className="relative w-full h-[950px] flex items-center justify-center">
+                {/* 2. Carousel Area - Flexible space */}
+                <div className="relative w-full flex-1 flex items-center justify-center min-h-0">
                     <LifeCarousel />
                 </div>
 
@@ -90,10 +90,10 @@ export default function LifeDashboard() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.8, delay: 0.6 }}
-                    className="text-center relative z-[2000] pointer-events-none mt-60 pb-10"
+                    className="text-center relative z-[2000] pointer-events-none mt-2 pb-6"
                 >
-                    <div className="h-[1px] w-12 bg-white/10 mx-auto mb-10" />
-                    <h1 className="text-sm md:text-lg font-light tracking-[0.3em] mb-4 text-white/20 uppercase">
+                    <div className="h-[1px] w-8 bg-white/10 mx-auto mb-6" />
+                    <h1 className="text-xs md:text-sm font-light tracking-[0.3em] mb-2 text-white/20 uppercase">
                         The Core of Being
                     </h1>
                     <p className="text-neutral-500 max-w-lg mx-auto leading-relaxed text-[10px] md:text-xs opacity-20 px-6">

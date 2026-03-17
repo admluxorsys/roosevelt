@@ -6,7 +6,11 @@ import { ChatSection } from './ConversationModal/components/ChatSection';
 import { Sidebar } from './ConversationModal/components/Sidebar';
 import { ConversationModalProps } from './ConversationModal/types';
 import { socialPlatforms } from './ConversationModal/constants';
-import { User, CreditCard, FileText, Clock, Phone, ChevronDown, X, CheckCheck, Search, MoreVertical, Filter, BellOff } from 'lucide-react';
+import { 
+  User, CreditCard, FileText, Clock, Phone, ChevronDown, X, CheckCheck, 
+  Search, MoreVertical, Filter, BellOff, ChevronsRight, Maximize2, 
+  PanelRight, ChevronUp 
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import FilePreviewModal from './ConversationModal/FilePreviewModal';
 import { Button } from '@/components/ui/button';
@@ -26,28 +30,6 @@ export default function ConversationModal(props: ConversationModalProps) {
   const [isChatSearchOpen, setIsChatSearchOpen] = React.useState(false);
   const [muteDuration, setMuteDuration] = React.useState<string | null>(null);
 
-  // Resize State
-  const [sidebarWidth, setSidebarWidth] = React.useState(450);
-  const [isResizing, setIsResizing] = React.useState(false);
-
-  const startResizing = React.useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    setIsResizing(true);
-  }, []);
-
-  const stopResizing = React.useCallback(() => {
-    setIsResizing(false);
-  }, []);
-
-  const resize = React.useCallback((e: MouseEvent) => {
-    if (isResizing) {
-      const newWidth = window.innerWidth - e.clientX;
-      if (newWidth > 350 && newWidth < 900) {
-        setSidebarWidth(newWidth);
-      }
-    }
-  }, [isResizing]);
-
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -61,20 +43,6 @@ export default function ConversationModal(props: ConversationModalProps) {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [logic, props.onClose]);
-
-  React.useEffect(() => {
-    if (isResizing) {
-      window.addEventListener('mousemove', resize);
-      window.addEventListener('mouseup', stopResizing);
-    } else {
-      window.removeEventListener('mousemove', resize);
-      window.removeEventListener('mouseup', stopResizing);
-    }
-    return () => {
-      window.removeEventListener('mousemove', resize);
-      window.removeEventListener('mouseup', stopResizing);
-    };
-  }, [isResizing, resize, stopResizing]);
 
   // Keep it open by default and set active tab
   React.useEffect(() => {
@@ -109,10 +77,9 @@ export default function ConversationModal(props: ConversationModalProps) {
     top: '0px',
     bottom: '0px',
     zIndex: 1000,
-    width: `${sidebarWidth}px`,
-    backgroundColor: '#0a0a0a', // Solid black background
+    width: '50%',
+    backgroundColor: '#000000', // Solid black background
     borderLeft: '1px solid rgba(255,255,255,0.1)',
-    transition: isResizing ? 'none' : 'width 0.1s ease-out',
   };
 
   return (
@@ -124,36 +91,46 @@ export default function ConversationModal(props: ConversationModalProps) {
       className={cn("text-white flex font-sans overflow-hidden fixed shadow-[-10px_0_30px_rgba(0,0,0,0.5)]")}
       style={floatingStyle}
     >
-      {/* Resize Handle */}
-      <div
-        onMouseDown={startResizing}
-        className={cn(
-          "absolute left-0 top-0 bottom-0 w-1.5 cursor-ew-resize z-[1001] transition-colors group",
-          isResizing ? "bg-neutral-500/30" : "hover:bg-neutral-500/20"
-        )}
-      >
-        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
-          <GripVertical size={16} className="text-neutral-500/60" />
-        </div>
-      </div>
-
       {/* Container with solid background and layout */}
-      <div className="flex w-full h-full bg-[#111] border-l border-white/10">
+      <div className="flex w-full h-full bg-black border-l border-white/10">
         {/* Main Content Area: Sidebar based on activeTab */}
         <div className="flex-1 flex flex-col h-full overflow-hidden bg-neutral-900/20 relative">
-          {/* Close Button at top right */}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={async () => {
-              await logic.handleInfoSave();
-              props.onClose();
-            }}
-            className="absolute top-4 right-4 z-[1002] h-8 w-8 text-neutral-400 hover:text-white hover:bg-white/10 rounded-full transition-all"
-            title="Cerrar panel"
-          >
-            <X size={18} />
-          </Button>
+          
+          {/* Top-Left Control Icons */}
+          <div className="absolute top-4 left-4 z-[1002] flex items-center gap-3 px-2 py-1.5 rounded-lg">
+            <div className="flex items-center gap-3">
+              <button 
+                onClick={async () => {
+                  await logic.handleInfoSave();
+                  props.onClose();
+                }}
+                className="text-neutral-500 hover:text-white transition-colors"
+                title="Cerrar y guardar"
+              >
+                <ChevronsRight size={18} />
+              </button>
+              <button className="text-neutral-500 hover:text-white transition-colors">
+                <Maximize2 size={16} />
+              </button>
+            </div>
+            
+            <div className="w-[1px] h-4 bg-white/10" />
+            
+            <button className="text-neutral-500 hover:text-white transition-colors">
+              <PanelRight size={18} />
+            </button>
+            
+            <div className="w-[1px] h-4 bg-white/10" />
+            
+            <div className="flex items-center gap-3">
+              <button className="text-neutral-500 hover:text-white transition-colors">
+                <ChevronUp size={18} />
+              </button>
+              <button className="text-neutral-500 hover:text-white transition-colors">
+                <ChevronDown size={18} />
+              </button>
+            </div>
+          </div>
 
           <Sidebar
             activeTab={logic.activeTab || 'perfil'}

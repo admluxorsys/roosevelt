@@ -28,14 +28,14 @@ export const KanbanHeader = ({
                         <div className="bg-blue-500/10 p-1.5 rounded-lg border border-blue-500/20">
                             <MessageSquare size={16} className="text-blue-500" />
                         </div>
-                        <h1 className="text-[14px] font-semibold text-white tracking-tight truncate hidden sm:block">Bandeja de Entrada</h1>
+                        <h1 className="text-[14px] font-semibold text-white tracking-tight truncate hidden sm:block">Inbox</h1>
                     </div>
                 </div>
 
                 <div className="h-6 w-[1px] bg-neutral-800 mx-2 hidden lg:block" />
 
                 {/* Stats Bar */}
-                <div className="flex items-center gap-6 py-1 px-1 overflow-x-auto no-scrollbar">
+                <div className="flex items-center gap-4 py-1 px-1 overflow-x-auto no-scrollbar">
                     {/* WhatsApp */}
                     <div className="flex flex-col items-center gap-0.5 transition-all cursor-pointer group/pill hover:opacity-80">
                         <div className="relative">
@@ -108,7 +108,7 @@ export const KanbanHeader = ({
                 <div className="relative group/search w-32 transition-all duration-300 focus-within:w-48">
                     <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-neutral-500 group-focus-within/search:text-blue-500 transition-colors" />
                     <Input
-                        placeholder="Buscar..."
+                        placeholder="Search..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className="pl-8 h-7 bg-black/20 border-white/5 text-[10px] placeholder:text-neutral-600 focus:bg-black/40 transition-all rounded-lg"
@@ -127,15 +127,15 @@ export const KanbanHeader = ({
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="bg-neutral-900 border-neutral-800 text-white shadow-2xl rounded-xl p-1 w-40">
                             <DropdownMenuItem onClick={() => setFilter('all')} className="flex items-center justify-between text-[11px] rounded-lg cursor-pointer">
-                                <span>Todos</span>
+                                <span>All</span>
                                 {filter === 'all' && <Check size={12} className="text-blue-500" />}
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => setFilter('unread')} className="flex items-center justify-between text-[11px] rounded-lg cursor-pointer">
-                                <span>Sin Leer</span>
+                                <span>Unread</span>
                                 {filter === 'unread' && <Check size={12} className="text-blue-500" />}
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => setFilter('unassigned')} className="flex items-center justify-between text-[11px] rounded-lg cursor-pointer">
-                                <span>No Asignados</span>
+                                <span>Unassigned</span>
                                 {filter === 'unassigned' && <Check size={12} className="text-blue-500" />}
                             </DropdownMenuItem>
                         </DropdownMenuContent>
@@ -149,7 +149,7 @@ export const KanbanHeader = ({
                 <div className="pl-2">
                     <Button size="sm" className="h-8 bg-blue-600 hover:bg-blue-500 text-white gap-2 shadow-lg shadow-blue-900/20 text-[11px] px-3 font-medium rounded-lg">
                         <UserPlus size={14} />
-                        <span>Nuevo Chat</span>
+                        <span>New Chat</span>
                     </Button>
                 </div>
             </div>

@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
     User, Mail, Phone, Globe, Languages, Flag, CreditCard,
     CheckCircle2, AlertCircle, X, ChevronDown, Search, Check, Send,
-    MapPin, Calendar, Briefcase, Building, Heart, Activity, Handshake, Users, GraduationCap, Clock, Shield, FileText, DollarSign, IdCard
+    MapPin, Calendar, Briefcase, Building, Heart, Activity, Handshake, Users, GraduationCap, Clock, Shield, FileText, DollarSign, IdCard, Library
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -40,103 +40,121 @@ export default function ApplicationPage({ params }: ApplicationPageProps) {
     );
 
     const [form, setForm] = useState({
-        // 1. Información de Contacto
-        firstName: '',
-        lastName: '',
-        contactName: '',
-        email: '',
-        phone: '',
-        website: '',
-        company: '',
-        address: '',
-        postalCode: '',
+        // 0. Selección de Visa
+        visaType: '',
+        selectedSchool: '',
 
-        // 2. Estudiante
+        // 1. Información Personal
+        lastName: '',
+        firstName: '',
         birthDate: '',
         birthPlace: '',
-        nationality: '',
-        birthCity: '',
-        birthCountry: '',
-        birthState: '',
-        hasOtherNationality: '',
-        otherNationalityCountry: '',
-        isPermanentResidentOther: '',
-        permanentResidentCountry: '',
+        city: '',
+        state: '',
+        country: '',
+        hasOtherNationality: 'No',
         nationalId: '',
         maritalStatus: '',
-        gender: '',
 
-        // 3. Pasaporte
+        // 2. Pasaporte y Visa
         passportNumber: '',
-        passportCountry: '',
         passportCity: '',
         passportState: '',
         passportIssuedDate: '',
         passportExpiryDate: '',
-        passportLost: '',
-        hasTouristVisa: '',
-        visaIssuedDate: '',
-        visaExpiryDate: '',
+        passportLost: 'No',
+        hasTouristVisa: 'No',
 
-        // 4. Dirección
-        city: '',
-        state: '',
-        country: '',
-        usAddress: '',
+        // 3. Dirección y Contacto
+        currentAddress: '',
+        currentCity: '',
+        currentState: '',
+        currentCountry: '',
+        postalCode: '',
+        phone: '',
+        email: '',
+
+        // 4. Patrocinador (Sponsor)
+        hasSponsor: 'No',
+        sponsorLastName: '',
+        sponsorFirstName: '',
+        sponsorPhone: '',
+        sponsorEmail: '',
+        sponsorRelation: '',
 
         // 5. Familia
-        hasSponsor: '',
-        sponsorFirstName: '',
-        sponsorLastName: '',
-        sponsorPhone: '',
-        sponsorRelation: '',
+        hasChildrenComing: 'No',
+        childNames: '',
+        childLastNames: '',
+        childBirthDate: '',
+        childAddress: '',
+        childHasPassport: 'No',
+        childPassportNumber: '',
+        childPassportCity: '',
+        childPassportState: '',
+        childPassportIssuedDate: '',
+        childPassportExpiryDate: '',
         motherName: '',
         motherBirthDate: '',
         fatherName: '',
         fatherBirthDate: '',
-        spouseName: '',
-        marriageDate: '',
-        spouseBirthDate: '',
-        spouseCity: '',
-        spouseCountry: '',
 
-        // 6. Empleo
-        occupationData: '',
+        // 6. Empleo Actual
+        currentRole: '',
         currentEmployer: '',
         employerAddress: '',
         employerCity: '',
+        employerState: '',
+        employerPostalCode: '',
         employerPhone: '',
-        monthlySalary: '',
         jobStartDate: '',
+        monthlySalary: '',
         jobDescription: '',
-        otherIncomeSource: '',
-        hasPreviousJob: '',
+        hasMoreIncome: 'No',
+
+        // 7. Empleo Anterior
+        hasPreviousJob: 'No',
         prevEmployer: '',
+        prevEmployerAddress: '',
+        prevEmployerCity: '',
+        prevEmployerState: '',
+        prevEmployerPostalCode: '',
         prevJobTitle: '',
-        profession: '',
+        prevSupervisor: '',
+        prevJobDescription: '',
+        prevJobStartDate: '',
+        prevJobEndDate: '',
 
-        // 7. Estudios
+        // 8. Educación Secundaria
         schoolName: '',
+        schoolAddress: '',
         schoolProgram: '',
+        schoolCity: '',
+        schoolState: '',
+        schoolStartDate: '',
+        schoolEndDate: '',
+
+        // 9. Educación Universitaria
+        hasUniversity: 'No',
         universityName: '',
+        universityAddress: '',
         universityProgram: '',
+        universityCity: '',
+        universityStartDate: '',
+        universityEndDate: '',
 
-        // 8. Antecedentes
-        studyReason: '',
-        studyDuration: '',
-        startSemester: '',
-        preferredSchedule: '',
-        targetSchool: '',
-        visaRefusal: '',
-        militaryService: '',
+        // 10. Detalles de Viaje y Otros
+        usStayAddress: '',
+        hasBeenToUS: 'No',
+        hasUSVisa: 'No',
+        changedPhoneLast5Years: 'No',
+        instagramLink: '',
+        facebookLink: '',
+        linkedinLink: '',
+        hasFamilyInUS: 'No',
         languages: '',
-        allergies: '',
-        medicalConditions: '',
-
-        // Legacy/Derived
-        primaryLanguage: '',
-        hasPassport: '',
-        visaType: ''
+        visitedOtherCountries: 'No',
+        militaryService: 'No'
     });
 
     useEffect(() => {
@@ -217,7 +235,7 @@ export default function ApplicationPage({ params }: ApplicationPageProps) {
 
         try {
             const docRef = doc(db, 'contacts', targetId);
-            
+
             // Only update fields that the user explicitly filled
             const dataToUpdate: any = {};
             Object.entries(form).forEach(([key, value]) => {
@@ -234,7 +252,7 @@ export default function ApplicationPage({ params }: ApplicationPageProps) {
                 const existingName = contact?.name || '';
                 const baseFirstName = contact?.firstName || existingName.split(' ')[0] || '';
                 const baseLastName = contact?.lastName || existingName.split(' ').slice(1).join(' ') || '';
-                
+
                 dataToUpdate.name = `${dataToUpdate.firstName || baseFirstName} ${dataToUpdate.lastName || baseLastName}`.trim();
             }
 
@@ -304,7 +322,7 @@ export default function ApplicationPage({ params }: ApplicationPageProps) {
             {/* Background elements */}
             <div className="fixed inset-0 overflow-hidden pointer-events-none">
                 <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-600/10 rounded-full blur-[120px]"></div>
-                <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-red-600/10 rounded-full blur-[120px]"></div>
+                <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-600/20 rounded-full blur-[120px]"></div>
             </div>
 
             <div className="relative z-10 container mx-auto px-4 py-12 md:py-24 flex items-center justify-center min-h-screen">
@@ -315,7 +333,7 @@ export default function ApplicationPage({ params }: ApplicationPageProps) {
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, scale: 0.95 }}
-                            className="w-full max-w-2xl bg-white/5 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] p-8 md:p-12 shadow-2xl relative overflow-hidden"
+                            className="w-full max-w-6xl bg-white/5 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] p-8 md:p-12 shadow-2xl relative overflow-hidden"
                         >
                             <button className="absolute top-6 right-8 text-neutral-500 hover:text-white transition-colors">
                                 <X size={24} />
@@ -337,252 +355,679 @@ export default function ApplicationPage({ params }: ApplicationPageProps) {
                             </header>
 
                             <form onSubmit={handleSubmit} className="space-y-12">
-                                {/* Section 1: Contact Information */}
+                                {/* Section 0: Tipo de Visa */}
+                                <div className="space-y-6">
+                                    <div className="flex items-center gap-3 border-b border-white/10 pb-2">
+                                        <div className="p-2 bg-indigo-500/10 rounded-lg text-indigo-400">
+                                            <FileText size={20} />
+                                        </div>
+                                        <h2 className="text-xl font-bold tracking-tight text-white">¿A qué visa estás aplicando?</h2>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div className="space-y-2">
+                                            <Label className="text-xs font-bold text-neutral-500 ml-1">Tipo de Visa</Label>
+                                            <Select value={form.visaType} onValueChange={val => setForm(prev => ({ ...prev, visaType: val, selectedSchool: val === 'Visa F1' ? prev.selectedSchool : '' }))}>
+                                                <SelectTrigger className="h-12 bg-black/40 border-white/10 rounded-xl text-white">
+                                                    <SelectValue placeholder="Selecciona" />
+                                                </SelectTrigger>
+                                                <SelectContent className="bg-neutral-900 border-white/10 text-white">
+                                                    <SelectItem value="Turista">Turista</SelectItem>
+                                                    <SelectItem value="Visa F1">Visa F1</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+
+                                        {form.visaType === 'Visa F1' && (
+                                            <motion.div
+                                                initial={{ opacity: 0, x: -20 }}
+                                                animate={{ opacity: 1, x: 0 }}
+                                                className="space-y-2"
+                                            >
+                                                <Label className="text-xs font-bold text-neutral-500 ml-1">Institución / Escuela</Label>
+                                                <Select value={form.selectedSchool} onValueChange={val => setForm(prev => ({ ...prev, selectedSchool: val }))}>
+                                                    <SelectTrigger className="h-12 bg-black/40 border-white/10 rounded-xl text-white">
+                                                        <SelectValue placeholder="Selecciona Escuela" />
+                                                    </SelectTrigger>
+                                                    <SelectContent className="bg-neutral-900 border-white/10 text-white">
+                                                        <SelectItem value="Lumos">Lumos</SelectItem>
+                                                        <SelectItem value="Uceda">Uceda</SelectItem>
+                                                        <SelectItem value="Mila">Mila</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </motion.div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Section 1: Información Personal */}
                                 <div className="space-y-6">
                                     <div className="flex items-center gap-3 border-b border-white/10 pb-2">
                                         <div className="p-2 bg-blue-500/10 rounded-lg text-blue-400">
                                             <User size={20} />
                                         </div>
-                                        <h2 className="text-xl font-bold tracking-tight text-white uppercase">Información de Contacto</h2>
+                                        <h2 className="text-xl font-bold tracking-tight text-white">1. Información Personal</h2>
                                     </div>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         <div className="space-y-2">
-                                            <Label className="text-xs font-bold uppercase tracking-widest text-neutral-500 ml-1">Nombres</Label>
-                                            <Input required value={form.firstName} onChange={e => setForm(prev => ({ ...prev, firstName: e.target.value }))} placeholder="Nombres" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all font-medium text-white" />
+                                            <Label className="text-xs font-bold text-neutral-500 ml-1">Apellidos</Label>
+                                            <Input required value={form.lastName} onChange={e => setForm(prev => ({ ...prev, lastName: e.target.value }))} placeholder="Ej: Solis Arias" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all font-medium text-white" />
                                         </div>
                                         <div className="space-y-2">
-                                            <Label className="text-xs font-bold uppercase tracking-widest text-neutral-500 ml-1">Apellidos</Label>
-                                            <Input required value={form.lastName} onChange={e => setForm(prev => ({ ...prev, lastName: e.target.value }))} placeholder="Apellidos" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all font-medium text-white" />
-                                        </div>
-                                        <div className="space-y-2 col-span-full">
-                                            <Label className="text-xs font-bold uppercase tracking-widest text-neutral-500 ml-1">Nombre Completo (Legacy)</Label>
-                                            <Input value={form.contactName} onChange={e => setForm(prev => ({ ...prev, contactName: e.target.value }))} placeholder="Nombre completo" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all font-medium text-white" />
+                                            <Label className="text-xs font-bold text-neutral-500 ml-1">Nombres</Label>
+                                            <Input required value={form.firstName} onChange={e => setForm(prev => ({ ...prev, firstName: e.target.value }))} placeholder="Ej: Nicole Geovanna" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all font-medium text-white" />
                                         </div>
                                         <div className="space-y-2">
-                                            <Label className="text-xs font-bold uppercase tracking-widest text-neutral-500 ml-1">Correo Electrónico</Label>
-                                            <Input required type="email" value={form.email} onChange={e => setForm(prev => ({ ...prev, email: e.target.value }))} placeholder="email@ejemplo.com" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all font-medium text-white" />
+                                            <Label className="text-xs font-bold text-neutral-500 ml-1">Fecha de Nacimiento</Label>
+                                            <Input required type="date" value={form.birthDate} onChange={e => setForm(prev => ({ ...prev, birthDate: e.target.value }))} className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
                                         </div>
                                         <div className="space-y-2">
-                                            <Label className="text-xs font-bold uppercase tracking-widest text-neutral-500 ml-1">WhatsApp / Teléfono</Label>
-                                            <div className="flex gap-2 relative">
-                                                <div className="relative w-[110px] shrink-0">
-                                                    <Button type="button" variant="outline" onClick={() => setIsPhoneOpen(!isPhoneOpen)} className="w-full h-12 bg-black/40 border-white/10 rounded-xl justify-between px-3 text-sm hover:bg-black/60 transition-all">
-                                                        <span className="flex items-center gap-1.5 overflow-hidden">
-                                                            <span className="text-base shrink-0">{selectedCountry.flag}</span>
-                                                            <span className="font-mono text-neutral-300">{selectedCountry.code}</span>
-                                                        </span>
-                                                        <ChevronDown size={14} className="text-neutral-500" />
-                                                    </Button>
-                                                    <AnimatePresence>
-                                                        {isPhoneOpen && (
-                                                            <motion.div initial={{ opacity: 0, scale: 0.95, y: -10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: -10 }} className="absolute bottom-full mb-2 left-0 w-[280px] bg-neutral-900 border border-white/10 rounded-2xl shadow-2xl z-[100] overflow-hidden">
-                                                                <div className="flex items-center border-b border-white/5 px-4 py-3 bg-black/20">
-                                                                    <Search className="h-4 w-4 text-neutral-500 mr-2" />
-                                                                    <input autoFocus className="w-full bg-transparent text-sm outline-none text-white font-medium" placeholder="Buscar país..." value={phoneSearchTerm} onChange={(e) => setPhoneSearchTerm(e.target.value)} />
-                                                                </div>
-                                                                <div className="max-h-[250px] overflow-y-auto py-2 custom-scrollbar">
-                                                                    {filteredCountries.map((country) => (
-                                                                        <button key={`${country.iso}-${country.code}`} type="button" onClick={() => handleCountrySelect(country)} className="w-full flex items-center px-4 py-3 text-sm text-neutral-300 hover:bg-blue-600/20 transition-colors text-left group">
-                                                                            <div className="flex items-center flex-1">
-                                                                                <Check className={cn("mr-3 h-4 w-4 text-blue-500 transition-opacity", selectedCountry.iso === country.iso && selectedCountry.code === country.code ? "opacity-100" : "opacity-0")} />
-                                                                                <span className="text-lg mr-3 shrink-0">{country.flag}</span>
-                                                                                <span className="flex-1 truncate font-medium">{country.country}</span>
-                                                                            </div>
-                                                                            <span className="font-mono text-neutral-500 text-xs ml-2 group-hover:text-blue-400">{country.code}</span>
-                                                                        </button>
-                                                                    ))}
-                                                                </div>
-                                                            </motion.div>
-                                                        )}
-                                                    </AnimatePresence>
-                                                </div>
-                                                <Input required value={form.phone} onChange={e => handlePhoneChange(e.target.value)} placeholder="Número" className="flex-1 h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all font-mono text-white" />
+                                            <Label className="text-xs font-bold text-neutral-500 ml-1">Lugar de Nacimiento</Label>
+                                            <Input required value={form.birthPlace} onChange={e => setForm(prev => ({ ...prev, birthPlace: e.target.value }))} placeholder="Ej: Quito" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label className="text-xs font-bold text-neutral-500 ml-1">Ciudad</Label>
+                                            <Input required value={form.city} onChange={e => setForm(prev => ({ ...prev, city: e.target.value }))} placeholder="Ej: Quito" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label className="text-xs font-bold text-neutral-500 ml-1">Estado / Provincia / Departamento</Label>
+                                            <Input required value={form.state} onChange={e => setForm(prev => ({ ...prev, state: e.target.value }))} placeholder="Ej: Pichincha" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label className="text-xs font-bold text-neutral-500 ml-1">País</Label>
+                                            <Input required value={form.country} onChange={e => setForm(prev => ({ ...prev, country: e.target.value }))} placeholder="Ej: Ecuador" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label className="text-xs font-bold text-neutral-500 ml-1">¿Tienes nacionalidad de algún otro país?</Label>
+                                            <Select value={form.hasOtherNationality} onValueChange={val => setForm(prev => ({ ...prev, hasOtherNationality: val }))}>
+                                                <SelectTrigger className="h-12 bg-black/40 border-white/10 rounded-xl text-white">
+                                                    <SelectValue placeholder="Selecciona" />
+                                                </SelectTrigger>
+                                                <SelectContent className="bg-neutral-900 border-white/10 text-white">
+                                                    <SelectItem value="Sí">Sí</SelectItem>
+                                                    <SelectItem value="No">No</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label className="text-xs font-bold text-neutral-500 ml-1">Número de Identificación Nacional (Cédula)</Label>
+                                            <Input required value={form.nationalId} onChange={e => setForm(prev => ({ ...prev, nationalId: e.target.value }))} placeholder="Identificación" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label className="text-xs font-bold text-neutral-500 ml-1">Estado Civil</Label>
+                                            <Input required value={form.maritalStatus} onChange={e => setForm(prev => ({ ...prev, maritalStatus: e.target.value }))} placeholder="Ej: Soltero/a" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Section 2: Pasaporte */}
+                                <div className="space-y-6">
+                                    <div className="flex items-center gap-3 border-b border-white/10 pb-2">
+                                        <div className="p-2 bg-blue-500/10 rounded-lg text-blue-400">
+                                            <CreditCard size={20} />
+                                        </div>
+                                        <h2 className="text-xl font-bold tracking-tight text-white">2. Pasaporte</h2>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div className="space-y-2">
+                                            <Label className="text-xs font-bold text-neutral-500 ml-1">Número de Pasaporte</Label>
+                                            <Input required value={form.passportNumber} onChange={e => setForm(prev => ({ ...prev, passportNumber: e.target.value }))} placeholder="Número" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label className="text-xs font-bold text-neutral-500 ml-1">Ciudad donde se emitió el pasaporte</Label>
+                                            <Input required value={form.passportCity} onChange={e => setForm(prev => ({ ...prev, passportCity: e.target.value }))} placeholder="Ciudad" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label className="text-xs font-bold text-neutral-500 ml-1">Provincia donde se emitió</Label>
+                                            <Input required value={form.passportState} onChange={e => setForm(prev => ({ ...prev, passportState: e.target.value }))} placeholder="Provincia" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label className="text-xs font-bold text-neutral-500 ml-1">Fecha de emisión del pasaporte</Label>
+                                            <Input required type="date" value={form.passportIssuedDate} onChange={e => setForm(prev => ({ ...prev, passportIssuedDate: e.target.value }))} className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label className="text-xs font-bold text-neutral-500 ml-1">Fecha de expiración del pasaporte</Label>
+                                            <Input required type="date" value={form.passportExpiryDate} onChange={e => setForm(prev => ({ ...prev, passportExpiryDate: e.target.value }))} className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label className="text-xs font-bold text-neutral-500 ml-1">¿Has perdido tu pasaporte alguna vez?</Label>
+                                            <Select value={form.passportLost} onValueChange={val => setForm(prev => ({ ...prev, passportLost: val }))}>
+                                                <SelectTrigger className="h-12 bg-black/40 border-white/10 rounded-xl text-white">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent className="bg-neutral-900 border-white/10 text-white">
+                                                    <SelectItem value="Sí">Sí</SelectItem>
+                                                    <SelectItem value="No">No</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label className="text-xs font-bold text-neutral-500 ml-1">¿Tienes visa de turista?</Label>
+                                            <Select value={form.hasTouristVisa} onValueChange={val => setForm(prev => ({ ...prev, hasTouristVisa: val }))}>
+                                                <SelectTrigger className="h-12 bg-black/40 border-white/10 rounded-xl text-white">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent className="bg-neutral-900 border-white/10 text-white">
+                                                    <SelectItem value="Sí">Sí</SelectItem>
+                                                    <SelectItem value="No">No</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Section 3: Dirección y Contacto */}
+                                <div className="space-y-6">
+                                    <div className="flex items-center gap-3 border-b border-white/10 pb-2">
+                                        <div className="p-2 bg-blue-500/10 rounded-lg text-blue-400">
+                                            <MapPin size={20} />
+                                        </div>
+                                        <h2 className="text-xl font-bold tracking-tight text-white">3. Dirección y Contacto</h2>
+                                    </div>
+                                    <div className="space-y-6">
+                                        <div className="space-y-2">
+                                            <Label className="text-xs font-bold uppercase tracking-widest text-neutral-500 ml-1">Dirección actual</Label>
+                                            <Input required value={form.currentAddress} onChange={e => setForm(prev => ({ ...prev, currentAddress: e.target.value }))} placeholder="Calle principal, secundaria, barrio..." className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            <div className="space-y-2">
+                                                <Label className="text-xs font-bold text-neutral-500 ml-1">Ciudad</Label>
+                                                <Input required value={form.currentCity} onChange={e => setForm(prev => ({ ...prev, currentCity: e.target.value }))} placeholder="Ciudad" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label className="text-xs font-bold text-neutral-500 ml-1">Provincia</Label>
+                                                <Input required value={form.currentState} onChange={e => setForm(prev => ({ ...prev, currentState: e.target.value }))} placeholder="Provincia" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label className="text-xs font-bold text-neutral-500 ml-1">País</Label>
+                                                <Input required value={form.currentCountry} onChange={e => setForm(prev => ({ ...prev, currentCountry: e.target.value }))} placeholder="País" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label className="text-xs font-bold text-neutral-500 ml-1">Código Postal</Label>
+                                                <Input required value={form.postalCode} onChange={e => setForm(prev => ({ ...prev, postalCode: e.target.value }))} placeholder="CP" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                            </div>
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            <div className="space-y-2">
+                                                <Label className="text-xs font-bold text-neutral-500 ml-1">Número de Celular</Label>
+                                                <Input required value={form.phone} onChange={e => setForm(prev => ({ ...prev, phone: e.target.value }))} placeholder="Número" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all font-mono text-white" />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label className="text-xs font-bold text-neutral-500 ml-1">Email</Label>
+                                                <Input required type="email" value={form.email} onChange={e => setForm(prev => ({ ...prev, email: e.target.value }))} placeholder="email@ejemplo.com" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
                                             </div>
                                         </div>
                                     </div>
                                 </div>
 
-                                {/* Section 2: Personal Details (Estudiante) */}
+                                {/* Section 4: Patrocinador (Sponsor) */}
                                 <div className="space-y-6">
                                     <div className="flex items-center gap-3 border-b border-white/10 pb-2">
-                                        <div className="p-2 bg-pink-500/10 rounded-lg text-pink-400">
-                                            <IdCard size={20} />
+                                        <div className="p-2 bg-blue-500/10 rounded-lg text-blue-400">
+                                            <Handshake size={20} />
                                         </div>
-                                        <h2 className="text-xl font-bold tracking-tight text-white uppercase">Información Personal</h2>
+                                        <h2 className="text-xl font-bold tracking-tight text-white">4. Patrocinador (Sponsor)</h2>
                                     </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="space-y-4">
                                         <div className="space-y-2">
-                                            <Label className="text-xs font-bold uppercase tracking-widest text-neutral-500 ml-1">Fecha de Nacimiento</Label>
-                                            <Input type="date" value={form.birthDate} onChange={e => setForm(prev => ({ ...prev, birthDate: e.target.value }))} className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                            <Label className="text-xs font-bold uppercase tracking-widest text-neutral-500 ml-1">¿Tienes Patrocinador/Sponsor?</Label>
+                                            <Select value={form.hasSponsor} onValueChange={val => setForm(prev => ({ ...prev, hasSponsor: val }))}>
+                                                <SelectTrigger className="h-12 bg-black/40 border-white/10 rounded-xl text-white">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent className="bg-neutral-900 border-white/10 text-white">
+                                                    <SelectItem value="Sí">Sí</SelectItem>
+                                                    <SelectItem value="No">No</SelectItem>
+                                                </SelectContent>
+                                            </Select>
                                         </div>
-                                        <div className="space-y-2">
-                                            <Label className="text-xs font-bold uppercase tracking-widest text-neutral-500 ml-1">Lugar de Nacimiento</Label>
-                                            <Input value={form.birthPlace} onChange={e => setForm(prev => ({ ...prev, birthPlace: e.target.value }))} placeholder="Lugar" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                        {form.hasSponsor === 'Sí' && (
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2 animate-in fade-in slide-in-from-top-4 duration-300">
+                                                <div className="space-y-2">
+                                                    <Label className="text-xs font-bold text-neutral-500 ml-1">Apellidos del patrocinador</Label>
+                                                    <Input value={form.sponsorLastName} onChange={e => setForm(prev => ({ ...prev, sponsorLastName: e.target.value }))} placeholder="Apellidos" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label className="text-xs font-bold text-neutral-500 ml-1">Nombres del patrocinador</Label>
+                                                    <Input value={form.sponsorFirstName} onChange={e => setForm(prev => ({ ...prev, sponsorFirstName: e.target.value }))} placeholder="Nombres" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label className="text-xs font-bold text-neutral-500 ml-1">Celular del patrocinador</Label>
+                                                    <Input value={form.sponsorPhone} onChange={e => setForm(prev => ({ ...prev, sponsorPhone: e.target.value }))} placeholder="Celular" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label className="text-xs font-bold text-neutral-500 ml-1">Email del patrocinador</Label>
+                                                    <Input type="email" value={form.sponsorEmail} onChange={e => setForm(prev => ({ ...prev, sponsorEmail: e.target.value }))} placeholder="Email" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                                </div>
+                                                <div className="space-y-2 col-span-full">
+                                                    <Label className="text-xs font-bold text-neutral-500 ml-1">Parentesco</Label>
+                                                    <Input value={form.sponsorRelation} onChange={e => setForm(prev => ({ ...prev, sponsorRelation: e.target.value }))} placeholder="Ej: Papá, Madre, Tío..." className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Section 5: Familia */}
+                                <div className="space-y-6">
+                                    <div className="flex items-center gap-3 border-b border-white/10 pb-2">
+                                        <div className="p-2 bg-blue-500/10 rounded-lg text-blue-400">
+                                            <Users size={20} />
                                         </div>
+                                        <h2 className="text-xl font-bold tracking-tight text-white">5. Familia</h2>
+                                    </div>
+                                    <div className="space-y-6">
                                         <div className="space-y-2">
-                                            <Label className="text-xs font-bold uppercase tracking-widest text-neutral-500 ml-1">Nacionalidad</Label>
-                                            <Input value={form.nationality} onChange={e => setForm(prev => ({ ...prev, nationality: e.target.value }))} placeholder="País" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                            <Label className="text-xs font-bold uppercase tracking-widest text-neutral-500 ml-1">¿Tienes hijos?</Label>
+                                            <Select value={form.hasChildrenComing} onValueChange={val => setForm(prev => ({ ...prev, hasChildrenComing: val }))}>
+                                                <SelectTrigger className="h-12 bg-black/40 border-white/10 rounded-xl text-white">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent className="bg-neutral-900 border-white/10 text-white">
+                                                    <SelectItem value="Sí">Sí</SelectItem>
+                                                    <SelectItem value="No">No</SelectItem>
+                                                </SelectContent>
+                                            </Select>
                                         </div>
-                                        <div className="space-y-2">
-                                            <Label className="text-xs font-bold uppercase tracking-widest text-neutral-500 ml-1">ID Nacional (DNI/CEDULA)</Label>
-                                            <Input value={form.nationalId} onChange={e => setForm(prev => ({ ...prev, nationalId: e.target.value }))} placeholder="DNI/CEDULA" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label className="text-xs font-bold uppercase tracking-widest text-neutral-500 ml-1">Ciudad de Nacimiento</Label>
-                                            <Input value={form.birthCity} onChange={e => setForm(prev => ({ ...prev, birthCity: e.target.value }))} placeholder="Ciudad" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label className="text-xs font-bold uppercase tracking-widest text-neutral-500 ml-1">País de Nacimiento</Label>
-                                            <Input value={form.birthCountry} onChange={e => setForm(prev => ({ ...prev, birthCountry: e.target.value }))} placeholder="País" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label className="text-xs font-bold uppercase tracking-widest text-neutral-500 ml-1">¿Tienes otra nacionalidad?</Label>
-                                            <Input value={form.hasOtherNationality} onChange={e => setForm(prev => ({ ...prev, hasOtherNationality: e.target.value }))} placeholder="Sí/No (¿Cuál?)" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label className="text-xs font-bold uppercase tracking-widest text-neutral-500 ml-1">¿Residente permanente de otro país?</Label>
-                                            <Input value={form.isPermanentResidentOther} onChange={e => setForm(prev => ({ ...prev, isPermanentResidentOther: e.target.value }))} placeholder="Sí/No (¿Cuál?)" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label className="text-xs font-bold uppercase tracking-widest text-neutral-500 ml-1">Estado Civil</Label>
-                                            <Input value={form.maritalStatus} onChange={e => setForm(prev => ({ ...prev, maritalStatus: e.target.value }))} placeholder="Estado Civil" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label className="text-xs font-bold uppercase tracking-widest text-neutral-500 ml-1">Género</Label>
-                                            <Input value={form.gender} onChange={e => setForm(prev => ({ ...prev, gender: e.target.value }))} placeholder="Género" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+
+                                        {form.hasChildrenComing === 'Sí' && (
+                                            <motion.div
+                                                initial={{ opacity: 0, height: 0 }}
+                                                animate={{ opacity: 1, height: 'auto' }}
+                                                className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2 border-l-2 border-blue-500/20 pl-6 space-y-4 md:space-y-0"
+                                            >
+                                                <div className="space-y-2">
+                                                    <Label className="text-xs font-bold text-neutral-500 ml-1">Nombres de hijos</Label>
+                                                    <Input value={form.childNames} onChange={e => setForm(prev => ({ ...prev, childNames: e.target.value }))} placeholder="Nombres" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label className="text-xs font-bold text-neutral-500 ml-1">Apellidos de hijos</Label>
+                                                    <Input value={form.childLastNames} onChange={e => setForm(prev => ({ ...prev, childLastNames: e.target.value }))} placeholder="Apellidos" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label className="text-xs font-bold text-neutral-500 ml-1">Fecha de nacimiento de hijos</Label>
+                                                    <Input type="date" value={form.childBirthDate} onChange={e => setForm(prev => ({ ...prev, childBirthDate: e.target.value }))} className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label className="text-xs font-bold text-neutral-500 ml-1">Dirección de hijos</Label>
+                                                    <Input value={form.childAddress} onChange={e => setForm(prev => ({ ...prev, childAddress: e.target.value }))} placeholder="Dirección completa" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                                </div>
+                                                <div className="space-y-2 col-span-full">
+                                                    <Label className="text-xs font-bold text-neutral-500 ml-1">¿Tienen pasaporte?</Label>
+                                                    <Select value={form.childHasPassport} onValueChange={val => setForm(prev => ({ ...prev, childHasPassport: val }))}>
+                                                        <SelectTrigger className="h-12 bg-black/40 border-white/10 rounded-xl text-white">
+                                                            <SelectValue />
+                                                        </SelectTrigger>
+                                                        <SelectContent className="bg-neutral-900 border-white/10 text-white">
+                                                            <SelectItem value="Sí">Sí</SelectItem>
+                                                            <SelectItem value="No">No</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+
+                                                {form.childHasPassport === 'Sí' && (
+                                                    <motion.div
+                                                        initial={{ opacity: 0, x: -20 }}
+                                                        animate={{ opacity: 1, x: 0 }}
+                                                        className="grid grid-cols-1 md:grid-cols-2 gap-6 col-span-full pt-4 border-t border-white/5"
+                                                    >
+                                                        <div className="space-y-2">
+                                                            <Label className="text-xs font-bold text-neutral-500 ml-1">Número de pasaporte (Hijos)</Label>
+                                                            <Input value={form.childPassportNumber} onChange={e => setForm(prev => ({ ...prev, childPassportNumber: e.target.value }))} placeholder="Número" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white font-mono" />
+                                                        </div>
+                                                        <div className="space-y-2">
+                                                            <Label className="text-xs font-bold text-neutral-500 ml-1">Ciudad de emisión</Label>
+                                                            <Input value={form.childPassportCity} onChange={e => setForm(prev => ({ ...prev, childPassportCity: e.target.value }))} placeholder="Ciudad" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                                        </div>
+                                                        <div className="space-y-2">
+                                                            <Label className="text-xs font-bold text-neutral-500 ml-1">Provincia/Estado de emisión</Label>
+                                                            <Input value={form.childPassportState} onChange={e => setForm(prev => ({ ...prev, childPassportState: e.target.value }))} placeholder="Provincia" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                                        </div>
+                                                        <div className="space-y-2">
+                                                            <Label className="text-xs font-bold text-neutral-500 ml-1">Fecha de emisión</Label>
+                                                            <Input type="date" value={form.childPassportIssuedDate} onChange={e => setForm(prev => ({ ...prev, childPassportIssuedDate: e.target.value }))} className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                                        </div>
+                                                        <div className="space-y-2">
+                                                            <Label className="text-xs font-bold text-neutral-500 ml-1">Fecha de expiración</Label>
+                                                            <Input type="date" value={form.childPassportExpiryDate} onChange={e => setForm(prev => ({ ...prev, childPassportExpiryDate: e.target.value }))} className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                                        </div>
+                                                    </motion.div>
+                                                )}
+                                            </motion.div>
+                                        )}
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-white/5">
+                                            <div className="space-y-2">
+                                                <Label className="text-xs font-bold uppercase tracking-widest text-neutral-500 ml-1">Nombre completo de la mamá</Label>
+                                                <Input required value={form.motherName} onChange={e => setForm(prev => ({ ...prev, motherName: e.target.value }))} placeholder="Nombre" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label className="text-xs font-bold uppercase tracking-widest text-neutral-500 ml-1">Fecha de nacimiento mamá</Label>
+                                                <Input required type="date" value={form.motherBirthDate} onChange={e => setForm(prev => ({ ...prev, motherBirthDate: e.target.value }))} className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label className="text-xs font-bold uppercase tracking-widest text-neutral-500 ml-1">Nombre completo del papá</Label>
+                                                <Input required value={form.fatherName} onChange={e => setForm(prev => ({ ...prev, fatherName: e.target.value }))} placeholder="Nombre" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label className="text-xs font-bold uppercase tracking-widest text-neutral-500 ml-1">Fecha de nacimiento papá</Label>
+                                                <Input required type="date" value={form.fatherBirthDate} onChange={e => setForm(prev => ({ ...prev, fatherBirthDate: e.target.value }))} className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
 
-                                {/* Section 3: Passport */}
+                                {/* Section 6: Empleo Actual */}
                                 <div className="space-y-6">
                                     <div className="flex items-center gap-3 border-b border-white/10 pb-2">
-                                        <div className="p-2 bg-amber-500/10 rounded-lg text-amber-400">
-                                            <CreditCard size={20} />
-                                        </div>
-                                        <h2 className="text-xl font-bold tracking-tight text-white uppercase">Pasaporte</h2>
-                                    </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        <div className="space-y-2">
-                                            <Label className="text-xs font-bold uppercase tracking-widest text-neutral-500 ml-1">Número de Pasaporte</Label>
-                                            <Input value={form.passportNumber} onChange={e => setForm(prev => ({ ...prev, passportNumber: e.target.value }))} placeholder="Número" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label className="text-xs font-bold uppercase tracking-widest text-neutral-500 ml-1">País de Emisión</Label>
-                                            <Input value={form.passportCountry} onChange={e => setForm(prev => ({ ...prev, passportCountry: e.target.value }))} placeholder="País" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label className="text-xs font-bold uppercase tracking-widest text-neutral-500 ml-1">Fecha de Expiración</Label>
-                                            <Input type="date" value={form.passportExpiryDate} onChange={e => setForm(prev => ({ ...prev, passportExpiryDate: e.target.value }))} className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label className="text-xs font-bold uppercase tracking-widest text-neutral-500 ml-1">Ciudad/Estado Emisión</Label>
-                                            <Input value={`${form.passportCity}${form.passportState ? `, ${form.passportState}` : ''}`} onChange={e => setForm(prev => ({ ...prev, passportCity: e.target.value }))} placeholder="Ciudad, Estado" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label className="text-xs font-bold uppercase tracking-widest text-neutral-500 ml-1">Fecha de Emisión</Label>
-                                            <Input type="date" value={form.passportIssuedDate} onChange={e => setForm(prev => ({ ...prev, passportIssuedDate: e.target.value }))} className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label className="text-xs font-bold uppercase tracking-widest text-neutral-500 ml-1">¿Has perdido tu pasaporte alguna vez?</Label>
-                                            <Input value={form.passportLost} onChange={e => setForm(prev => ({ ...prev, passportLost: e.target.value }))} placeholder="Sí/No" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label className="text-xs font-bold uppercase tracking-widest text-neutral-500 ml-1">¿Tienes visa americana vigente?</Label>
-                                            <Input value={form.hasTouristVisa} onChange={e => setForm(prev => ({ ...prev, hasTouristVisa: e.target.value }))} placeholder="Sí/No" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Section 4: Address */}
-                                <div className="space-y-6">
-                                    <div className="flex items-center gap-3 border-b border-white/10 pb-2">
-                                        <div className="p-2 bg-rose-500/10 rounded-lg text-rose-400">
-                                            <MapPin size={20} />
-                                        </div>
-                                        <h2 className="text-xl font-bold tracking-tight text-white uppercase">Dirección de Residencia</h2>
-                                    </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        <div className="space-y-2">
-                                            <Label className="text-xs font-bold uppercase tracking-widest text-neutral-500 ml-1">País</Label>
-                                            <Input value={form.country} onChange={e => setForm(prev => ({ ...prev, country: e.target.value }))} placeholder="País" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label className="text-xs font-bold uppercase tracking-widest text-neutral-500 ml-1">Estado / Provincia</Label>
-                                            <Input value={form.state} onChange={e => setForm(prev => ({ ...prev, state: e.target.value }))} placeholder="Estado" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label className="text-xs font-bold uppercase tracking-widest text-neutral-500 ml-1">Ciudad</Label>
-                                            <Input value={form.city} onChange={e => setForm(prev => ({ ...prev, city: e.target.value }))} placeholder="Ciudad" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label className="text-xs font-bold uppercase tracking-widest text-neutral-500 ml-1">Código Postal</Label>
-                                            <Input value={form.postalCode} onChange={e => setForm(prev => ({ ...prev, postalCode: e.target.value }))} placeholder="Código Postal" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Section 5: Education & Employment (Simplified for brevity but including all fields) */}
-                                <div className="space-y-6">
-                                    <div className="flex items-center gap-3 border-b border-white/10 pb-2">
-                                        <div className="p-2 bg-cyan-500/10 rounded-lg text-cyan-400">
+                                        <div className="p-2 bg-blue-500/10 rounded-lg text-blue-400">
                                             <Briefcase size={20} />
                                         </div>
-                                        <h2 className="text-xl font-bold tracking-tight text-white uppercase">Educación y Empleo</h2>
+                                        <h2 className="text-xl font-bold tracking-tight text-white">6. Empleo Actual</h2>
                                     </div>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         <div className="space-y-2 col-span-full">
-                                            <Label className="text-xs font-bold uppercase tracking-widest text-neutral-500 ml-1">Profesión / Ocupación Actual</Label>
-                                            <Input value={form.occupationData} onChange={e => setForm(prev => ({ ...prev, occupationData: e.target.value }))} placeholder="Ocupación" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                            <Label className="text-xs font-bold text-neutral-500 ml-1">Rol / Ocupación actual</Label>
+                                            <Input required value={form.currentRole} onChange={e => setForm(prev => ({ ...prev, currentRole: e.target.value }))} placeholder="Ej: Ciencias Sociales" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                        </div>
+                                        <div className="space-y-2 col-span-full">
+                                            <Label className="text-xs font-bold text-neutral-500 ml-1">Nombre de la empresa actual</Label>
+                                            <Input required value={form.currentEmployer} onChange={e => setForm(prev => ({ ...prev, currentEmployer: e.target.value }))} placeholder="Empresa" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                        </div>
+                                        <div className="space-y-2 col-span-full">
+                                            <Label className="text-xs font-bold text-neutral-500 ml-1">Dirección empresa</Label>
+                                            <Input required value={form.employerAddress} onChange={e => setForm(prev => ({ ...prev, employerAddress: e.target.value }))} placeholder="Dirección completa" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
                                         </div>
                                         <div className="space-y-2">
-                                            <Label className="text-xs font-bold uppercase tracking-widest text-neutral-500 ml-1">Empresa Actual</Label>
-                                            <Input value={form.currentEmployer} onChange={e => setForm(prev => ({ ...prev, currentEmployer: e.target.value }))} placeholder="Empresa" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                            <Label className="text-xs font-bold text-neutral-500 ml-1">Ciudad empresa</Label>
+                                            <Input required value={form.employerCity} onChange={e => setForm(prev => ({ ...prev, employerCity: e.target.value }))} placeholder="Ciudad" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
                                         </div>
                                         <div className="space-y-2">
-                                            <Label className="text-xs font-bold uppercase tracking-widest text-neutral-500 ml-1">Salario Mensual (Aprox)</Label>
-                                            <Input value={form.monthlySalary} onChange={e => setForm(prev => ({ ...prev, monthlySalary: e.target.value }))} placeholder="Monto" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                            <Label className="text-xs font-bold text-neutral-500 ml-1">Provincia empresa</Label>
+                                            <Input required value={form.employerState} onChange={e => setForm(prev => ({ ...prev, employerState: e.target.value }))} placeholder="Provincia" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
                                         </div>
                                         <div className="space-y-2">
-                                            <Label className="text-xs font-bold uppercase tracking-widest text-neutral-500 ml-1">Última Institución Educativa</Label>
-                                            <Input value={form.universityName || form.schoolName} onChange={e => setForm(prev => ({ ...prev, universityName: e.target.value }))} placeholder="Universidad o Colegio" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                            <Label className="text-xs font-bold text-neutral-500 ml-1">Código Postal empresa</Label>
+                                            <Input required value={form.employerPostalCode} onChange={e => setForm(prev => ({ ...prev, employerPostalCode: e.target.value }))} placeholder="CP" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
                                         </div>
                                         <div className="space-y-2">
-                                            <Label className="text-xs font-bold uppercase tracking-widest text-neutral-500 ml-1">Carrera / Programa</Label>
-                                            <Input value={form.universityProgram || form.schoolProgram} onChange={e => setForm(prev => ({ ...prev, universityProgram: e.target.value }))} placeholder="Carrera" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                            <Label className="text-xs font-bold text-neutral-500 ml-1">Teléfono empresa</Label>
+                                            <Input required value={form.employerPhone} onChange={e => setForm(prev => ({ ...prev, employerPhone: e.target.value }))} placeholder="Teléfono" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label className="text-xs font-bold text-neutral-500 ml-1">Fecha de inicio en el trabajo actual</Label>
+                                            <Input required type="date" value={form.jobStartDate} onChange={e => setForm(prev => ({ ...prev, jobStartDate: e.target.value }))} className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label className="text-xs font-bold text-neutral-500 ml-1">Salario mensual (en moneda local)</Label>
+                                            <Input required value={form.monthlySalary} onChange={e => setForm(prev => ({ ...prev, monthlySalary: e.target.value }))} placeholder="Ej: 900" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                        </div>
+                                        <div className="space-y-2 col-span-full">
+                                            <Label className="text-xs font-bold text-neutral-500 ml-1">Descripción breve del trabajo</Label>
+                                            <Input required value={form.jobDescription} onChange={e => setForm(prev => ({ ...prev, jobDescription: e.target.value }))} placeholder="¿Qué haces en tu trabajo?" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                        </div>
+                                        <div className="space-y-2 col-span-full">
+                                            <Label className="text-xs font-bold text-neutral-500 ml-1">¿Tienes más fuentes de ingreso?</Label>
+                                            <Input value={form.hasMoreIncome} onChange={e => setForm(prev => ({ ...prev, hasMoreIncome: e.target.value }))} placeholder="Sí/No (¿Cuáles?)" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
                                         </div>
                                     </div>
                                 </div>
 
-                                <div className="pt-10 border-t border-white/5 space-y-4">
-                                    <div className="flex items-center gap-3 pb-4">
+                                {/* Section 7: Empleo Anterior */}
+                                <div className="space-y-6">
+                                    <div className="flex items-center gap-3 border-b border-white/10 pb-2">
                                         <div className="p-2 bg-blue-500/10 rounded-lg text-blue-400">
-                                            <Languages size={20} />
+                                            <Briefcase size={20} />
                                         </div>
-                                        <h2 className="text-xl font-bold tracking-tight text-white">ÚLTIMOS DETALLES</h2>
+                                        <h2 className="text-xl font-bold tracking-tight text-white">7. Empleo Anterior</h2>
                                     </div>
-                                    <div className="space-y-2">
-                                        <Label className="text-xs font-bold uppercase tracking-widest text-neutral-500 ml-1">¿A qué tipo de visa deseas aplicar?</Label>
-                                        <Select value={form.visaType} onValueChange={val => setForm(prev => ({ ...prev, visaType: val }))}>
-                                            <SelectTrigger className="h-12 bg-black/40 border-white/10 rounded-xl focus:ring-1 focus:ring-blue-500/50 text-neutral-200">
-                                                <SelectValue placeholder="Selecciona el tipo de visa" />
-                                            </SelectTrigger>
-                                            <SelectContent className="bg-neutral-900 border-white/10 text-white rounded-xl">
-                                                <SelectItem value="F1">Visa de Estudiante (F1)</SelectItem>
-                                                <SelectItem value="B1/B2">Visa de Turismo/Negocios (B1/B2)</SelectItem>
-                                                <SelectItem value="J1">Visa de Intercambio (J1)</SelectItem>
-                                                <SelectItem value="H1B">Visa de Trabajo (H1B)</SelectItem>
-                                                <SelectItem value="M1">Estudios Vocacionales (M1)</SelectItem>
-                                            </SelectContent>
-                                        </Select>
+                                    <div className="space-y-4">
+                                        <div className="space-y-2">
+                                            <Label className="text-xs font-bold uppercase tracking-widest text-neutral-500 ml-1">¿Tuviste empleo anterior?</Label>
+                                            <Select value={form.hasPreviousJob} onValueChange={val => setForm(prev => ({ ...prev, hasPreviousJob: val }))}>
+                                                <SelectTrigger className="h-12 bg-black/40 border-white/10 rounded-xl text-white">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent className="bg-neutral-900 border-white/10 text-white">
+                                                    <SelectItem value="Sí">Sí</SelectItem>
+                                                    <SelectItem value="No">No</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        {form.hasPreviousJob === 'Sí' && (
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2 animate-in fade-in slide-in-from-top-4 duration-300">
+                                                <div className="space-y-2 col-span-full">
+                                                    <Label className="text-xs font-bold text-neutral-500 ml-1">Nombre empresa anterior</Label>
+                                                    <Input value={form.prevEmployer} onChange={e => setForm(prev => ({ ...prev, prevEmployer: e.target.value }))} placeholder="Empresa" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                                </div>
+                                                <div className="space-y-2 col-span-full">
+                                                    <Label className="text-xs font-bold text-neutral-500 ml-1">Dirección empresa anterior</Label>
+                                                    <Input value={form.prevEmployerAddress} onChange={e => setForm(prev => ({ ...prev, prevEmployerAddress: e.target.value }))} placeholder="Dirección" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label className="text-xs font-bold text-neutral-500 ml-1">Ciudad</Label>
+                                                    <Input value={form.prevEmployerCity} onChange={e => setForm(prev => ({ ...prev, prevEmployerCity: e.target.value }))} placeholder="Ciudad" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label className="text-xs font-bold text-neutral-500 ml-1">Provincia</Label>
+                                                    <Input value={form.prevEmployerState} onChange={e => setForm(prev => ({ ...prev, prevEmployerState: e.target.value }))} placeholder="Provincia" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label className="text-xs font-bold text-neutral-500 ml-1">Código Postal</Label>
+                                                    <Input value={form.prevEmployerPostalCode} onChange={e => setForm(prev => ({ ...prev, prevEmployerPostalCode: e.target.value }))} placeholder="CP" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label className="text-xs font-bold text-neutral-500 ml-1">Cargo anterior</Label>
+                                                    <Input value={form.prevJobTitle} onChange={e => setForm(prev => ({ ...prev, prevJobTitle: e.target.value }))} placeholder="Cargo" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label className="text-xs font-bold text-neutral-500 ml-1">Nombre del supervisor</Label>
+                                                    <Input value={form.prevSupervisor} onChange={e => setForm(prev => ({ ...prev, prevSupervisor: e.target.value }))} placeholder="Supervisor" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                                </div>
+                                                <div className="space-y-2 col-span-full">
+                                                    <Label className="text-xs font-bold text-neutral-500 ml-1">Descripción breve del trabajo anterior</Label>
+                                                    <Input value={form.prevJobDescription} onChange={e => setForm(prev => ({ ...prev, prevJobDescription: e.target.value }))} placeholder="¿Qué hacías?" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label className="text-xs font-bold text-neutral-500 ml-1">Fecha de inicio empleo anterior</Label>
+                                                    <Input type="date" value={form.prevJobStartDate} onChange={e => setForm(prev => ({ ...prev, prevJobStartDate: e.target.value }))} className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label className="text-xs font-bold text-neutral-500 ml-1">Fecha de término empleo anterior</Label>
+                                                    <Input type="date" value={form.prevJobEndDate} onChange={e => setForm(prev => ({ ...prev, prevJobEndDate: e.target.value }))} className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                                {/* Section 8: Educación Secundaria */}
+                                <div className="space-y-6">
+                                    <div className="flex items-center gap-3 border-b border-white/10 pb-2">
+                                        <div className="p-2 bg-blue-500/10 rounded-lg text-blue-400">
+                                            <GraduationCap size={20} />
+                                        </div>
+                                        <h2 className="text-xl font-bold tracking-tight text-white">8. Educación Secundaria</h2>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div className="space-y-2 col-span-full">
+                                            <Label className="text-xs font-bold text-neutral-500 ml-1">Nombre del Colegio / Institución Secundaria</Label>
+                                            <Input required value={form.schoolName} onChange={e => setForm(prev => ({ ...prev, schoolName: e.target.value }))} placeholder="Nombre" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                        </div>
+                                        <div className="space-y-2 col-span-full">
+                                            <Label className="text-xs font-bold text-neutral-500 ml-1">Dirección del Colegio</Label>
+                                            <Input required value={form.schoolAddress} onChange={e => setForm(prev => ({ ...prev, schoolAddress: e.target.value }))} placeholder="Dirección" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                        </div>
+                                        <div className="space-y-2 col-span-full">
+                                            <Label className="text-xs font-bold text-neutral-500 ml-1">Programa secundario</Label>
+                                            <Input required value={form.schoolProgram} onChange={e => setForm(prev => ({ ...prev, schoolProgram: e.target.value }))} placeholder="Ej: Ciencias Generales" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label className="text-xs font-bold text-neutral-500 ml-1">Fecha de inicio secundaria</Label>
+                                            <Input required type="month" value={form.schoolStartDate} onChange={e => setForm(prev => ({ ...prev, schoolStartDate: e.target.value }))} className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label className="text-xs font-bold text-neutral-500 ml-1">Fecha de fin secundaria</Label>
+                                            <Input required type="month" value={form.schoolEndDate} onChange={e => setForm(prev => ({ ...prev, schoolEndDate: e.target.value }))} className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Section 9: Educación Universitaria */}
+                                <div className="space-y-6">
+                                    <div className="flex items-center gap-3 border-b border-white/10 pb-2">
+                                        <div className="p-2 bg-indigo-500/10 rounded-lg text-indigo-400">
+                                            <Library size={20} />
+                                        </div>
+                                        <h2 className="text-xl font-bold tracking-tight text-white">9. Educación Universitaria</h2>
+                                    </div>
+                                    <div className="space-y-4">
+                                        <div className="space-y-2">
+                                            <Label className="text-xs font-bold uppercase tracking-widest text-neutral-500 ml-1">¿Tienes estudios universitarios?</Label>
+                                            <Select value={form.hasUniversity} onValueChange={val => setForm(prev => ({ ...prev, hasUniversity: val }))}>
+                                                <SelectTrigger className="h-12 bg-black/40 border-white/10 rounded-xl text-white">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent className="bg-neutral-900 border-white/10 text-white">
+                                                    <SelectItem value="Sí">Sí</SelectItem>
+                                                    <SelectItem value="No">No</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        {form.hasUniversity === 'Sí' && (
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2 animate-in fade-in slide-in-from-top-4 duration-300">
+                                                <div className="space-y-2 col-span-full">
+                                                    <Label className="text-xs font-bold text-neutral-500 ml-1">Nombre de la Universidad</Label>
+                                                    <Input value={form.universityName} onChange={e => setForm(prev => ({ ...prev, universityName: e.target.value }))} placeholder="Nombre" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                                </div>
+                                                <div className="space-y-2 col-span-full">
+                                                    <Label className="text-xs font-bold text-neutral-500 ml-1">Dirección de la Universidad</Label>
+                                                    <Input value={form.universityAddress} onChange={e => setForm(prev => ({ ...prev, universityAddress: e.target.value }))} placeholder="Dirección" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label className="text-xs font-bold text-neutral-500 ml-1">Carrera / Programa</Label>
+                                                    <Input value={form.universityProgram} onChange={e => setForm(prev => ({ ...prev, universityProgram: e.target.value }))} placeholder="Programa" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label className="text-xs font-bold text-neutral-500 ml-1">Ciudad</Label>
+                                                    <Input value={form.universityCity} onChange={e => setForm(prev => ({ ...prev, universityCity: e.target.value }))} placeholder="Ciudad" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label className="text-xs font-bold text-neutral-500 ml-1">Fecha de inicio universidad</Label>
+                                                    <Input type="month" value={form.universityStartDate} onChange={e => setForm(prev => ({ ...prev, universityStartDate: e.target.value }))} className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label className="text-xs font-bold text-neutral-500 ml-1">Fecha de fin universidad</Label>
+                                                    <Input type="month" value={form.universityEndDate} onChange={e => setForm(prev => ({ ...prev, universityEndDate: e.target.value }))} className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Section 10: Detalles de Viaje y Otros */}
+                                <div className="space-y-6">
+                                    <div className="flex items-center gap-3 border-b border-white/10 pb-2">
+                                        <div className="p-2 bg-blue-500/10 rounded-lg text-blue-400">
+                                            <Globe size={20} />
+                                        </div>
+                                        <h2 className="text-xl font-bold tracking-tight text-white">10. Viaje y Otros</h2>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div className="space-y-2 col-span-full">
+                                            <Label className="text-xs font-bold text-neutral-500 ml-1">Dirección donde se hospedará en EE.UU.</Label>
+                                            <Input value={form.usStayAddress} onChange={e => setForm(prev => ({ ...prev, usStayAddress: e.target.value }))} placeholder="Estado / Ciudad / Dirección" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label className="text-xs font-bold text-neutral-500 ml-1">¿Ha estado antes en Estados Unidos?</Label>
+                                            <Select value={form.hasBeenToUS} onValueChange={val => setForm(prev => ({ ...prev, hasBeenToUS: val }))}>
+                                                <SelectTrigger className="h-12 bg-black/40 border-white/10 rounded-xl text-white">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent className="bg-neutral-900 border-white/10 text-white">
+                                                    <SelectItem value="Sí">Sí</SelectItem>
+                                                    <SelectItem value="No">No</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label className="text-xs font-bold text-neutral-500 ml-1">¿Ha tenido visa americana antes?</Label>
+                                            <Select value={form.hasUSVisa} onValueChange={val => setForm(prev => ({ ...prev, hasUSVisa: val }))}>
+                                                <SelectTrigger className="h-12 bg-black/40 border-white/10 rounded-xl text-white">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent className="bg-neutral-900 border-white/10 text-white">
+                                                    <SelectItem value="Sí">Sí</SelectItem>
+                                                    <SelectItem value="No">No</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label className="text-xs font-bold text-neutral-500 ml-1">¿Cambio de número celular últimos 5 años?</Label>
+                                            <Select value={form.changedPhoneLast5Years} onValueChange={val => setForm(prev => ({ ...prev, changedPhoneLast5Years: val }))}>
+                                                <SelectTrigger className="h-12 bg-black/40 border-white/10 rounded-xl text-white">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent className="bg-neutral-900 border-white/10 text-white">
+                                                    <SelectItem value="Sí">Sí</SelectItem>
+                                                    <SelectItem value="No">No</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label className="text-xs font-bold text-neutral-500 ml-1">Link Instagram personal</Label>
+                                            <Input value={form.instagramLink} onChange={e => setForm(prev => ({ ...prev, instagramLink: e.target.value }))} placeholder="Instagram" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label className="text-xs font-bold text-neutral-500 ml-1">Link Facebook personal</Label>
+                                            <Input value={form.facebookLink} onChange={e => setForm(prev => ({ ...prev, facebookLink: e.target.value }))} placeholder="Facebook" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label className="text-xs font-bold text-neutral-500 ml-1">¿Familia en Estados Unidos?</Label>
+                                            <Select value={form.hasFamilyInUS} onValueChange={val => setForm(prev => ({ ...prev, hasFamilyInUS: val }))}>
+                                                <SelectTrigger className="h-12 bg-black/40 border-white/10 rounded-xl text-white">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent className="bg-neutral-900 border-white/10 text-white">
+                                                    <SelectItem value="Sí">Sí</SelectItem>
+                                                    <SelectItem value="No">No</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label className="text-xs font-bold text-neutral-500 ml-1">Idiomas que habla</Label>
+                                            <Input value={form.languages} onChange={e => setForm(prev => ({ ...prev, languages: e.target.value }))} placeholder="Ej: Español, Inglés" className="h-12 bg-black/40 border-white/10 rounded-xl focus:border-blue-500/50 transition-all text-white" />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label className="text-xs font-bold text-neutral-500 ml-1">¿Viajes internacionales últimos 5 años?</Label>
+                                            <Select value={form.visitedOtherCountries} onValueChange={val => setForm(prev => ({ ...prev, visitedOtherCountries: val }))}>
+                                                <SelectTrigger className="h-12 bg-black/40 border-white/10 rounded-xl text-white">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent className="bg-neutral-900 border-white/10 text-white">
+                                                    <SelectItem value="Sí">Sí</SelectItem>
+                                                    <SelectItem value="No">No</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label className="text-xs font-bold text-neutral-500 ml-1">¿Servicio militar?</Label>
+                                            <Select value={form.militaryService} onValueChange={val => setForm(prev => ({ ...prev, militaryService: val }))}>
+                                                <SelectTrigger className="h-12 bg-black/40 border-white/10 rounded-xl text-white">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent className="bg-neutral-900 border-white/10 text-white">
+                                                    <SelectItem value="Sí">Sí</SelectItem>
+                                                    <SelectItem value="No">No</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
                                     </div>
                                 </div>
 
                                 <div className="pt-8 grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <Button type="button" variant="outline" className="h-14 bg-transparent border-white/10 rounded-2xl text-neutral-300 font-bold uppercase tracking-widest hover:bg-white/5 hover:text-white transition-all order-2 md:order-1">
+                                    <Button type="button" variant="outline" className="h-14 bg-transparent border-white/10 rounded-2xl text-neutral-300 font-bold tracking-tight hover:bg-white/5 hover:text-white transition-all order-2 md:order-1">
                                         Volver
                                     </Button>
-                                    <Button type="submit" className="h-14 bg-red-600 hover:bg-red-700 text-white rounded-2xl font-bold uppercase tracking-widest shadow-[0_0_20px_rgba(220,38,38,0.3)] transition-all order-1 md:order-2">
+                                    <Button type="submit" className="h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-bold tracking-tight shadow-[0_0_20px_rgba(37,99,235,0.3)] transition-all order-1 md:order-2">
                                         Enviar Aplicación <Send size={18} className="ml-2" />
                                     </Button>
                                 </div>
@@ -607,7 +1052,7 @@ export default function ApplicationPage({ params }: ApplicationPageProps) {
                                     window.close();
                                     setTimeout(() => { window.location.href = '/'; }, 300);
                                 }}
-                                className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold uppercase tracking-widest"
+                                className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold tracking-tight"
                             >
                                 Cerrar Ventana
                             </Button>
@@ -618,7 +1063,7 @@ export default function ApplicationPage({ params }: ApplicationPageProps) {
 
             {/* Footer logo/info */}
             <footer className="absolute bottom-8 left-0 right-0 text-center animate-fade-in pointer-events-none">
-                <p className="text-[10px] font-bold text-neutral-600 uppercase tracking-[0.3em]">
+                <p className="text-[10px] font-bold text-neutral-600 tracking-wide">
                     Powered by uDreamms © 2024
                 </p>
             </footer>

@@ -9,7 +9,7 @@ export const CentralVideo = () => (
         initial={{ scale: 0.8, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         transition={{ duration: 1.2, ease: "easeOut" }}
-        className="relative w-[90vw] max-w-[1200px] aspect-square flex items-center justify-center p-8 z-10"
+        className="relative w-[60vw] max-w-[600px] aspect-square flex items-center justify-center p-8 z-10"
     >
         {/* The video itself, borderless */}
         <video

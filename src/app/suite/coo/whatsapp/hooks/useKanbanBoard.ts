@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { db } from '@/lib/firebase';
-import { collection, query, orderBy, onSnapshot, doc, updateDoc, arrayUnion, Timestamp } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, doc, updateDoc, arrayUnion, Timestamp, addDoc } from 'firebase/firestore';
 import { functions } from '@/lib/firebase';
 import { httpsCallable } from 'firebase/functions';
 import { toast } from 'sonner';
@@ -113,7 +113,22 @@ export const useKanbanBoard = (filterTerm: string = '') => {
             await updateDoc(doc(db, 'kanban-groups', groupId), { color });
         } catch (error) {
             console.error('Error updating color:', error);
-            toast.error('Error al cambiar el color.');
+            toast.error('Error changing color.');
+        }
+    };
+
+    const handleAddGroup = async (name: string) => {
+        try {
+            await addDoc(collection(db, 'kanban-groups'), {
+                name,
+                order: groups.length,
+                color: 'bg-[#121212]/50', // Default color
+                createdAt: Timestamp.now(),
+            });
+            toast.success(`Group "${name}" created.`);
+        } catch (error) {
+            console.error('Error adding group:', error);
+            toast.error('Error creating group.');
         }
     };
 
@@ -123,6 +138,7 @@ export const useKanbanBoard = (filterTerm: string = '') => {
         loading,
         handleDragEnd,
         handleUpdateColor,
+        handleAddGroup,
         setCards
     };
 };

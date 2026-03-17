@@ -13,17 +13,17 @@
     --popover: 0 0% 100%;
     --popover-foreground: 220 39% 11%;
 
-    --primary: 348 83% 42%;
+    --primary: 221 83% 42%;
     --primary-foreground: 0 0% 100%;
-    --primary-glow: 348 100% 58%;
+    --primary-glow: 221 100% 58%;
 
-    --secondary: 15 93% 55%;
+    --secondary: 217 91% 60%;
     --secondary-foreground: 0 0% 100%;
 
     --muted: 210 40% 96.1%;
     --muted-foreground: 215 16.3% 46.9%;
 
-    --accent: 348 83% 47%;
+    --accent: 221 83% 47%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 84.2% 60.2%;
@@ -31,18 +31,18 @@
 
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
-    --ring: 348 83% 47%;
+    --ring: 221 83% 47%;
 
     --radius: 0.75rem;
 
-    --gradient-hero: linear-gradient(135deg, hsl(348 83% 42%), hsl(348 100% 58%));
-    --gradient-card: linear-gradient(135deg, hsl(348 83% 42% / 0.05), hsl(15 93% 55% / 0.05));
-    --gradient-tech: linear-gradient(135deg, hsl(348 83% 42%), hsl(15 93% 55%), hsl(348 100% 58%));
-    --shadow-soft: 0 4px 20px -2px hsl(348 83% 47% / 0.15);
-    --shadow-elevated: 0 10px 40px -10px hsl(348 83% 47% / 0.25);
-    --shadow-glow: 0 0 40px hsl(348 100% 65% / 0.4);
+    --gradient-hero: linear-gradient(135deg, hsl(221 83% 42%), hsl(221 100% 58%));
+    --gradient-card: linear-gradient(135deg, hsl(221 83% 42% / 0.05), hsl(217 91% 55% / 0.05));
+    --gradient-tech: linear-gradient(135deg, hsl(221 83% 42%), hsl(217 91% 55%), hsl(221 100% 58%));
+    --shadow-soft: 0 4px 20px -2px hsl(221 83% 47% / 0.15);
+    --shadow-elevated: 0 10px 40px -10px hsl(221 83% 47% / 0.25);
+    --shadow-glow: 0 0 40px hsl(221 100% 65% / 0.4);
 
-    /* Sidebar specific variables (keeping existing ones if needed, or using new scheme) */
+    /* Sidebar specific variables */
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 240 5.3% 26.1%;
     --sidebar-primary: 240 5.9% 10%;
@@ -50,55 +50,55 @@
     --sidebar-accent: 240 4.8% 95.9%;
     --sidebar-accent-foreground: 240 5.9% 10%;
     --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-ring: 221 83% 47%;
   }
 
   .dark {
-    --background: 220 39% 11%;
+    --background: 221 39% 11%;
     --foreground: 0 0% 98%;
 
-    --card: 220 30% 15%;
+    --card: 221 30% 15%;
     --card-foreground: 0 0% 98%;
 
-    --popover: 220 30% 15%;
+    --popover: 221 30% 15%;
     --popover-foreground: 0 0% 98%;
 
-    --primary: 348 83% 42%;
+    --primary: 221 83% 42%;
     --primary-foreground: 0 0% 100%;
-    --primary-glow: 348 100% 58%;
+    --primary-glow: 221 100% 58%;
 
-    --secondary: 15 93% 55%;
+    --secondary: 217 91% 60%;
     --secondary-foreground: 0 0% 100%;
 
-    --muted: 217.2 32.6% 17.5%;
+    --muted: 221 32.6% 17.5%;
     --muted-foreground: 215 20.2% 65.1%;
 
-    --accent: 348 83% 47%;
+    --accent: 221 83% 47%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 348 83% 47%;
+    --border: 221 32.6% 17.5%;
+    --input: 221 32.6% 17.5%;
+    --ring: 221 83% 47%;
 
-    --gradient-hero: linear-gradient(135deg, hsl(348 83% 42%), hsl(348 100% 58%));
-    --gradient-card: linear-gradient(135deg, hsl(348 83% 42% / 0.1), hsl(15 93% 55% / 0.1));
-    --gradient-tech: linear-gradient(135deg, hsl(348 83% 42%), hsl(15 93% 55%), hsl(348 100% 58%));
-    --shadow-soft: 0 4px 20px -2px hsl(348 83% 47% / 0.25);
-    --shadow-elevated: 0 10px 40px -10px hsl(348 83% 47% / 0.35);
-    --shadow-glow: 0 0 40px hsl(348 100% 65% / 0.5);
+    --gradient-hero: linear-gradient(135deg, hsl(221 83% 42%), hsl(221 100% 58%));
+    --gradient-card: linear-gradient(135deg, hsl(221 83% 42% / 0.1), hsl(217 91% 55% / 0.1));
+    --gradient-tech: linear-gradient(135deg, hsl(221 83% 42%), hsl(217 91% 55%), hsl(221 100% 58%));
+    --shadow-soft: 0 4px 20px -2px hsl(221 83% 47% / 0.25);
+    --shadow-elevated: 0 10px 40px -10px hsl(221 83% 47% / 0.35);
+    --shadow-glow: 0 0 40px hsl(221 100% 65% / 0.5);
 
     /* Sidebar specific variables for dark mode */
     --sidebar-background: 240 5.9% 10%;
     --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary: 221 83% 45%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 240 3.7% 15.9%;
     --sidebar-accent-foreground: 240 4.8% 95.9%;
     --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-ring: 221 83% 47%;
   }
 }
 
