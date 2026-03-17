@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { User, Phone, MapPin, Mail, Globe, Tag, Clock, Calendar, ChevronRight, FileText, CheckCircle, Link, Copy, Check, X } from 'lucide-react';
-import { useConversationLogic } from '../../kamban/components/ConversationModal/hooks/useConversationLogic';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import { db } from '@/lib/firebase';
+import { doc, updateDoc, onSnapshot } from 'firebase/firestore';
 
 interface ContactPanelProps {
     card: any;
@@ -33,17 +34,59 @@ export default function ContactPanel({ card, groups }: ContactPanelProps) {
         };
     }, []);
     
-    // Initialize logic just for operations like Notes
-    const logic = useConversationLogic({
-        isOpen: true,
-        onClose: () => {},
-        card,
-        groups
-    });
+    const [liveCardData, setLiveCardData] = useState<any>(null);
+    const [newNote, setNewNote] = useState('');
+
+    useEffect(() => {
+        if (!card?.id || !card?.groupId) return;
+        const unsub = onSnapshot(
+            doc(db, 'kanban-groups', card.groupId, 'cards', card.id),
+            (snap) => { if (snap.exists()) setLiveCardData({ id: snap.id, ...snap.data() }); }
+        );
+        return () => unsub();
+    }, [card?.id, card?.groupId]);
+
+    const handleUpdateAssignee = async (val: string) => {
+        if (!card?.id) return;
+        await updateDoc(doc(db, 'kanban-groups', card.groupId, 'cards', card.id), { assignedTo: val });
+    };
+
+    const handleSaveNote = async () => {
+        if (!newNote.trim() || !card?.id) return;
+        const note = {
+            id: Date.now().toString(),
+            text: newNote,
+            author: 'Sistema',
+            timestamp: new Date()
+        };
+        const currentNotes = liveCardData?.notes || [];
+        await updateDoc(doc(db, 'kanban-groups', card.groupId, 'cards', card.id), {
+            notes: [...currentNotes, note]
+        });
+        setNewNote('');
+        toast.success('Nota guardada');
+    };
+
+    const handleAddLabel = async (label: string) => {
+        if (!card?.id) return;
+        const currentLabels = liveCardData?.labels || [];
+        if (currentLabels.includes(label)) return;
+        await updateDoc(doc(db, 'kanban-groups', card.groupId, 'cards', card.id), {
+            labels: [...currentLabels, label]
+        });
+    };
+
+    const handleRemoveLabel = async (label: string) => {
+        if (!card?.id) return;
+        const currentLabels = liveCardData?.labels || [];
+        await updateDoc(doc(db, 'kanban-groups', card.groupId, 'cards', card.id), {
+            labels: currentLabels.filter((l: string) => l !== label)
+        });
+    };
 
     const contactName = card?.contactName || card?.contactNumber || 'Desconocido';
     const groupName = groups.find(g => g.id === card?.groupId)?.name;
-    const assignee = logic.liveCardData?.assignedTo || card?.assignedTo || 'Unassigned';
+    const assignee = liveCardData?.assignedTo || card?.assignedTo || 'Unassigned';
 
     // Simulated list of agents (could be fetched from a 'users' collection later)
     const agents = ['Sistema', 'Unassigned'];
@@ -107,15 +150,7 @@ export default function ContactPanel({ card, groups }: ContactPanelProps) {
                                     size="sm"
                                     className="h-6 w-6 p-0 text-neutral-500 hover:text-white hover:bg-neutral-800 transition-colors"
                                     onClick={async () => {
-                                        let finalId = logic.crmId;
-                                        if (!finalId || (typeof finalId === 'string' && finalId.startsWith('temp-'))) {
-                                            try {
-                                                const savedId = await logic.handleSaveNote() as unknown as string; // Reusing logic to ensure ID exists
-                                                if (savedId) finalId = savedId;
-                                            } catch (e) {
-                                                finalId = (card?.contactNumber || logic.liveCardData?.contactNumber || '').replace(/[^\d]/g, '');
-                                            }
-                                        }
+                                        const finalId = liveCardData?.crmId || card?.crmId;
                                         if (finalId) {
                                             const link = `${window.location.origin}/suite/coo/kamban/application/${finalId}`;
                                             navigator.clipboard.writeText(link);
@@ -148,7 +183,7 @@ export default function ContactPanel({ card, groups }: ContactPanelProps) {
                                     <select 
                                         className="bg-neutral-800 text-neutral-300 font-bold px-1.5 py-0 text-[11px] rounded cursor-pointer focus:outline-none ring-1 ring-inset ring-neutral-700/50"
                                         value={assignee}
-                                        onChange={(e) => logic.handleUpdateAssignee?.(e.target.value)}
+                                        onChange={(e) => handleUpdateAssignee(e.target.value)}
                                     >
                                         {agents.map(a => <option key={a} value={a}>{a}</option>)}
                                     </select>
@@ -192,14 +227,14 @@ export default function ContactPanel({ card, groups }: ContactPanelProps) {
                             
                             {showLabelDropdown && (
                                 <div className="absolute right-0 top-8 w-40 bg-[#111] border border-neutral-800 rounded-md shadow-2xl z-20 py-1 overflow-hidden">
-                                    {PREDEFINED_LABELS.filter(l => !logic.liveCardData?.labels?.includes(l)).map(label => {
+                                    {PREDEFINED_LABELS.filter(l => !liveCardData?.labels?.includes(l)).map(label => {
                                         const colors = ['bg-red-500', 'bg-blue-500', 'bg-green-500', 'bg-yellow-500', 'bg-purple-500', 'bg-pink-500', 'bg-indigo-500', 'bg-teal-500'];
                                         const colorClass = colors[label.length % colors.length];
                                         return (
                                             <button
                                                 key={`dropdown-${label}`}
                                                 onClick={() => {
-                                                    logic.handleAddLabel?.(label);
+                                                    handleAddLabel(label);
                                                     setShowLabelDropdown(false);
                                                 }}
                                                 className="w-full text-left px-3 py-1.5 text-xs text-neutral-300 hover:bg-neutral-800 transition-colors flex items-center gap-2"
@@ -209,7 +244,7 @@ export default function ContactPanel({ card, groups }: ContactPanelProps) {
                                             </button>
                                         );
                                     })}
-                                    {PREDEFINED_LABELS.filter(l => !logic.liveCardData?.labels?.includes(l)).length > 0 && (
+                                    {PREDEFINED_LABELS.filter(l => !liveCardData?.labels?.includes(l)).length > 0 && (
                                         <div className="h-px bg-neutral-800/50 my-1"></div>
                                     )}
                                     <button
@@ -233,7 +268,7 @@ export default function ContactPanel({ card, groups }: ContactPanelProps) {
                                         onChange={(e) => setNewLabelText(e.target.value)}
                                         onKeyDown={(e) => {
                                             if (e.key === 'Enter' && newLabelText.trim()) {
-                                                logic.handleAddLabel?.(newLabelText.trim());
+                                                handleAddLabel(newLabelText.trim());
                                                 setNewLabelText('');
                                                 setShowLabelInput(false);
                                             } else if (e.key === 'Escape') {
@@ -247,7 +282,7 @@ export default function ContactPanel({ card, groups }: ContactPanelProps) {
                                     <button 
                                         onClick={() => {
                                             if (newLabelText.trim()) {
-                                                logic.handleAddLabel?.(newLabelText.trim());
+                                                handleAddLabel(newLabelText.trim());
                                             }
                                             setNewLabelText('');
                                             setShowLabelInput(false);
@@ -260,7 +295,7 @@ export default function ContactPanel({ card, groups }: ContactPanelProps) {
                             )}
 
                             <div className="flex flex-wrap gap-2">
-                                {(logic.liveCardData?.labels || []).map((label: string, idx: number) => {
+                                {(liveCardData?.labels || []).map((label: string, idx: number) => {
                                     // Deterministic color logic based on string length/char to make it look colorful but consistent
                                     const colors = [
                                         'bg-red-500', 'bg-blue-500', 'bg-green-500', 'bg-yellow-500', 
@@ -276,7 +311,7 @@ export default function ContactPanel({ card, groups }: ContactPanelProps) {
                                             <span className={`w-1.5 h-1.5 rounded-full ${colorClass} mr-1.5`}></span>
                                             {label}
                                             <button 
-                                                onClick={() => logic.handleRemoveLabel?.(label)}
+                                                onClick={() => handleRemoveLabel?.(label)}
                                                 className={`ml-1.5 opacity-0 group-hover:opacity-100 p-0.5 rounded-full hover:${colorClass}/40 transition-opacity`}
                                                 title="Eliminar etiqueta"
                                             >
@@ -285,7 +320,7 @@ export default function ContactPanel({ card, groups }: ContactPanelProps) {
                                         </span>
                                     );
                                 })}
-                                {(!logic.liveCardData?.labels || logic.liveCardData.labels.length === 0) && !showLabelInput && (
+                                {(!liveCardData?.labels || liveCardData.labels.length === 0) && !showLabelInput && (
                                     <span className="text-neutral-600 text-[10px] italic">Sin etiquetas</span>
                                 )}
                             </div>
@@ -298,7 +333,7 @@ export default function ContactPanel({ card, groups }: ContactPanelProps) {
                     <div className="space-y-4">
                         <div className="text-sm text-neutral-400 pb-2">Activity history for this conversation.</div>
                         <div className="space-y-3">
-                            {(logic.liveCardData?.history || []).slice().reverse().map((event: any) => (
+                            {(liveCardData?.history || []).slice().reverse().map((event: any) => (
                                 <div key={event.id} className="p-3 border border-neutral-800 bg-neutral-900 rounded-lg">
                                     <div className="flex justify-between text-[10px] mb-1">
                                         <span className="font-bold text-blue-400 uppercase tracking-tighter">{event.type}</span>
@@ -308,7 +343,7 @@ export default function ContactPanel({ card, groups }: ContactPanelProps) {
                                     <div className="text-[10px] text-neutral-600 mt-1.5">Por: {event.author}</div>
                                 </div>
                             ))}
-                            {(!logic.liveCardData?.history || logic.liveCardData.history.length === 0) && (
+                            {(!liveCardData?.history || liveCardData.history.length === 0) && (
                                 <div className="text-center py-10 text-neutral-600 italic text-sm">No activity recorded yet.</div>
                             )}
                         </div>
@@ -318,7 +353,7 @@ export default function ContactPanel({ card, groups }: ContactPanelProps) {
                 {activeTab === 'notes' && (
                     <div className="flex flex-col h-full">
                         <div className="flex-1 overflow-y-auto mb-4 space-y-2">
-                            {(logic.liveCardData?.notes || []).map((note: any) => (
+                            {(liveCardData?.notes || []).map((note: any) => (
                                 <div key={note.id} className="p-3 bg-neutral-900 border border-neutral-800 rounded-md">
                                     <p className="text-xs text-white mb-1.5 whitespace-pre-wrap">{note.text}</p>
                                     <div className="flex justify-between items-center text-[10px] text-neutral-500">
@@ -331,12 +366,12 @@ export default function ContactPanel({ card, groups }: ContactPanelProps) {
                         <textarea
                             className="w-full h-24 bg-neutral-900 border border-neutral-800 rounded-md p-3 text-sm text-white placeholder-neutral-600 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none transition-shadow"
                             placeholder="Add a private note..."
-                            value={logic.newNote}
-                            onChange={(e) => logic.setNewNote(e.target.value)}
+                            value={newNote}
+                            onChange={(e) => setNewNote(e.target.value)}
                         ></textarea>
                         <button 
-                            onClick={logic.handleSaveNote}
-                            disabled={!logic.newNote.trim()}
+                            onClick={handleSaveNote}
+                            disabled={!newNote.trim()}
                             className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium py-2 rounded-md mt-3 transition-colors"
                         >
                             Save Note

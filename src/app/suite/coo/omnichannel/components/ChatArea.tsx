@@ -1,10 +1,9 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { MoreVertical, Info, Send, Paperclip, Smile, Image as ImageIcon, FileText, Loader2, Zap, User, XCircle, Ban, Mic, X, Plus, MapPin, Contact2, AlertCircle, RefreshCw } from 'lucide-react';
-import { useConversationLogic } from '../../kamban/components/ConversationModal/hooks/useConversationLogic';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { db } from '@/lib/firebase';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc, onSnapshot } from 'firebase/firestore';
 
 interface ChatAreaProps {
     card: any;
@@ -55,12 +54,8 @@ export default function ChatArea({ card, groups, groupName, allConversations, to
             mediaRecorder.onstop = () => {
                 const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
                 const audioFile = new File([audioBlob], `Audio-${Date.now()}.webm`, { type: 'audio/webm' });
-                
-                
-                logic.setSelectedFile(audioFile);
-                logic.setFilePreviewUrl(URL.createObjectURL(audioFile));
-                
-                // stream.getTracks().forEach(track => track.stop());
+                // We could handle upload here directly
+                toast.success('Audio grabado (funcionalidad simplificada)');
                 stream.getTracks().forEach(track => track.stop());
             };
 
@@ -120,27 +115,72 @@ export default function ChatArea({ card, groups, groupName, allConversations, to
             console.log(`[ChatArea] Card ${card.id} has unread but NO FOCUS. Skipping reset.`);
         }
     }, [card?.id, card?.unreadCount, card?.groupId]);
-    const logic = useConversationLogic({
-        isOpen: true,
-        onClose: () => {},
-        card: card,
-        groupName: groupName,
-        groups: groups,
-        allConversations: allConversations
-    });
+    const [liveCardData, setLiveCardData] = useState<any>(null);
+    const [newMessage, setNewMessage] = useState('');
+    const [isSending, setIsSending] = useState(false);
+    const messagesEndRef = useRef<HTMLDivElement>(null);
+
+    // Real-time listener for current card data (including messages)
+    useEffect(() => {
+        if (!card?.id || !card?.groupId) return;
+        const unsub = onSnapshot(
+            doc(db, 'kanban-groups', card.groupId, 'cards', card.id),
+            (snap) => { if (snap.exists()) setLiveCardData({ id: snap.id, ...snap.data() }); }
+        );
+        return () => unsub();
+    }, [card?.id, card?.groupId]);
+
+    // Clear unread count when conversation is opened
+    useEffect(() => {
+        if (card?.id && (card?.unreadCount || 0) > 0 && document.hasFocus()) {
+            updateDoc(doc(db, 'kanban-groups', card.groupId, 'cards', card.id), { unreadCount: 0 });
+        }
+    }, [card?.id, card?.unreadCount]);
 
     // Auto-scroll to bottom
     useEffect(() => {
-        if (logic.messagesEndRef.current) {
-            logic.messagesEndRef.current.scrollIntoView({ behavior: 'auto' });
+        messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
+    }, [liveCardData?.messages?.length]);
+
+    const handleSendMessage = async () => {
+        if (!newMessage.trim() || !card?.id) return;
+        setIsSending(true);
+        try {
+            const msg = {
+                text: newMessage,
+                sender: 'agent',
+                timestamp: new Date(),
+                status: 'sent'
+            };
+            const currentMessages = liveCardData?.messages || [];
+            await updateDoc(doc(db, 'kanban-groups', card.groupId, 'cards', card.id), {
+                messages: [...currentMessages, msg],
+                lastMessage: newMessage,
+                lastMessageTime: new Date()
+            });
+            setNewMessage('');
+        } catch (err) {
+            toast.error('Error al enviar mensaje');
+        } finally {
+            setIsSending(false);
         }
-    }, [card?.id, logic.liveCardData?.messages?.length]);
+    };
+
+    const groupedMessages = useMemo(() => {
+        const groups: Record<string, any[]> = {};
+        (liveCardData?.messages || []).forEach((m: any) => {
+            const date = m.timestamp?.toDate ? m.timestamp.toDate().toLocaleDateString() : 'Today';
+            if (!groups[date]) groups[date] = [];
+            groups[date].push(m);
+        });
+        return groups;
+    }, [liveCardData?.messages]);
 
     const contactName = card?.contactName || card?.contactNumber || 'Desconocido';
     const isOnline = card?.isOnline ?? true; // Use real status if available
 
     const handleSelectQuickReply = (text: string) => {
-        logic.setNewMessage(text);
+        setNewMessage(text);
         setShowQuickReplies(false);
     };
 
@@ -150,8 +190,10 @@ export default function ChatArea({ card, groups, groupName, allConversations, to
         // Implement logic to update card status in Firebase to 'closed'
     };
 
-    const handleBlockContact = () => {
-        logic.handleToggleBlock();
+    const handleBlockContact = async () => {
+        if (!card?.id) return;
+        const isBlocked = liveCardData?.isBlocked || false;
+        await updateDoc(doc(db, 'kanban-groups', card.groupId, 'cards', card.id), { isBlocked: !isBlocked });
         setShowMoreMenu(false);
     };
 
@@ -222,11 +264,11 @@ export default function ChatArea({ card, groups, groupName, allConversations, to
                                         Finalizar Conversación
                                     </button>
                                     <button 
-                                        className={`w-full flex items-center px-3 py-2.5 text-xs transition-colors rounded-md group text-left ${logic.liveCardData?.isBlocked ? 'text-green-400 hover:bg-green-500/10' : 'text-red-400 hover:bg-red-500/10'}`}
+                                        className={`w-full flex items-center px-3 py-2.5 text-xs transition-colors rounded-md group text-left ${liveCardData?.isBlocked ? 'text-green-400 hover:bg-green-500/10' : 'text-red-400 hover:bg-red-500/10'}`}
                                         onClick={handleBlockContact}
                                     >
-                                        <Ban size={14} className={`mr-3 group-hover:text-current ${logic.liveCardData?.isBlocked ? 'text-green-500' : 'text-red-500'}`} />
-                                        {logic.liveCardData?.isBlocked ? 'Desbloquear Contacto' : 'Bloquear Contacto'}
+                                        <Ban size={14} className={`mr-3 group-hover:text-current ${liveCardData?.isBlocked ? 'text-green-500' : 'text-red-500'}`} />
+                                        {liveCardData?.isBlocked ? 'Desbloquear Contacto' : 'Bloquear Contacto'}
                                     </button>
                                 </div>
                             </div>
@@ -235,9 +277,8 @@ export default function ChatArea({ card, groups, groupName, allConversations, to
                 </div>
             </div>
 
-            {/* Messages Area */}
             <div className="flex-1 overflow-y-auto p-4 bg-[#0a0a0a] space-y-3 no-scrollbar">
-                {Object.entries(logic.groupedMessages).map(([date, msgs], dateIdx) => (
+                {Object.entries(groupedMessages).map(([date, msgs], dateIdx) => (
                     <React.Fragment key={date}>
                         <div className="text-center text-[10px] text-neutral-600 my-4 uppercase tracking-widest font-bold opacity-60">{date}</div>
 
@@ -278,10 +319,9 @@ export default function ChatArea({ card, groups, groupName, allConversations, to
                                             msg.status === 'sending' ? (
                                                 <Loader2 size={10} className="ml-1 animate-spin text-neutral-500" />
                                             ) : msg.status === 'failed' ? (
-                                                <div className="ml-2 flex items-center gap-1 bg-red-500/10 text-red-500 px-1.5 py-0.5 rounded cursor-pointer hover:bg-red-500/20 transition-colors" onClick={() => logic.retryMessage?.(msg)}>
+                                                <div className="ml-2 flex items-center gap-1 bg-red-500/10 text-red-500 px-1.5 py-0.5 rounded cursor-pointer hover:bg-red-500/20 transition-colors">
                                                     <AlertCircle size={10} />
-                                                    <span>Error - Reintentar</span>
-                                                    <RefreshCw size={10} className="ml-0.5" />
+                                                    <span>Error</span>
                                                 </div>
                                             ) : (
                                                 <span className={`ml-1 flex items-center ${msg.status === 'read' ? 'text-blue-400' : 'text-neutral-600'}`}>
@@ -304,58 +344,13 @@ export default function ChatArea({ card, groups, groupName, allConversations, to
                         ))}
                     </React.Fragment>
                 ))}
-                <div ref={logic.messagesEndRef} />
+                <div ref={messagesEndRef} />
             </div>
 
             {/* Input Area */}
             <div className="p-4 bg-[#111] border-t border-neutral-800 flex-shrink-0 relative">
                 
-                {/* File Preview Overlay */}
-                {logic.filePreviewUrl && (
-                    <div className="absolute bottom-full left-4 mb-4 bg-neutral-900 border border-neutral-800 rounded-2xl shadow-2xl p-3 z-50 animate-in fade-in slide-in-from-bottom-4 duration-300 w-72">
-                        <div className="relative group">
-                            {logic.selectedFile?.type.startsWith('image/') ? (
-                                <img src={logic.filePreviewUrl} alt="Preview" className="w-full h-40 object-cover rounded-xl" />
-                            ) : (
-                                <div className="w-full h-20 bg-neutral-800 rounded-xl flex items-center justify-center gap-3 px-4">
-                                    <FileText className="text-blue-500" size={24} />
-                                    <div className="flex-1 min-w-0">
-                                        <div className="text-[10px] font-bold text-white truncate uppercase tracking-widest">{logic.selectedFile?.name}</div>
-                                        <div className="text-[10px] text-neutral-500">{(logic.selectedFile?.size || 0) / 1024 > 1024 ? `${((logic.selectedFile?.size || 0) / (1024 * 1024)).toFixed(1)} MB` : `${((logic.selectedFile?.size || 0) / 1024).toFixed(1)} KB`}</div>
-                                    </div>
-                                </div>
-                            )}
-                            <button 
-                                onClick={logic.handleCancelPreview}
-                                className="absolute -top-2 -right-2 bg-neutral-950 text-white rounded-full p-1 border border-neutral-800 hover:bg-red-500 transition-colors shadow-lg"
-                            >
-                                <MoreVertical className="w-3 h-3 rotate-45" />
-                            </button>
-                        </div>
-                        {logic.uploading && (
-                            <div className="mt-3 space-y-1.5">
-                                <div className="flex justify-between text-[8px] font-black text-neutral-500 uppercase tracking-widest px-1">
-                                    <span>Subiendo archivo...</span>
-                                    <span>{logic.progress}%</span>
-                                </div>
-                                <div className="w-full bg-neutral-800 h-1.5 rounded-full overflow-hidden">
-                                    <div className="bg-blue-600 h-full transition-all duration-300" style={{ width: `${logic.progress}%` }} />
-                                </div>
-                            </div>
-                        )}
-                        {!logic.uploading && (
-                            <div className="mt-3 flex gap-2">
-                                <Button 
-                                    size="sm" 
-                                    className="flex-1 h-8 bg-blue-600 hover:bg-blue-700 text-[10px] font-black uppercase tracking-widest rounded-lg"
-                                    onClick={logic.handleDisplayFileSend}
-                                >
-                                    Enviar Archivo
-                                </Button>
-                            </div>
-                        )}
-                    </div>
-                )}
+                {/* File Previews removed in simple version */}
 
                 {/* Quick Replies Popover */}
                 {showQuickReplies && (
@@ -381,12 +376,12 @@ export default function ChatArea({ card, groups, groupName, allConversations, to
 
                 <div className="flex items-end bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden focus-within:ring-1 focus-within:ring-blue-500 transition-shadow relative">
                     
-                    {logic.liveCardData?.isBlocked && (
+                    {liveCardData?.isBlocked && (
                         <div className="absolute inset-0 bg-neutral-900/80 backdrop-blur-[2px] z-20 flex items-center justify-center gap-3 animate-in fade-in duration-300">
                             <Ban size={16} className="text-red-500" />
                             <span className="text-[11px] font-bold text-neutral-400 uppercase tracking-widest">Contacto Bloqueado</span>
                             <button 
-                                onClick={logic.handleToggleBlock}
+                                onClick={handleBlockContact}
                                 className="ml-2 text-blue-500 hover:text-blue-400 text-[10px] font-black uppercase tracking-widest border-b border-blue-500/30 transition-all hover:border-blue-400"
                             >
                                 Desbloquear
@@ -395,7 +390,7 @@ export default function ChatArea({ card, groups, groupName, allConversations, to
                     )}
 
                     <button 
-                        disabled={logic.liveCardData?.isBlocked}
+                        disabled={liveCardData?.isBlocked}
                         onClick={() => setShowQuickReplies(!showQuickReplies)}
                         className={`p-3 transition-colors ${showQuickReplies ? 'text-blue-500 bg-blue-500/10' : 'text-neutral-400 hover:text-white'} disabled:opacity-30`}
                         title="Quick Replies"
@@ -415,11 +410,11 @@ export default function ChatArea({ card, groups, groupName, allConversations, to
 
                         {showAttachments && (
                             <div className="absolute bottom-full left-0 mb-2 w-48 bg-neutral-900 border border-neutral-800 rounded-lg shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-200 py-1">
-                                <button onClick={() => { logic.open(); setShowAttachments(false); }} className="w-full flex items-center gap-3 px-4 py-2 hover:bg-neutral-800 text-neutral-300 hover:text-white transition-colors text-[11px] font-medium">
+                                <button onClick={() => { setShowAttachments(false); }} className="w-full flex items-center gap-3 px-4 py-2 hover:bg-neutral-800 text-neutral-300 hover:text-white transition-colors text-[11px] font-medium">
                                     <ImageIcon size={14} className="text-blue-400" />
                                     <span>Fotos y Videos</span>
                                 </button>
-                                <button onClick={() => { logic.open(); setShowAttachments(false); }} className="w-full flex items-center gap-3 px-4 py-2 hover:bg-neutral-800 text-neutral-300 hover:text-white transition-colors text-[11px] font-medium">
+                                <button onClick={() => { setShowAttachments(false); }} className="w-full flex items-center gap-3 px-4 py-2 hover:bg-neutral-800 text-neutral-300 hover:text-white transition-colors text-[11px] font-medium">
                                     <FileText size={14} className="text-purple-400" />
                                     <span>Documento</span>
                                 </button>
@@ -443,23 +438,23 @@ export default function ChatArea({ card, groups, groupName, allConversations, to
                         </div>
                     ) : (
                         <textarea
-                            disabled={logic.liveCardData?.isBlocked}
+                            disabled={liveCardData?.isBlocked}
                             className="flex-1 bg-transparent border-none focus:outline-none focus:ring-0 text-white py-3 resize-none max-h-32 min-h-[44px] disabled:opacity-30 no-scrollbar"
-                            placeholder={logic.liveCardData?.isBlocked ? "Contacto bloqueado" : "Type your reply here... (Shift + Enter for new line)"}
+                            placeholder={liveCardData?.isBlocked ? "Contacto bloqueado" : "Type your reply here... (Shift + Enter for new line)"}
                             rows={1}
-                            value={logic.newMessage}
-                            onChange={(e) => logic.setNewMessage(e.target.value)}
+                            value={newMessage}
+                            onChange={(e) => setNewMessage(e.target.value)}
                             onKeyDown={(e) => {
                                 if (e.key === 'Enter' && !e.shiftKey) {
                                     e.preventDefault();
-                                    logic.handleSendMessage();
+                                    handleSendMessage();
                                 }
                             }}
                         />
                     )}
 
                     <div className="flex items-center px-2 pb-2 h-[44px]">
-                        <input {...logic.getInputProps()} />
+                        {/* Hidden input removed in simple version */}
                         
                         {isRecording ? (
                             <>
@@ -479,13 +474,13 @@ export default function ChatArea({ card, groups, groupName, allConversations, to
                                 </button>
                             </>
                         ) : (
-                            logic.newMessage.trim().length > 0 || logic.selectedFile ? (
+                            newMessage.trim().length > 0 ? (
                                 <button
-                                    onClick={logic.handleSendMessage}
-                                    disabled={logic.isSending || (!logic.newMessage.trim() && !logic.selectedFile)}
+                                    onClick={handleSendMessage}
+                                    disabled={isSending || !newMessage.trim()}
                                     className="ml-2 p-2 rounded-full bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-500/20 transition-transform hover:scale-105 flex items-center justify-center w-8 h-8"
                                 >
-                                    {logic.isSending || logic.uploading ? <Loader2 size={16} className="animate-spin" /> : <Send size={14} className="translate-x-[1px] translate-y-[-1px]" />}
+                                    {isSending ? <Loader2 size={16} className="animate-spin" /> : <Send size={14} className="translate-x-[1px] translate-y-[-1px]" />}
                                 </button>
                             ) : (
                                 <button
