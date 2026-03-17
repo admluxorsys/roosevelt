@@ -21,6 +21,9 @@ export interface ConversationModalProps {
   allConversations?: any[];
   onSelectConversation?: (card: any) => void;
   stats?: { totalConversations: number; totalGroups: number };
+  isGlobalContact?: boolean;
+  hideSidebar?: boolean;
+  hideInternalTray?: boolean;
 }
 
 // ─── Badge color options ──────────────────────────────────────────────────────
