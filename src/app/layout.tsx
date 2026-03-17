@@ -15,11 +15,14 @@ const montserrat = Montserrat({
 });
 
 export const metadata: Metadata = {
-  title: "Udreamms | Tu Sueño en USA",
+  title: "Roosevelt | Artificial Intelligence",
   description: "Asesoría experta para visas, estudios y nueva vida en Estados Unidos. Tecnología y soporte humano en un solo lugar.",
   icons: {
-    icon: "/assets/Logo Udreamms.png",
-    apple: "/assets/Logo Udreamms.png",
+    icon: [
+      { url: "/assets/newlogo.png", sizes: "32x32", type: "image/png" },
+      { url: "/assets/newlogo.png", sizes: "192x192", type: "image/png" },
+    ],
+    apple: { url: "/assets/newlogo.png", sizes: "180x180", type: "image/png" },
   }
 };
 

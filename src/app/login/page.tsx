@@ -38,7 +38,7 @@ const BlueParticles = () => {
     window.addEventListener('resize', resize);
     resize();
 
-    const particleCount = 450; 
+    const particleCount = 450; // Restored to 450 as requested
     particles.current = Array.from({ length: particleCount }).map(() => ({
       x: Math.random() * canvas.width,
       y: Math.random() * canvas.height,
@@ -61,19 +61,13 @@ const BlueParticles = () => {
         if (p.y > canvas.height) p.y = 0;
         
         const opacity = 0.1 + p.seed * 0.3;
-        ctx.fillStyle = `rgba(59, 130, 246, ${opacity})`; // Blue color
+        ctx.fillStyle = `rgba(59, 130, 246, ${opacity})`;
         
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
         ctx.fill();
 
-        // Subtle glow effect for some particles
-        if (p.seed > 0.8) {
-          ctx.shadowBlur = 10;
-          ctx.shadowColor = 'rgba(59, 130, 246, 0.5)';
-          ctx.fill();
-          ctx.shadowBlur = 0;
-        }
+        // Removed expensive shadowBlur effect
       });
 
       animationFrame.current = requestAnimationFrame(animate);
@@ -87,7 +81,7 @@ const BlueParticles = () => {
     };
   }, []);
 
-  return <canvas ref={canvasRef} className="fixed inset-0 z-0 bg-transparent pointer-events-none" />;
+  return <canvas ref={canvasRef} className="fixed inset-0 z-[5] pointer-events-none" />;
 };
 
 
@@ -116,21 +110,23 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-black text-white relative flex flex-col items-center justify-end overflow-hidden selection:bg-white/10">
-      <BlueParticles />
-      {/* Central Roosevelt AI GIF */}
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+      {/* Central Roosevelt AI GIF - Low Z-index */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
         <motion.img 
           src="/assets/Roosevelt Ai.gif" 
           alt="Roosevelt AI"
           initial={{ opacity: 0, scale: 1.1, y: -40 }}
-          animate={{ opacity: 0.6, scale: 1.4, y: -80 }}
+          animate={{ opacity: 1, scale: 1.4, y: -80 }}
           transition={{ duration: 2.5, ease: "easeOut" }}
           className="w-full max-w-5xl h-auto"
         />
       </div>
 
-      {/* Content Container */}
-      <div className="relative z-10 w-full max-w-lg px-6 flex flex-col items-center pb-24">
+      {/* Blue Particles - Middle Z-index (Over the GIF) */}
+      <BlueParticles />
+
+      {/* Content Container - High Z-index (Over Particles and GIF) */}
+      <div className="relative z-[10] w-full max-w-lg px-6 flex flex-col items-center pb-24">
         <AnimatePresence mode="wait">
           {!showForm ? (
             <motion.div
@@ -142,7 +138,7 @@ export default function LoginPage() {
               onMouseEnter={() => setIsHoveringText(true)}
               onMouseLeave={() => setIsHoveringText(false)}
             >
-              <h1 className="text-3xl md:text-4xl font-extralight tracking-tighter text-center mb-16 text-white/90 drop-shadow-2xl">
+              <h1 className="text-3xl md:text-4xl font-extralight tracking-tighter text-center mb-16 text-white/90">
                 Welcome to your <br /> <span className="text-white font-light uppercase tracking-[0.3em] text-xs mt-2 block opacity-60">Personal Administrator</span>
               </h1>
 
@@ -156,7 +152,7 @@ export default function LoginPage() {
 
               <Button
                 variant="outline"
-                className="w-full max-w-sm h-14 rounded-full bg-white/10 backdrop-blur-xl border-white/20 text-white hover:bg-white/20 font-medium text-sm tracking-widest transition-all shadow-[0_0_40px_rgba(255,255,255,0.05)]"
+                className="w-full max-w-sm h-14 rounded-full bg-white/10 backdrop-blur-xl border-white/20 text-white hover:bg-white/20 font-medium text-sm tracking-widest transition-all"
                 onClick={() => setShowForm(true)}
               >
                 I ALREADY HAVE MY DIGITAL CHARACTER
