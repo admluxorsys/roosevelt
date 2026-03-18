@@ -16,8 +16,17 @@ const montserrat = Montserrat({
 });
 
 export const metadata: Metadata = {
-  title: "Roosevelt | Artificial Intelligence",
-  description: "Asesoría experta para visas, estudios y nueva vida en Estados Unidos. Tecnología y soporte humano en un solo lugar.",
+  title: "Autonomous | Artificial Intelligence",
+  description: `A Next-Generation Artificial Intelligence infrastructure designed to act as a unified command center. It's a proactive manager integrating business strategy with personal optimization. 
+  
+How it works:
+• Total Interconnectivity: Links digital assets, blockchains (like Solana), and admin tools for a real-time 360° view.
+• Predictive Analysis: Detects patterns, financial risks, and crypto opportunities before they become problems.
+• Autonomous Execution: Resolves technical tasks independently, letting you focus on high-level decisions.
+
+Impact Areas: Web3 Ecosystems, Business Direction, and Time Optimization. 
+
+It is the bridge between the founder's vision and operational execution, evolving with your business.`,
   icons: {
     icon: [
       { url: "/assets/newlogo.png", sizes: "32x32", type: "image/png" },
