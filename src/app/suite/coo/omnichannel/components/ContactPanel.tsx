@@ -56,12 +56,66 @@ export default function ContactPanel({ card, groups }: ContactPanelProps) {
                 <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center font-bold text-white text-lg shadow-lg ring-4 ring-neutral-900 mb-2">
                     {contactName.charAt(0).toUpperCase()}
                 </div>
-                <h2 className="font-semibold text-white tracking-wide text-sm text-center">{contactName}</h2>
-                {card?.contactEmail && <p className="text-neutral-500 text-[11px] mt-0.5">{card.contactEmail}</p>}
+                {logic.isEditing ? (
+                    <input
+                        name="contactName"
+                        value={logic.contactInfo.contactName || ''}
+                        onChange={logic.handleInfoChange}
+                        placeholder="Nombre"
+                        className="bg-neutral-800 border border-neutral-700 rounded px-2 py-1 text-xs text-white text-center focus:outline-none focus:border-blue-500 mt-1"
+                    />
+                ) : (
+                    <h2 className="font-semibold text-white tracking-wide text-sm text-center">{contactName}</h2>
+                )}
+                
+                {logic.isEditing ? (
+                    <input
+                        name="email"
+                        value={logic.contactInfo.email || ''}
+                        onChange={logic.handleInfoChange}
+                        placeholder="Email"
+                        className="bg-neutral-800 border border-neutral-700 rounded px-2 py-1 text-[11px] text-neutral-300 text-center focus:outline-none focus:border-blue-500 mt-1"
+                    />
+                ) : (
+                    card?.email && <p className="text-neutral-500 text-[11px] mt-0.5">{card.email}</p>
+                )}
 
                 <div className="flex gap-1.5 mt-3">
-                    <button className="px-3 py-1 bg-neutral-800 hover:bg-neutral-700 text-white rounded text-[10px] font-bold transition-colors ring-1 ring-inset ring-neutral-700/50 uppercase tracking-tight">Edit</button>
-                    <button className="px-3 py-1 bg-neutral-800 hover:bg-neutral-700 text-white rounded text-[10px] font-bold transition-colors ring-1 ring-inset ring-neutral-700/50 uppercase tracking-tight">Merge</button>
+                    {logic.isEditing ? (
+                        <>
+                            <button 
+                                onClick={logic.handleInfoSave}
+                                className="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded text-[10px] font-bold transition-colors uppercase tracking-tight"
+                            >
+                                Save
+                            </button>
+                            <button 
+                                onClick={() => logic.setIsEditing(false)}
+                                className="px-3 py-1 bg-neutral-800 hover:bg-neutral-700 text-white rounded text-[10px] font-bold transition-colors ring-1 ring-inset ring-neutral-700/50 uppercase tracking-tight"
+                            >
+                                Cancel
+                            </button>
+                        </>
+                    ) : (
+                        <>
+                            <button 
+                                onClick={() => {
+                                    logic.setContactInfo({
+                                        contactName: card?.contactName || '',
+                                        email: card?.email || '',
+                                        contactNumber: card?.contactNumber || '',
+                                        country: card?.country || '',
+                                        source: card?.source || 'WhatsApp'
+                                    });
+                                    logic.setIsEditing(true);
+                                }}
+                                className="px-3 py-1 bg-neutral-800 hover:bg-neutral-700 text-white rounded text-[10px] font-bold transition-colors ring-1 ring-inset ring-neutral-700/50 uppercase tracking-tight"
+                            >
+                                Edit
+                            </button>
+                            <button className="px-3 py-1 bg-neutral-800 hover:bg-neutral-700 text-white rounded text-[10px] font-bold transition-colors ring-1 ring-inset ring-neutral-700/50 uppercase tracking-tight">Merge</button>
+                        </>
+                    )}
                 </div>
             </div>
 
@@ -162,15 +216,42 @@ export default function ContactPanel({ card, groups }: ContactPanelProps) {
                             <div className="space-y-3">
                                 <div className="flex items-center text-sm">
                                     <Phone size={14} className="text-neutral-500 mr-3" />
-                                    <span className="text-white font-medium">{card?.contactNumber || 'No especificado'}</span>
+                                    {logic.isEditing ? (
+                                        <input
+                                            name="contactNumber"
+                                            value={logic.contactInfo.contactNumber || ''}
+                                            onChange={logic.handleInfoChange}
+                                            className="bg-neutral-800 border border-neutral-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500 flex-1 ml-0"
+                                        />
+                                    ) : (
+                                        <span className="text-white font-medium">{card?.contactNumber || 'No especificado'}</span>
+                                    )}
                                 </div>
                                 <div className="flex items-center text-sm">
                                     <Globe size={14} className="text-neutral-500 mr-3" />
-                                    <span className="text-white font-medium">{card?.country || 'Desconocido'}</span>
+                                    {logic.isEditing ? (
+                                        <input
+                                            name="country"
+                                            value={logic.contactInfo.country || ''}
+                                            onChange={logic.handleInfoChange}
+                                            className="bg-neutral-800 border border-neutral-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500 flex-1 ml-0"
+                                        />
+                                    ) : (
+                                        <span className="text-white font-medium">{card?.country || 'Desconocido'}</span>
+                                    )}
                                 </div>
                                 <div className="flex items-center text-sm">
                                     <Clock size={14} className="text-neutral-500 mr-3" />
-                                    <span className="text-white font-medium">Activo {card?.source || 'WhatsApp'}</span>
+                                    {logic.isEditing ? (
+                                        <input
+                                            name="source"
+                                            value={logic.contactInfo.source || ''}
+                                            onChange={logic.handleInfoChange}
+                                            className="bg-neutral-800 border border-neutral-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500 flex-1 ml-0"
+                                        />
+                                    ) : (
+                                        <span className="text-white font-medium">Activo {card?.source || 'WhatsApp'}</span>
+                                    )}
                                 </div>
                             </div>
                         </div>
