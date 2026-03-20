@@ -77,30 +77,24 @@ export async function sendTelegramMessage(chatId: string, text: string): Promise
         text: text
     });
 }
-// --- kamban ---
+// --- WhatsApp ---
 
 /**
- * Sends a message via kamban Business API
+ * Sends a message via WhatsApp Business API
  */
-export async function sendkambanMessage(toNumber: string, message: string, options: { 
-    type?: 'text' | 'template' | 'quick_reply' | 'list', 
-    template?: any,
-    buttons?: any[],
-    button?: string,
-    sections?: any[]
-} = {}): Promise<any> {
-    const token = process.env.kamban_ACCESS_TOKEN;
-    const phoneNumberId = process.env.kamban_PHONE_NUMBER_ID;
+export async function sendWhatsAppMessage(toNumber: string, message: string, options: { type?: 'text' | 'template', template?: any } = {}): Promise<any> {
+    const token = process.env.WHATSAPP_ACCESS_TOKEN;
+    const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
 
     if (!token || !phoneNumberId) {
-        throw new Error('Missing kamban configuration (Token or Phone ID)');
+        throw new Error('Missing WhatsApp configuration (Token or Phone ID)');
     }
 
     const url = `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`;
     const cleanTo = toNumber.replace(/\D/g, '');
 
     let payload: any = {
-        messaging_product: 'kamban',
+        messaging_product: 'whatsapp',
         recipient_type: 'individual',
         to: cleanTo,
     };
@@ -112,37 +106,6 @@ export async function sendkambanMessage(toNumber: string, message: string, optio
             language: { code: options.template.language?.code || 'es' },
             components: options.template.components || []
         };
-    } else if (options.type === 'quick_reply') {
-        payload.type = 'interactive';
-        payload.interactive = {
-            type: 'button',
-            body: { text: message },
-            action: {
-                buttons: options.buttons || []
-            }
-        };
-    } else if (options.type === 'list') {
-        payload.type = 'interactive';
-        payload.interactive = {
-            type: 'list',
-            body: { text: message },
-            action: {
-                button: options.button || 'Opciones',
-                sections: options.sections || []
-            }
-        };
-    } else if ((options as any).type === 'media') {
-        const url = (options as any).url;
-        const filename = (options as any).filename || 'file';
-        const ext = filename.split('.').pop()?.toLowerCase();
-        
-        let mediaType: 'image' | 'video' | 'document' | 'audio' = 'document';
-        if (['jpg', 'jpeg', 'png', 'webp'].includes(ext!)) mediaType = 'image';
-        else if (['mp4', 'mov'].includes(ext!)) mediaType = 'video';
-        else if (['mp3', 'ogg', 'wav'].includes(ext!)) mediaType = 'audio';
-
-        payload.type = mediaType;
-        payload[mediaType] = { link: url, caption: message };
     } else {
         payload.type = 'text';
         payload.text = { body: message, preview_url: false };
@@ -153,15 +116,13 @@ export async function sendkambanMessage(toNumber: string, message: string, optio
             headers: { Authorization: `Bearer ${token}` }
         });
 
-        console.log(`[kamban API] Message sent to ${cleanTo}: ${response.data.messages?.[0]?.id}`);
         return {
             ...response.data,
             sentTo: cleanTo
         };
     } catch (error: any) {
         const errorData = error.response?.data || error.message;
-        console.error('[kamban API] Error sending message:', JSON.stringify(errorData, null, 2));
-        throw new Error(`kamban API Error: ${JSON.stringify(errorData)}`);
+        console.error('WhatsApp API Error:', JSON.stringify(errorData, null, 2));
+        throw new Error(`WhatsApp API Error: ${JSON.stringify(errorData)}`);
     }
 }
-

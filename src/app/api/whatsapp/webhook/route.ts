@@ -210,7 +210,7 @@ async function triggerChatbot(from: string, text: string, groupId: string | null
         debugLog(`[TRACING] Missing groupId (${groupId}) or cardId (${cardId}). Aborting.`);
         return;
     }
-    const { sendkambanMessage } = await import('@/lib/sendProviders');
+    const { sendWhatsAppMessage } = await import('@/lib/sendProviders');
 
     // 1. Fetch active chatbot
     debugLog(`[TRACING] Fetching active chatbot...`);
@@ -287,7 +287,7 @@ async function triggerChatbot(from: string, text: string, groupId: string | null
                 const messageText = replaceVariables(rawText);
                 debugLog(`[TRACING] Text node, sending: "${messageText}" to ${from}`);
                 try {
-                    const sendResult = await sendkambanMessage(from, messageText);
+                    const sendResult = await sendWhatsAppMessage(from, messageText);
                     debugLog(`[TRACING] Send success: ${sendResult.messages?.[0]?.id}`);
                     
                     // Log message
@@ -331,7 +331,7 @@ async function triggerChatbot(from: string, text: string, groupId: string | null
                     }
                 })).slice(0, 3);
 
-                const sendResult = await sendkambanMessage(from, messageText, { 
+                const sendResult = await sendWhatsAppMessage(from, messageText, { 
                     type: 'quick_reply',
                     buttons: buttons 
                 } as any);
@@ -360,7 +360,7 @@ async function triggerChatbot(from: string, text: string, groupId: string | null
                 // If it's the first time reaching this node, we only send the prompt if content exists
                 if (!currentState.waitingForInput && messageText) {
                     debugLog(`[TRACING] Sending capture prompt: "${messageText}"`);
-                    const sendResult = await sendkambanMessage(from, messageText);
+                    const sendResult = await sendWhatsAppMessage(from, messageText);
                     await cardRef.update({
                         messages: admin.firestore.FieldValue.arrayUnion({
                             sender: 'agent',
@@ -392,7 +392,7 @@ async function triggerChatbot(from: string, text: string, groupId: string | null
                 
                 if (url) {
                     try {
-                        const sendResult = await sendkambanMessage(from, caption, {
+                        const sendResult = await sendWhatsAppMessage(from, caption, {
                             type: 'media' as any,
                             url,
                             filename
@@ -437,7 +437,7 @@ async function triggerChatbot(from: string, text: string, groupId: string | null
                 debugLog(`[TRACING] ListMessage node, message: "${messageText}", sections: ${sections.length}`);
                 
                 try {
-                    const sendResult = await sendkambanMessage(from, messageText, {
+                    const sendResult = await sendWhatsAppMessage(from, messageText, {
                         type: 'list' as any,
                         button: buttonText,
                         sections: sections
@@ -590,7 +590,7 @@ async function triggerChatbot(from: string, text: string, groupId: string | null
                     } else {
                         // NO MATCH and NO FALLBACK: Send a helpful message
                         debugLog(`[TRACING] No edge matched for "${text}". Sending help message.`);
-                        await sendkambanMessage(from, "Lo siento, no entendí esa opción. Por favor, selecciona una de las opciones del menú anterior o responde con el texto exacto.");
+                        await sendWhatsAppMessage(from, "Lo siento, no entendí esa opción. Por favor, selecciona una de las opciones del menú anterior o responde con el texto exacto.");
                     }
                 }
             }

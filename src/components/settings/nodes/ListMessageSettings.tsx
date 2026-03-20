@@ -11,6 +11,7 @@ import { SettingsSection, Field } from '../SharedComponents';
 
 interface NodeSettingsProps {
     node: Node;
+    allNodes: Node[];
     updateNodeConfig: (nodeId: string, data: object) => void;
 }
 
@@ -18,8 +19,8 @@ interface NodeSettingsProps {
 const normalizeNodeData = (data: any) => {
     const safeData = { ...data };
 
-    // 1. Asegurar textos base
-    safeData.buttonText = safeData.buttonText || 'Abrir Menú';
+    // 1. Asegurar textos base (Usamos ?? para permitir "" durante edición)
+    safeData.buttonText = safeData.buttonText ?? 'Abrir Menú';
     safeData.header = safeData.header || '';
     safeData.body = safeData.body || safeData.text || '';
     safeData.footer = safeData.footer || '';
@@ -48,7 +49,7 @@ const normalizeNodeData = (data: any) => {
         // Si YA es un array, asegurarnos que cada sección tenga 'rows'
         safeData.sections = safeData.sections.map((sec: any) => ({
             ...sec,
-            title: sec.title || 'Sin Título',
+            title: sec.title ?? 'Sección Principal',
             rows: Array.isArray(sec.rows) ? sec.rows : [] // Asegurar que rows exista
         }));
     }
@@ -56,7 +57,7 @@ const normalizeNodeData = (data: any) => {
     return safeData;
 };
 
-export const ListMessageSettings = ({ node, updateNodeConfig }: NodeSettingsProps) => {
+export const ListMessageSettings = ({ node, allNodes, updateNodeConfig }: NodeSettingsProps) => {
     // Inicializamos con datos normalizados para evitar crashes
     const [config, setConfig] = useState(() => normalizeNodeData(node.data));
 
@@ -129,7 +130,12 @@ export const ListMessageSettings = ({ node, updateNodeConfig }: NodeSettingsProp
                     <Input
                         value={config.buttonText || ''}
                         onChange={(e) => handleUpdate({ ...config, buttonText: e.target.value })}
-                        className="font-bold text-green-400 bg-neutral-950 border-neutral-800"
+                        onBlur={(e) => {
+                            if (!e.target.value.trim()) {
+                                handleUpdate({ ...config, buttonText: 'Abrir Menú' });
+                            }
+                        }}
+                        className="font-bold text-green-400 bg-neutral-950 border-neutral-800 focus:border-green-500/50"
                     />
                 </Field>
                 <Field label="Cuerpo del Mensaje (Body)" htmlFor="list-body">
@@ -173,6 +179,14 @@ export const ListMessageSettings = ({ node, updateNodeConfig }: NodeSettingsProp
                                         });
                                         handleUpdate(newData);
                                     }}
+                                    onBlur={(e) => {
+                                        if (!e.target.value.trim()) {
+                                            const newData = produce(config, (draft: any) => {
+                                                if (draft.sections[sIdx]) draft.sections[sIdx].title = 'Sección';
+                                            });
+                                            handleUpdate(newData);
+                                        }
+                                    }}
                                     className="font-bold border-none bg-transparent focus:bg-neutral-800 p-1 h-7 text-sm flex-1 focus-visible:ring-0"
                                     placeholder="Título de Sección"
                                 />
@@ -189,7 +203,12 @@ export const ListMessageSettings = ({ node, updateNodeConfig }: NodeSettingsProp
                                                 placeholder="Título de la opción"
                                                 value={row.title || ''}
                                                 onChange={(e) => updateRow(sIdx, rIdx, 'title', e.target.value)}
-                                                className="h-8 text-sm bg-neutral-900 border-neutral-700"
+                                                onBlur={(e) => {
+                                                    if (!e.target.value.trim()) {
+                                                        updateRow(sIdx, rIdx, 'title', 'Opción');
+                                                    }
+                                                }}
+                                                className="h-8 text-sm bg-neutral-900 border-neutral-700 focus:border-green-500/30"
                                             />
                                             <Input
                                                 placeholder="Descripción corta"

@@ -41,6 +41,7 @@ interface ConditionNodeData {
 
 interface NodeSettingsProps {
     node: Node<ConditionNodeData>;
+    allNodes: Node[];
     updateNodeConfig: (nodeId: string, data: object) => void;
 }
 
@@ -76,7 +77,7 @@ const OPERATORS = [
     }
 ];
 
-export const ConditionSettings = ({ node, updateNodeConfig }: NodeSettingsProps) => {
+export const ConditionSettings = ({ node, allNodes, updateNodeConfig }: NodeSettingsProps) => {
     const data = node.data || {};
     const routes = data.routes || [];
 

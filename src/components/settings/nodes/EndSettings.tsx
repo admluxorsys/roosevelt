@@ -34,10 +34,11 @@ interface EndNodeData {
 
 interface NodeSettingsProps {
     node: Node<EndNodeData>;
+    allNodes: Node[];
     updateNodeConfig: (nodeId: string, data: object) => void;
 }
 
-export const EndSettings = ({ node, updateNodeConfig }: NodeSettingsProps) => {
+export const EndSettings = ({ node, allNodes, updateNodeConfig }: NodeSettingsProps) => {
     const data = node.data || {};
     
     // Estado local para la UI de Outcome
@@ -113,18 +114,21 @@ export const EndSettings = ({ node, updateNodeConfig }: NodeSettingsProps) => {
                 
                 {/* CSAT Trigger */}
                 <div className="flex items-center justify-between py-2">
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 opacity-50 select-none">
                         <div className="p-2 bg-yellow-900/20 text-yellow-500 rounded-md">
                             <Star size={16} />
                         </div>
                         <div className="space-y-0.5">
-                            <label className="text-sm font-medium text-white">Encuesta CSAT</label>
+                            <div className="flex items-center gap-2">
+                                <label className="text-sm font-medium text-white">Encuesta CSAT</label>
+                                <Badge className="bg-amber-500/10 text-amber-500 border-amber-500/20 text-[8px] h-4">PRÓXIMAMENTE</Badge>
+                            </div>
                             <p className="text-xs text-neutral-500">Pedir calificación (1-5) antes de cerrar.</p>
                         </div>
                     </div>
                     <Switch 
-                        checked={data.triggerCsat || false}
-                        onCheckedChange={(c) => updateConfig(d => { d.triggerCsat = c })}
+                        disabled
+                        checked={false}
                     />
                 </div>
                 
@@ -176,15 +180,16 @@ export const EndSettings = ({ node, updateNodeConfig }: NodeSettingsProps) => {
 
             {/* 4. Webhook Final */}
             <div className="pt-2">
-                <div className="flex items-center gap-2 mb-2 px-1">
+                <div className="flex items-center gap-2 mb-2 px-1 opacity-50 select-none">
                     <Webhook className="w-3 h-3 text-purple-500" />
                     <span className="text-xs font-bold text-neutral-400 uppercase tracking-wider">Webhook Silencioso (Opcional)</span>
+                    <Badge className="bg-purple-500/10 text-purple-500 border-purple-500/20 text-[8px] h-4 ml-auto">BETA</Badge>
                 </div>
                 <Input 
-                    value={data.finalWebhookUrl || ''} 
-                    onChange={(e) => updateConfig(d => { d.finalWebhookUrl = e.target.value })}
+                    disabled
+                    value={''} 
                     placeholder="https://api.crm.com/hooks/close-ticket"
-                    className="bg-neutral-900 border-dashed border-neutral-700 text-xs text-neutral-300"
+                    className="bg-neutral-900 border-dashed border-neutral-700 text-xs text-neutral-300 opacity-30"
                 />
             </div>
         </div>

@@ -78,45 +78,45 @@ const sidebarNodeGroups = [
             { type: 'mediaMessageNode', label: 'Mensaje Multimedia', icon: <ImageIcon className="text-yellow-400" /> },
             { type: 'quickReplyNode', label: 'Respuesta Rápida', icon: <Zap className="text-purple-400" /> },
             { type: 'listMessageNode', label: 'Mensaje de Lista', icon: <Rows className="text-indigo-400" /> },
-            { type: 'pollNode', label: 'Encuesta Nativa', icon: <CheckSquare className="text-teal-400" /> },
-            { type: 'contactNode', label: 'Contacto (VCard)', icon: <Contact className="text-orange-400" /> },
-            { type: 'locationNode', label: 'Ubicación', icon: <MapPin className="text-red-400" /> },
+            { type: 'pollNode', label: 'Encuesta Nativa', icon: <CheckSquare className="text-teal-400" />, disabled: true },
+            { type: 'contactNode', label: 'Contacto (VCard)', icon: <Contact className="text-orange-400" />, disabled: true },
+            { type: 'locationNode', label: 'Ubicación', icon: <MapPin className="text-red-400" />, disabled: true },
         ]
     },
     {
         title: 'Lógica y Procesamiento',
         nodes: [
             { type: 'captureInputNode', label: 'Capturar Entrada', icon: <Edit2 className="text-cyan-400" /> },
-            { type: 'conditionNode', label: 'Condición (If/Else)', icon: <BrainCircuit className="text-amber-400" /> },
-            { type: 'setVariableNode', label: 'Asignar Variable', icon: <Variable className="text-lime-400" /> },
-            { type: 'webhookNode', label: 'Webhook', icon: <Code className="text-pink-400" /> },
-            { type: 'firestoreReadWriteNode', label: 'Consulta Firestore', icon: <Database className="text-gray-400" /> },
-            { type: 'delayNode', label: 'Espera / Delay', icon: <Clock className="text-gray-400" /> },
+            { type: 'conditionNode', label: 'Condición (If/Else)', icon: <BrainCircuit className="text-amber-400" />, disabled: true },
+            { type: 'setVariableNode', label: 'Asignar Variable', icon: <Variable className="text-lime-400" />, disabled: true },
+            { type: 'webhookNode', label: 'Webhook', icon: <Code className="text-pink-400" />, disabled: true },
+            { type: 'firestoreReadWriteNode', label: 'Consulta Firestore', icon: <Database className="text-gray-400" />, disabled: true },
+            { type: 'delayNode', label: 'Espera / Delay', icon: <Clock className="text-gray-400" />, disabled: true },
             { type: 'endNode', label: 'Fin de Flujo', icon: <StopCircle className="text-red-500" /> },
         ]
     },
     {
         title: 'Comercio y Ventas',
         nodes: [
-            { type: 'catalogNode', label: 'Catálogo de Productos', icon: <ShoppingCart className="text-green-400" /> },
-            { type: 'productNode', label: 'Producto Único/Múltiple', icon: <CreditCard className="text-green-400" /> },
-            { type: 'kambanFlowsNode', label: 'kamban Flows', icon: <Rocket className="text-green-400" /> },
-            { type: 'checkoutNode', label: 'Nodo de Pago', icon: <ThumbsUp className="text-green-400" /> },
+            { type: 'catalogNode', label: 'Catálogo de Productos', icon: <ShoppingCart className="text-green-400" />, disabled: true },
+            { type: 'productNode', label: 'Producto Único/Múltiple', icon: <CreditCard className="text-green-400" />, disabled: true },
+            { type: 'kambanFlowsNode', label: 'kamban Flows', icon: <Rocket className="text-green-400" />, disabled: true },
+            { type: 'checkoutNode', label: 'Nodo de Pago', icon: <ThumbsUp className="text-green-400" />, disabled: true },
         ]
     },
     {
         title: 'Inteligencia Artificial',
         nodes: [
-            { type: 'generativeAINode', label: 'IA Generativa (LLM)', icon: <Bot className="text-sky-400" /> },
-            { type: 'transcriptionNode', label: 'Transcripción (Audio)', icon: <Mic className="text-sky-400" /> },
-            { type: 'sentimentAnalysisNode', label: 'Análisis de Sentimiento', icon: <Smile className="text-sky-400" /> },
+            { type: 'generativeAINode', label: 'IA Generativa (LLM)', icon: <Bot className="text-sky-400" />, disabled: true },
+            { type: 'transcriptionNode', label: 'Transcripción (Audio)', icon: <Mic className="text-sky-400" />, disabled: true },
+            { type: 'sentimentAnalysisNode', label: 'Análisis de Sentimiento', icon: <Smile className="text-sky-400" />, disabled: true },
         ]
     },
     {
         title: 'Gestión y Soporte',
         nodes: [
-            { type: 'templateNode', label: 'Plantillas (Templates)', icon: <Send className="text-fuchsia-400" /> },
-            { type: 'humanHandoffNode', label: 'Transferencia a Humano', icon: <Users className="text-fuchsia-400" /> },
+            { type: 'templateNode', label: 'Plantillas (Templates)', icon: <Send className="text-fuchsia-400" />, disabled: true },
+            { type: 'humanHandoffNode', label: 'Transferencia a Humano', icon: <Users className="text-fuchsia-400" />, disabled: true },
         ]
     }
 ];
@@ -134,18 +134,28 @@ interface ChatbotCanvasProps {
     setEdges: React.Dispatch<React.SetStateAction<Edge[]>>;
 }
 
-const SidebarNode = ({ icon, label, type: nodeType, onDragStart, isCollapsed }) => {
+interface SidebarNodeProps {
+    icon: React.ReactElement;
+    label: string;
+    type: string;
+    onDragStart: (event: React.DragEvent, nodeType: string) => void;
+    isCollapsed: boolean;
+    disabled?: boolean;
+}
+
+const SidebarNode = ({ icon, label, type: nodeType, onDragStart, isCollapsed, disabled }: SidebarNodeProps) => {
     const nodeContent = (
         <div
             className={cn(
-                "flex items-center p-2 mb-0.5 rounded-md cursor-grab hover:bg-white/5 transition-colors group",
+                "flex items-center p-2 mb-0.5 rounded-md transition-all group",
+                disabled ? "opacity-30 grayscale cursor-not-allowed" : "cursor-grab hover:bg-white/5",
                 isCollapsed && "justify-center"
             )}
-            onDragStart={(event) => onDragStart(event, nodeType)}
-            draggable
+            onDragStart={disabled ? undefined : (event) => onDragStart(event, nodeType)}
+            draggable={!disabled}
         >
             <div className="text-neutral-500 group-hover:text-blue-400 transition-colors">
-                {React.cloneElement(icon, { size: 16 })}
+                {React.cloneElement(icon, { size: 16 } as any)}
             </div>
             <span className={cn("ml-2.5 text-[11px] font-bold text-neutral-400 group-hover:text-white transition-colors uppercase tracking-tight", isCollapsed && "hidden")}>
                 {label}
@@ -268,6 +278,17 @@ const ChatbotCanvas = forwardRef<ChatbotCanvasRef, ChatbotCanvasProps>(
             }
         }, [selectedNode, setNodes]);
 
+        const onNodesDelete = useCallback(
+            (deletedNodes: Node[]) => {
+                const deletedNodeIds = new Set(deletedNodes.map((n) => n.id));
+                if (selectedNode && deletedNodeIds.has(selectedNode.id)) {
+                    setSelectedNode(null);
+                    setRightSidebarOpen(false);
+                }
+            },
+            [selectedNode]
+        );
+
         const deleteNode = useCallback((nodeId: string) => {
             setNodes((nds) => nds.filter((node) => node.id !== nodeId));
             setEdges((eds) => eds.filter((edge) => edge.source !== nodeId && edge.target !== nodeId));
@@ -330,6 +351,7 @@ const ChatbotCanvas = forwardRef<ChatbotCanvasRef, ChatbotCanvasProps>(
                         onEdgeUpdate={onEdgeUpdate}
                         onNodeClick={onNodeClick}
                         onPaneClick={onPaneClick}
+                        onNodesDelete={onNodesDelete}
                         nodeTypes={nodeTypes}
                         edgeTypes={edgeTypes}
                         onInit={setReactFlowInstance}
@@ -346,6 +368,7 @@ const ChatbotCanvas = forwardRef<ChatbotCanvasRef, ChatbotCanvasProps>(
 
                 <SettingsPanel
                     selectedNode={selectedNode}
+                    allNodes={nodes}
                     updateNodeConfig={updateNodeConfig}
                     deleteNode={deleteNode}
                     isOpen={isRightSidebarOpen}

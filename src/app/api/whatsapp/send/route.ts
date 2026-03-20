@@ -37,9 +37,9 @@ export async function POST(req: Request) {
                 messageId = responseData?.result?.message_id?.toString();
 
             } else {
-                // --- Default: kamban Logic ---
-                const { sendkambanMessage } = await import('@/lib/sendProviders');
-                responseData = await sendkambanMessage(toNumber, message, { type, template });
+                // --- Default: WhatsApp Logic ---
+                const { sendWhatsAppMessage } = await import('@/lib/sendProviders');
+                responseData = await sendWhatsAppMessage(toNumber, message, { type, template });
                 messageId = responseData?.messages?.[0]?.id;
                 cleanTo = responseData?.sentTo || toNumber;
             }
@@ -54,36 +54,34 @@ export async function POST(req: Request) {
             );
         }
 
-        // 2. Log in Firestore
+        // 2. Log in Firestore (Decoupled from sending status)
         let finalCardId = cardId;
         let finalGroupId = groupId;
 
-        if (!finalCardId || !finalGroupId) {
-            // ... (Card finding logic - largely same, but needs to be platform aware if strictly needed)
-            // For now, assuming card exists or this is a response.
-            // Simplified fallback for existing cards to keep it safe.
-            // If strictly new contact from API, we might need more logic here, but for now we focus on REPLYing.
-            console.log('[Omnichannel API] Warning: No cardId provided. Logging might be incomplete if card not found.');
-            // (We can assume frontend always sends cardId for replies)
-        }
-
         if (finalCardId && finalGroupId) {
-            const cardRef = db.collection('kamban-groups').doc(finalGroupId).collection('cards').doc(finalCardId);
-
-            await cardRef.update({
-                lastMessage: message.length > 40 ? message.substring(0, 37) + '...' : message,
-                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-                // Only update contactNumberClean if it's kamban/Phone
-                ...(targetPlatform === 'kamban' ? { contactNumberClean: cleanTo } : {}),
-                messages: admin.firestore.FieldValue.arrayUnion({
-                    sender: 'agent',
-                    text: message,
-                    timestamp: new Date(),
-                    kambanMessageId: messageId || null, // rename this field in future to generic 'messageId'
-                    platform: targetPlatform
-                }),
-                unreadCount: 0,
-            });
+            try {
+                const cardRef = db.collection('kamban-groups').doc(finalGroupId).collection('cards').doc(finalCardId);
+                
+                await cardRef.update({
+                    lastMessage: message.length > 40 ? message.substring(0, 37) + '...' : message,
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                    ...(targetPlatform === 'kamban' || targetPlatform === 'whatsapp' ? { contactNumberClean: cleanTo } : {}),
+                    messages: admin.firestore.FieldValue.arrayUnion({
+                        sender: 'agent',
+                        text: message,
+                        timestamp: admin.firestore.Timestamp.now(), // More reliable Firestore Timestamp
+                        kambanMessageId: messageId || null,
+                        platform: targetPlatform
+                    }),
+                    unreadCount: 0,
+                });
+                console.log(`[Omnichannel API] Firestore log success for ${finalCardId}`);
+            } catch (logError: any) {
+                console.error('[Omnichannel API] Firestore log failed (but message was sent):', logError.message);
+                // We DON'T return 500 here because the message reached the provider
+            }
+        } else {
+            console.log('[Omnichannel API] Warning: No cardId/groupId provided. Skipping Firestore log.');
         }
 
         return NextResponse.json({
@@ -95,10 +93,10 @@ export async function POST(req: Request) {
             groupId: finalGroupId
         });
     } catch (error: any) {
-        console.error('Error sending message:', error.response?.data || error.message);
+        console.error('Fatal API Error:', error.response?.data || error.message);
         return NextResponse.json(
             {
-                error: 'Failed to send message',
+                error: 'Fatal error processing request',
                 details: error.response?.data || error.message,
             },
             { status: 500 }

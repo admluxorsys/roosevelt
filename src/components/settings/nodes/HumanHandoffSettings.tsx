@@ -21,10 +21,11 @@ interface HandoffData {
 
 interface NodeSettingsProps {
     node: Node<HandoffData>;
+    allNodes: Node[];
     updateNodeConfig: (nodeId: string, data: object) => void;
 }
 
-export const HumanHandoffSettings = ({ node, updateNodeConfig }: NodeSettingsProps) => {
+export const HumanHandoffSettings = ({ node, allNodes, updateNodeConfig }: NodeSettingsProps) => {
     const data = node.data || {};
 
     const updateConfig = useCallback((fn: (draft: HandoffData) => void) => {

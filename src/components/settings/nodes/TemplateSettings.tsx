@@ -26,10 +26,11 @@ interface TemplateData {
 
 interface NodeSettingsProps {
     node: Node<TemplateData>;
+    allNodes: Node[];
     updateNodeConfig: (nodeId: string, data: object) => void;
 }
 
-export const TemplateSettings = ({ node, updateNodeConfig }: NodeSettingsProps) => {
+export const TemplateSettings = ({ node, allNodes, updateNodeConfig }: NodeSettingsProps) => {
     const data = node.data || {};
     const [loading, setLoading] = useState(false);
 

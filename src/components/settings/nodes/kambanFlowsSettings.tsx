@@ -35,10 +35,11 @@ interface FlowData {
 
 interface NodeSettingsProps {
     node: Node<FlowData>;
+    allNodes: Node[];
     updateNodeConfig: (nodeId: string, data: object) => void;
 }
 
-export const kambanFlowsSettings = ({ node, updateNodeConfig }: NodeSettingsProps) => {
+export const kambanFlowsSettings = ({ node, allNodes, updateNodeConfig }: NodeSettingsProps) => {
     const data = node.data || {};
     const [loadingFlows, setLoadingFlows] = useState(false);
     

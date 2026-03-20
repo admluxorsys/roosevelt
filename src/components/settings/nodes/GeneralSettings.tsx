@@ -7,10 +7,11 @@ import { SettingsSection, Field } from '../SharedComponents';
 
 interface NodeSettingsProps {
     node: Node;
+    allNodes: Node[];
     updateNodeConfig: (nodeId: string, data: object) => void;
 }
 
-export const GeneralSettings = ({ node, updateNodeConfig }: NodeSettingsProps) => {
+export const GeneralSettings = ({ node, allNodes, updateNodeConfig }: NodeSettingsProps) => {
     const [nodeName, setNodeName] = useState(node.data.label || '');
 
     useEffect(() => {

@@ -126,7 +126,16 @@ function FlowPage() {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-neutral-900 text-white overflow-hidden">
+    <div className="fixed inset-0 flex flex-col h-screen bg-neutral-900 text-white overflow-hidden">
+      <style jsx global>{`
+        html, body {
+          overflow: hidden !important;
+          height: 100% !important;
+          width: 100% !important;
+          position: fixed;
+        }
+      `}</style>
+      
       {/* HEADER BAR */}
       <div className="h-14 bg-neutral-950 border-b border-neutral-800 flex items-center justify-between px-4 z-20 shrink-0">
 

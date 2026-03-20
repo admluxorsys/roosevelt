@@ -39,10 +39,11 @@ interface CheckoutData {
 
 interface NodeSettingsProps {
     node: Node<CheckoutData>;
+    allNodes: Node[];
     updateNodeConfig: (nodeId: string, data: object) => void;
 }
 
-export const CheckoutSettings = ({ node, updateNodeConfig }: NodeSettingsProps) => {
+export const CheckoutSettings = ({ node, allNodes, updateNodeConfig }: NodeSettingsProps) => {
     const data = node.data || {};
     const items = data.items || [];
 

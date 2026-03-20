@@ -19,6 +19,7 @@ interface PollOption {
 
 interface NodeSettingsProps {
     node: Node;
+    allNodes: Node[];
     updateNodeConfig: (nodeId: string, data: object) => void;
 }
 
@@ -27,7 +28,7 @@ const MAX_OPTIONS = 12;
 const MAX_OPTION_CHARS = 100;
 const MAX_QUESTION_CHARS = 1024; // Límite generoso para el body, pero buena práctica validar
 
-export const PollSettings = ({ node, updateNodeConfig }: NodeSettingsProps) => {
+export const PollSettings = ({ node, allNodes, updateNodeConfig }: NodeSettingsProps) => {
     const [config, setConfig] = useState({
         question: node.data.question || '',
         allowMultipleAnswers: node.data.allowMultipleAnswers || false,

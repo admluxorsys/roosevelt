@@ -1,6 +1,7 @@
 // src/components/settings/nodes/CaptureInputSettings.tsx
 'use client';
 import React, { useCallback } from 'react';
+import { cn } from '@/lib/utils';
 import { Node } from 'reactflow';
 import { produce } from 'immer';
 import { Input } from '@/components/ui/input';
@@ -25,6 +26,7 @@ interface CaptureInputData {
 
 interface NodeSettingsProps {
     node: Node<CaptureInputData>;
+    allNodes: Node[];
     updateNodeConfig: (nodeId: string, data: object) => void;
 }
 
@@ -37,7 +39,7 @@ const REGEX_TEMPLATES: Record<string, string> = {
     cpf: "^\\d{3}\\.\\d{3}\\.\\d{3}-\\d{2}$"
 };
 
-export const CaptureInputSettings = ({ node, updateNodeConfig }: NodeSettingsProps) => {
+export const CaptureInputSettings = ({ node, allNodes, updateNodeConfig }: NodeSettingsProps) => {
     // Estado inicial seguro
     const data = node.data || {};
 
@@ -67,6 +69,17 @@ export const CaptureInputSettings = ({ node, updateNodeConfig }: NodeSettingsPro
         updateNodeConfig(node.id, newData);
     };
 
+    const getVariableError = (name: string) => {
+        if (!name) return null;
+        if (/\s/.test(name)) return "No puede contener espacios.";
+        if (/[A-Z]/.test(name)) return "No puede contener mayúsculas.";
+        if (/\./.test(name)) return "No puede contener puntos.";
+        if (/[^a-z0-9_]/.test(name)) return "Solo se permiten letras minúsculas, números y guiones bajos (_).";
+        return null;
+    };
+
+    const varError = getVariableError(data.variableName || '');
+
     return (
         <div className="space-y-3">
             <Tabs defaultValue="validation" className="w-full">
@@ -81,20 +94,27 @@ export const CaptureInputSettings = ({ node, updateNodeConfig }: NodeSettingsPro
                         <Field
                             label="Nombre de la Variable"
                             htmlFor="variableName"
-                            description="Se guardará automáticamente en formato snake_case."
+                            description="Se utilizará para recuperar el dato en otros nodos."
                         >
-                            <div className="relative">
-                                <span className="absolute left-3 top-2.5 text-neutral-500 font-mono text-xs">@</span>
-                                <Input
-                                    id="variableName"
-                                    value={data.variableName || ''}
-                                    onChange={(e) => {
-                                        const val = e.target.value.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
-                                        updateConfig('variableName', val);
-                                    }}
-                                    placeholder="ej: email_cliente"
-                                    className="pl-7 font-mono text-purple-400 bg-neutral-900/20 border-neutral-800/50 focus:border-purple-500/50"
-                                />
+                            <div className="space-y-1.5 flex flex-col">
+                                <div className="relative">
+                                    <span className="absolute left-3 top-2.5 text-neutral-500 font-mono text-xs">@</span>
+                                    <Input
+                                        id="variableName"
+                                        value={data.variableName || ''}
+                                        onChange={(e) => updateConfig('variableName', e.target.value)}
+                                        placeholder="ej: email_cliente"
+                                        className={cn(
+                                            "pl-7 font-mono text-purple-400 bg-neutral-900/20 border-neutral-800/50 focus:border-purple-500/50",
+                                            varError && "border-red-500/50 focus:border-red-500/50 text-red-400"
+                                        )}
+                                    />
+                                </div>
+                                {varError && (
+                                    <span className="text-[10px] text-red-500 font-bold uppercase tracking-tight ml-1 animate-in fade-in slide-in-from-top-1 duration-200">
+                                        ⚠️ {varError}
+                                    </span>
+                                )}
                             </div>
                         </Field>
                     </SettingsSection>
@@ -126,15 +146,15 @@ export const CaptureInputSettings = ({ node, updateNodeConfig }: NodeSettingsPro
                                 <Field
                                     label="Expresión Regular (Regex)"
                                     htmlFor="regex"
-                                    description={data.inputType !== 'regex' ? "Autogenerado por la plantilla seleccionada." : "Define tu propia validación estricta."}
+                                    description={data.inputType !== 'regex' ? "Información: En este modo la validación es flexible." : "Define tu propia validación estricta."}
                                 >
                                     <Input
                                         id="regex"
                                         value={data.validationRegex || ''}
                                         onChange={(e) => updateConfig('validationRegex', e.target.value)}
                                         disabled={data.inputType !== 'regex'}
-                                        className="font-mono text-xs text-yellow-500 bg-neutral-950 border-neutral-800 disabled:opacity-50"
-                                        placeholder="^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$"
+                                        className="font-mono text-xs text-yellow-500 bg-neutral-950 border-neutral-800 disabled:opacity-30"
+                                        placeholder={REGEX_TEMPLATES[data.inputType || ''] || "^[\\w-\\.]+@([\\w-]+\\.)+[\\w-]{2,4}$"}
                                     />
                                 </Field>
 
@@ -143,13 +163,23 @@ export const CaptureInputSettings = ({ node, updateNodeConfig }: NodeSettingsPro
                                     htmlFor="errorMessage"
                                     description="Se enviará si la validación falla."
                                 >
-                                    <Textarea
-                                        id="errorMessage"
-                                        value={data.errorMessage || ''}
-                                        onChange={(e) => updateConfig('errorMessage', e.target.value)}
-                                        placeholder="Formato inválido. Por favor intenta de nuevo..."
-                                        className="min-h-[80px] bg-neutral-950 border-neutral-800 resize-none"
-                                    />
+                                    <div className="space-y-2">
+                                        <Textarea
+                                            id="errorMessage"
+                                            value={data.errorMessage || ''}
+                                            onChange={(e) => updateConfig('errorMessage', e.target.value)}
+                                            placeholder="Formato inválido. Por favor intenta de nuevo..."
+                                            className="min-h-[80px] bg-neutral-950 border-neutral-800 resize-none"
+                                        />
+                                        {data.inputType === 'text' && data.errorMessage && (
+                                            <div className="flex items-center gap-2 p-2 rounded-md bg-amber-500/10 border border-amber-500/20">
+                                                <AlertTriangle size={12} className="text-amber-500 shrink-0" />
+                                                <span className="text-[9px] text-amber-200/80 leading-tight">
+                                                    Nota: En "Texto Libre", este mensaje solo se enviará si la respuesta es detectada como inválida o vacía.
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
                                 </Field>
                             </div>
                         )}

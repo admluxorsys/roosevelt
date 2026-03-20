@@ -79,10 +79,11 @@ interface CatalogData {
 
 interface NodeSettingsProps {
     node: Node;
+    allNodes: Node[];
     updateNodeConfig: (nodeId: string, data: object) => void;
 }
 
-export const PlaceholderSettings = ({ node, updateNodeConfig }: NodeSettingsProps) => {
+export const PlaceholderSettings = ({ node, allNodes, updateNodeConfig }: NodeSettingsProps) => {
     
     // --- 1. LÓGICA PARA NODO DELAY ---
     if (node.type === 'delayNode') {

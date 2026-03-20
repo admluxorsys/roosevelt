@@ -6,7 +6,7 @@ import { AnimatePresence, Variants, motion } from 'framer-motion';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, collectionGroup, setDoc, doc, deleteDoc, serverTimestamp, query, where, updateDoc, addDoc, onSnapshot, orderBy } from 'firebase/firestore';
 import { Plus, Search, X, Users, RefreshCw, Filter, MoreHorizontal, ArrowLeft, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
-import ConversationModal from '../../coo/kamban/components/ConversationModal';
+import ConversationModal from '../../coo/whatsapp/components/ConversationModal';
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Badge } from '@/components/ui/badge';
@@ -38,7 +38,7 @@ const HEADER_MAPPING: { [key: string]: string[] } = {
     // --- Identity & Demographics ---
     name: ['name', 'nombre', 'fullname', 'nombre completo', 'full name', 'client', 'cliente'],
     email: ['email', 'correo', 'mail', 'digital mail', 'correo electrónico'],
-    phone: ['phone', 'teléfono', 'telefono', 'tel', 'celular', 'mobile', 'kamban', 'direct line', 'contactnumber'],
+    phone: ['phone', 'teléfono', 'telefono', 'tel', 'celular', 'mobile', 'whatsapp', 'direct line', 'contactnumber'],
     birthDate: ['birthdate', 'fecha de nacimiento', 'fecha nacimiento', 'nacimiento', 'cumpleaños', 'dob'],
     gender: ['gender', 'género', 'genero', 'sexo', 'sex', 'sexualidad'],
     maritalStatus: ['maritalstatus', 'estado civil', 'civil status', 'situación civil'],
@@ -138,12 +138,29 @@ export default function ContactsPage() {
     const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
     const [isMounted, setIsMounted] = useState(false);
     const [isLoadingContacts, setIsLoadingContacts] = useState(false);
+
+    // Add keyboard listener for Command+K
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+                e.preventDefault();
+                const searchInput = document.getElementById('crm-search-input');
+                if (searchInput) {
+                    searchInput.focus();
+                }
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, []);
     const [newTag, setNewTag] = useState('');
     const [isAddingTag, setIsAddingTag] = useState(false);
     const [isSyncing, setIsSyncing] = useState(false);
     const [isDuplicateManagerOpen, setIsDuplicateManagerOpen] = useState(false);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [deleteTarget, setDeleteTarget] = useState<{ type: 'single' | 'bulk', id?: string }>({ type: 'single' });
+    const [currentView, setCurrentView] = useState<'all' | 'Prospecting' | 'In Progress' | 'Closed'>('all');
 
     // Handle client-side mounting and localStorage
     useEffect(() => {
@@ -156,16 +173,27 @@ export default function ContactsPage() {
         }
     }, []);
     const [syncStatus, setSyncStatus] = useState('');
+    
+    // Auto-hide sync status after 10 seconds
+    useEffect(() => {
+        if (syncStatus) {
+            const timer = setTimeout(() => {
+                setSyncStatus('');
+            }, 10000);
+            return () => clearTimeout(timer);
+        }
+    }, [syncStatus]);
+
     const [isEditingProfile, setIsEditingProfile] = useState(false);
     const [isChatOpen, setIsChatOpen] = useState(false);
 
-    // --- kamban SYNC LOGIC (Added for ConversationModal consistency) ---
+    // --- KANBAN SYNC LOGIC (Added for ConversationModal consistency) ---
     const [groups, setGroups] = useState<any[]>([]);
     const [allCards, setAllCards] = useState<any[]>([]);
     const [activeCard, setActiveCard] = useState<any>(null); // To pass to modal
 
     useEffect(() => {
-        const groupsQuery = query(collection(db, 'kamban-groups'), orderBy("order", "asc"));
+        const groupsQuery = query(collection(db, 'kanban-groups'), orderBy("order", "asc"));
         const unsubscribe = onSnapshot(groupsQuery, (snapshot) => {
             const groupsFromDb = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
             setGroups(groupsFromDb);
@@ -178,7 +206,7 @@ export default function ContactsPage() {
         const unsubscribe = onSnapshot(cardsQuery, (snapshot) => {
             const allCardsFromDb = snapshot.docs.map(doc => {
                 // Use Regex to safely extract groupId from path
-                const match = doc.ref.path.match(/kamban-groups\/([^\/]+)\/cards/);
+                const match = doc.ref.path.match(/kanban-groups\/([^\/]+)\/cards/);
                 const groupId = match ? match[1] : undefined;
                 return { ...doc.data(), id: doc.id, groupId: groupId };
             });
@@ -543,7 +571,7 @@ export default function ContactsPage() {
         };
         reader.readAsArrayBuffer(file);
     };
-    const handleSynckambanContacts = async () => {
+    const handleSyncWhatsAppContacts = async () => {
         setIsSyncing(true);
         setSyncStatus('Iniciando sincronización inteligente...');
         try {
@@ -572,7 +600,7 @@ export default function ContactsPage() {
                 const cardGroup = phoneToCardsMap[phone];
                 let primaryCard = cardGroup[0];
 
-                // --- AUTO MERGE kamban CARDS IF MULTIPLE EXIST ---
+                // --- AUTO MERGE KANBAN CARDS IF MULTIPLE EXIST ---
                 if (cardGroup.length > 1) {
                     setSyncStatus(`Fusionando ${cardGroup.length} tarjetas para ${phone}...`);
                     // Sort by message count to pick best primary
@@ -621,7 +649,7 @@ export default function ContactsPage() {
                 const contactData: any = {
                     name: primaryCard.contactName || 'Sin Nombre',
                     email: primaryCard.email || '',
-                    source: 'kamban',
+                    source: 'WhatsApp',
                     stage: 'In Progress',
                     lastUpdated: serverTimestamp(),
                 };
@@ -646,7 +674,7 @@ export default function ContactsPage() {
                         ...contactData,
                         phone: phone,
                         id: primaryCard.id,
-                        importedFrom: 'kamban-kamban',
+                        importedFrom: 'whatsapp-kanban',
                         importedAt: serverTimestamp(),
                         date: new Date().toISOString().split('T')[0],
                         tags: primaryCard.tags || [],
@@ -876,6 +904,18 @@ export default function ContactsPage() {
         } catch (error) { toast.error("Error al actualizar."); }
     };
 
+    const handleOpenDetails = (contact: any) => {
+        setSelectedContact(contact);
+        setIsChatOpen(false);
+        setIsDetailModalOpen(true);
+        setIsEditingProfile(false);
+    };
+
+    const handleOpenChat = (contact: any) => {
+        setIsDetailModalOpen(false);
+        handleContactClick(contact);
+    };
+
     const handleDeleteContact = async (id: string) => {
         setDeleteTarget({ type: 'single', id });
         setIsDeleteDialogOpen(true);
@@ -884,17 +924,47 @@ export default function ContactsPage() {
     const confirmDelete = async () => {
         try {
             if (deleteTarget.type === 'single' && deleteTarget.id) {
+                // Find phone number to delete cards
+                const contactToDelete = contacts.find(c => c.id === deleteTarget.id);
+                const phone = contactToDelete?.phone;
+
+                // 1. Delete CRM Contact
                 await deleteDoc(doc(db, 'contacts', deleteTarget.id));
+                
+                // 2. Delete associated Kanban Cards
+                if (phone) {
+                    const cardsQuery = query(collectionGroup(db, 'cards'), where('contactNumber', '==', phone));
+                    const cardsSnapshot = await getDocs(cardsQuery);
+                    const cardDeletions = cardsSnapshot.docs.map(d => deleteDoc(d.ref));
+                    await Promise.all(cardDeletions);
+                }
+
                 setContacts(contacts.filter(c => c.id !== deleteTarget.id));
                 setSelectedContactIds(prev => prev.filter(selectedId => selectedId !== deleteTarget.id));
-                toast.success("Contacto eliminado");
+                toast.success("Contacto e instancias eliminados");
             } else if (deleteTarget.type === 'bulk') {
-                const batchPromises = selectedContactIds.map(id => deleteDoc(doc(db, 'contacts', id)));
-                await Promise.all(batchPromises);
+                const results: any[] = [];
+                for (const id of selectedContactIds) {
+                    const contact = contacts.find(c => c.id === id);
+                    const phone = contact?.phone;
+                    
+                    // Delete CRM Doc
+                    results.push(deleteDoc(doc(db, 'contacts', id)));
+                    
+                    // Delete Cards
+                    if (phone) {
+                        const q = query(collectionGroup(db, 'cards'), where('contactNumber', '==', phone));
+                        const snap = await getDocs(q);
+                        snap.docs.forEach(d => results.push(deleteDoc(d.ref)));
+                    }
+                }
+                
+                await Promise.all(results);
                 setContacts(contacts.filter(c => !selectedContactIds.includes(c.id)));
                 setSelectedContactIds([]);
-                toast.success(`${selectedContactIds.length} contactos eliminados`);
+                toast.success(`${selectedContactIds.length} contactos e instancias eliminados`);
             }
+            setIsDeleteDialogOpen(false); // Close dialog on success
         } catch (error) {
             console.error("Error deleting:", error);
             toast.error("Error al eliminar.");
@@ -936,6 +1006,7 @@ export default function ContactsPage() {
         if (associatedCard) {
             setActiveCard(associatedCard);
             setIsChatOpen(true);
+            setIsDetailModalOpen(false); // Mutual exclusivity
         } else {
             // If no card exists, valid strategy: 
             // 1. Option A: Create a temp card object (visual only)
@@ -960,17 +1031,37 @@ export default function ContactsPage() {
             };
             setActiveCard(mockCard);
             setIsChatOpen(true);
+            setIsDetailModalOpen(false); // Mutual exclusivity
 
             // Ideally: The user should send a template to start.
         }
     };
 
     const filteredContacts = contacts.filter(c => {
-        const matchesSearch = c.name.toLowerCase().includes(searchQuery.toLowerCase()) || (c.email || '').toLowerCase().includes(searchQuery.toLowerCase()) || (c.phone || '').includes(searchQuery);
+        const name = (c.name || '').toLowerCase();
+        const email = (c.email || '').toLowerCase();
+        const phone = (c.phone || '').replace(/\D/g, '');
+        const query = searchQuery.toLowerCase();
+        
+        const id = (c.id || '').toLowerCase();
+        const source = (c.source || '').toLowerCase();
+        const phoneRaw = (c.phone || '').replace(/\D/g, '');
+        const queryDigits = query.replace(/\D/g, '');
+
+        const matchesSearch = !query || 
+            name.includes(query) || 
+            email.includes(query) || 
+            phoneRaw.includes(queryDigits || query) || 
+            (c.phone || '').toLowerCase().includes(query) ||
+            id.includes(query) || 
+            source.includes(query);
+
         const matchesStage = selectedStages.length === 0 || selectedStages.includes(c.stage);
         const matchesSource = selectedSources.length === 0 || selectedSources.includes(c.source);
         const matchesTags = selectedTags.length === 0 || (c.tags && c.tags.some((tag: string) => selectedTags.includes(tag)));
-        return matchesSearch && matchesStage && matchesSource && matchesTags;
+        const matchesView = currentView === 'all' || c.stage === currentView;
+        
+        return matchesSearch && matchesStage && matchesSource && matchesTags && matchesView;
     });
 
     const availableStages = Array.from(new Set(contacts.map(c => c.stage).filter(Boolean)));
@@ -1013,7 +1104,7 @@ export default function ContactsPage() {
                 <main className="flex-1 overflow-y-auto scrollbar-hide custom-scrollbar p-6 space-y-6">
                     <ContactHeader
                         isChatOpen={isChatOpen}
-                        handleSynckambanContacts={handleSynckambanContacts}
+                        handleSynckambanContacts={handleSyncWhatsAppContacts}
                         isSyncing={isSyncing}
                         isImportModalOpen={isImportModalOpen}
                         setIsImportModalOpen={setIsImportModalOpen}
@@ -1027,10 +1118,25 @@ export default function ContactsPage() {
                     />
 
                     {syncStatus && (
-                        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="p-4 bg-blue-600/10 border border-blue-500/30 rounded-lg text-blue-400 font-medium text-sm">
-                            {syncStatus}
+                        <motion.div 
+                            initial={{ opacity: 0, y: -10 }} 
+                            animate={{ opacity: 1, y: 0 }} 
+                            className="p-4 bg-blue-600/10 border border-blue-500/30 rounded-lg text-blue-400 font-medium text-sm flex justify-between items-center"
+                        >
+                            <div className="flex items-center gap-2">
+                                <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
+                                {syncStatus}
+                            </div>
+                            <button 
+                                onClick={() => setSyncStatus('')}
+                                className="p-1 hover:bg-blue-500/10 rounded transition-colors"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
                         </motion.div>
                     )}
+
+
 
                     <div className="bg-neutral-900/40 border border-white/5 rounded-xl p-4">
                         <ContactFilters
@@ -1055,6 +1161,8 @@ export default function ContactsPage() {
                             filteredCount={filteredContacts.length}
                             selectedCount={selectedContactIds.length}
                             handleBulkDelete={handleBulkDelete}
+                            currentView={currentView}
+                            setCurrentView={setCurrentView}
                         />
                     </div>
 
@@ -1074,9 +1182,10 @@ export default function ContactsPage() {
                                     containerVariants={containerVariants}
                                     itemVariants={itemVariants}
                                     isChatOpen={isChatOpen}
-                                    handleContactClick={handleContactClick}
+                                    handleContactClick={handleOpenChat}
                                     setSelectedContact={setSelectedContact}
                                     setIsDetailModalOpen={setIsDetailModalOpen}
+                                    handleOpenDetails={handleOpenDetails}
                                     setIsEditingProfile={setIsEditingProfile}
                                     handleDeleteContact={handleDeleteContact}
                                     selectedContactIds={selectedContactIds}
@@ -1088,9 +1197,10 @@ export default function ContactsPage() {
                                     contacts={filteredContacts}
                                     containerVariants={containerVariants}
                                     itemVariants={itemVariants}
-                                    handleContactClick={handleContactClick}
+                                    handleContactClick={handleOpenChat}
                                     setSelectedContact={setSelectedContact}
                                     setIsDetailModalOpen={setIsDetailModalOpen}
+                                    handleOpenDetails={handleOpenDetails}
                                     setIsEditingProfile={setIsEditingProfile}
                                     handleDeleteContact={handleDeleteContact}
                                     selectedContactIds={selectedContactIds}
@@ -1107,10 +1217,10 @@ export default function ContactsPage() {
                 isOpen={isChatOpen}
                 onClose={() => setIsChatOpen(false)}
                 card={selectedContact ? {
-                    id: `temp-${selectedContact.id}`, // Temporary ID until real kamban card is found
+                    id: `temp-${selectedContact.id}`, // Temporary ID until real Kanban card is found
                     contactName: selectedContact.name,
                     contactNumber: selectedContact.phone,
-                    // Don't pass the CRM contact ID as card.id - let the hook find the real kamban card
+                    // Don't pass the CRM contact ID as card.id - let the hook find the real Kanban card
                 } : null}
                 groups={[]}
                 allConversations={contacts.map(c => ({ id: c.id, contactName: c.name, contactNumber: c.phone }))}
@@ -1174,4 +1284,3 @@ export default function ContactsPage() {
         </div>
     );
 }
-

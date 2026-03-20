@@ -20,10 +20,11 @@ interface PhoneEntry {
 
 interface NodeSettingsProps {
     node: Node;
+    allNodes: Node[];
     updateNodeConfig: (nodeId: string, data: object) => void;
 }
 
-export const ContactSettings = ({ node, updateNodeConfig }: NodeSettingsProps) => {
+export const ContactSettings = ({ node, allNodes, updateNodeConfig }: NodeSettingsProps) => {
     const [config, setConfig] = useState({
         firstName: node.data.firstName || '',
         lastName: node.data.lastName || '',

@@ -33,12 +33,12 @@ export default function InboxSidebar({ selectedFolder, setSelectedFolder, cards 
     ];
 
     const channels = [
-        { id: 'kamban1', label: 'kamban Main', type: 'kamban' },
+        { id: 'whatsapp1', label: 'WhatsApp Main', type: 'whatsapp' },
         { id: 'ig1', label: 'Instagram CS', type: 'instagram' },
     ];
 
     return (
-        <div className="w-[190px] bg-[#0a0a0a] border-r border-neutral-900 flex flex-col h-full flex-shrink-0 select-none">
+        <div className="w-52 bg-[#0a0a0a] border-r border-neutral-900 flex flex-col h-full flex-shrink-0 select-none">
             {/* Header / Brand */}
             <div className="h-12 flex items-center px-3 border-b border-neutral-900">
                 <div className="w-5 h-5 bg-blue-600 rounded mr-2 flex items-center justify-center">
@@ -149,4 +149,3 @@ export default function InboxSidebar({ selectedFolder, setSelectedFolder, cards 
         </div>
     );
 }
-

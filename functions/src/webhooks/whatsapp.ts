@@ -1,7 +1,7 @@
 import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
 import { handleKanbanUpdateOmni, updateReadStatus } from '../helpers/kanbanOmni';
-import { getActiveBot, executeBotFlow } from '../helpers/botEngine';
+import { getActiveBot, executeBotFlow, resolveCardRef } from '../helpers/botEngine';
 import { UnifiedMessage } from '../types/message';
 
 const FORTY_EIGHT_HOURS_IN_MS = 48 * 60 * 60 * 1000;
@@ -140,50 +140,57 @@ export const whatsappWebhook = functions.https.onRequest(async (req: functions.h
 
             // 3. Ejecutar Bot
             // Fetch complete card data to check bot state
-            const db = admin.firestore();
-            // We need to find the card. If handleKanbanUpdateOmni returned cardId, we can find it directly.
-            // Since cardId is unique in the subcollection, but we don't know the Group ID easily without querying or returning it.
-            // But wait, handleKanbanUpdateOmni creates it, so we can find it.
+            const cardRef = await resolveCardRef(from);
 
-            // To be safe and fast, let's query by ID across groups
-            const cardQuery = db.collectionGroup('cards').where('platform_ids.whatsapp', '==', from).limit(1);
-            const cardSnap = await cardQuery.get();
-
-            if (!cardSnap.empty) {
-                const cardDoc = cardSnap.docs[0];
-                const cardData = { id: cardDoc.id, ...cardDoc.data() } as any;
+            if (cardRef) {
+                const cardSnap = await cardRef.get();
+                const cardData = { id: cardRef.id, ...cardSnap.data() } as any;
 
                 const activeBot = await getActiveBot();
                 if (activeBot) {
                     const now = new Date();
-                    let shouldRestart = false;
+                    
+                    const input = body.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                    const isCommand = input === 'reinicia todo ahora' || input === 'reiniciar' || input === 'reset';
+                    
+                    const botStatus = cardData.botState?.status || 'none';
+                    let shouldTrigger = false;
 
-                    if (isNew) {
-                        shouldRestart = true;
+                    // --- LIFECYCLE TRIGGER CONDITIONS ---
+                    if (isCommand) {
+                        shouldTrigger = true;
+                    } else if (botStatus === 'completed') {
+                        functions.logger.info(`[Lifecycle] Session is completed for ${from}, skipping bot execution.`);
+                        shouldTrigger = false;
+                    } else if (isNew || botStatus === 'none') {
+                        shouldTrigger = true;
+                    } else if (botStatus === 'active') {
+                        shouldTrigger = true;
                     } else if (cardData.botState?.lastInteraction) {
-                        const lastInteraction = cardData.botState.lastInteraction.toDate
-                            ? cardData.botState.lastInteraction.toDate()
-                            : new Date(0);
-                        if ((now.getTime() - lastInteraction.getTime()) > FORTY_EIGHT_HOURS_IN_MS) {
-                            shouldRestart = true;
+                        const lastInt = cardData.botState.lastInteraction.toDate ? cardData.botState.lastInteraction.toDate() : new Date(0);
+                        if ((now.getTime() - lastInt.getTime()) > FORTY_EIGHT_HOURS_IN_MS) {
+                            shouldTrigger = true;
                         }
-                    } else if (!cardData.botState) {
-                        shouldRestart = true;
                     }
 
-                    if (shouldRestart || cardData.botState?.status === 'active') {
-                        if (shouldRestart) {
-                            // Reset bot state in DB
-                            await cardDoc.ref.update({ botState: admin.firestore.FieldValue.delete() });
+                    if (shouldTrigger) {
+                        // Reset state if it's starting a fresh session from none
+                        const needsReset = isNew || botStatus === 'none';
+                        
+                        if (needsReset && cardData.botState) {
+                            functions.logger.info(`[Webhook] Resetting bot state for ${from} (Reason: New/None Session)`);
+                            await cardRef.update({ botState: admin.firestore.FieldValue.delete() });
                             delete cardData.botState;
                         }
-                        await executeBotFlow(activeBot, from, cardData, body);
+                        
+                        await executeBotFlow(activeBot, from, cardData, body, message.id, { mediaUrl, type: msgType });
                     }
+                } else {
+                    functions.logger.warn(`[Webhook] No active chatbot found in DB for ${from}. Skipping bot execution.`);
                 }
             } else {
-                functions.logger.error(`[Bot Error] Could not find card ${cardId} after creation/update.`);
+                functions.logger.error(`[Bot Error] Could not find card for ${from} after creation/update.`);
             }
-
         } catch (error) {
             functions.logger.error('Error in whatsappWebhook processing:', error);
         }

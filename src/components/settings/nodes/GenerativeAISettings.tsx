@@ -33,10 +33,11 @@ interface GenAIData {
 
 interface NodeSettingsProps {
     node: Node<GenAIData>;
+    allNodes: Node[];
     updateNodeConfig: (nodeId: string, data: object) => void;
 }
 
-export const GenerativeAISettings = ({ node, updateNodeConfig }: NodeSettingsProps) => {
+export const GenerativeAISettings = ({ node, allNodes, updateNodeConfig }: NodeSettingsProps) => {
     const data = node.data || {};
 
     const updateConfig = useCallback((fn: (draft: GenAIData) => void) => {

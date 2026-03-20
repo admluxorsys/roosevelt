@@ -36,10 +36,11 @@ interface SetVariableData {
 
 interface NodeSettingsProps {
     node: Node<SetVariableData>;
+    allNodes: Node[];
     updateNodeConfig: (nodeId: string, data: object) => void;
 }
 
-export const SetVariableSettings = ({ node, updateNodeConfig }: NodeSettingsProps) => {
+export const SetVariableSettings = ({ node, allNodes, updateNodeConfig }: NodeSettingsProps) => {
     const data = node.data || {};
 
     const updateConfig = useCallback((path: keyof SetVariableData, value: any) => {

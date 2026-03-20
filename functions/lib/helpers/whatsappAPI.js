@@ -11,13 +11,14 @@ const functions = require("firebase-functions");
 const axios_1 = require("axios");
 const whatsappConfig = functions.config().whatsapp;
 // Updated with user provided keys as primary or fallback
-const accessToken = (whatsappConfig === null || whatsappConfig === void 0 ? void 0 : whatsappConfig.access_token) || 'EAARnTi3ZAPNYBQFC70F28fb9MispCQZAVtfnHhmPsdZBNqyWQZBcA3bE7pU4430ZBzDJxEoHZAbmUD2EWOxZBS9aRirmHvM5luC6U03sIz752oracncCSZCb9WPOtaLaIcAiXkytFuFPF5AuJrmoLvB6leQ09wyOWNfS217JjNZAvjYYxjfEZCtvfxyZChGBkWzZBQZDZD';
+const accessToken = (whatsappConfig === null || whatsappConfig === void 0 ? void 0 : whatsappConfig.access_token) || '';
 const phoneNumberId = (whatsappConfig === null || whatsappConfig === void 0 ? void 0 : whatsappConfig.phone_number_id) || '676837795516836';
 function cleanNumber(phone) {
     return phone.replace(/\D/g, ''); // Solo números, quita el '+'
 }
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 async function makeWhatsAppRequest(data, type) {
-    var _a, _b, _c;
+    var _a, _b, _c, _d;
     // Priority: Cloud Config > Environment Variables
     const apiToken = ((_a = functions.config().whatsapp) === null || _a === void 0 ? void 0 : _a.access_token) || process.env.WHATSAPP_ACCESS_TOKEN || accessToken;
     const phoneId = ((_b = functions.config().whatsapp) === null || _b === void 0 ? void 0 : _b.phone_number_id) || process.env.WHATSAPP_PHONE_NUMBER_ID || phoneNumberId;
@@ -26,22 +27,36 @@ async function makeWhatsAppRequest(data, type) {
         throw new Error('WhatsApp API credentials are not configured.');
     }
     const url = `https://graph.facebook.com/v19.0/${phoneId}/messages`;
-    try {
-        const response = await axios_1.default.post(url, data, {
-            headers: { 'Authorization': `Bearer ${apiToken}`, 'Content-Type': 'application/json' },
-        });
-        functions.logger.info(`✅ [WhatsApp API] ${type} success`, { recipient: data.to });
-        return response.data;
+    let lastError = null;
+    const MAX_ATTEMPTS = 3;
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+        try {
+            const response = await axios_1.default.post(url, data, {
+                headers: { 'Authorization': `Bearer ${apiToken}`, 'Content-Type': 'application/json' },
+            });
+            functions.logger.info(`✅ [WhatsApp API] ${type} success (Attempt ${attempt})`, { recipient: data.to });
+            return response.data;
+        }
+        catch (error) {
+            lastError = ((_c = error.response) === null || _c === void 0 ? void 0 : _c.data) || error.message;
+            // Only retry on potential transient errors (5xx or 429)
+            const status = (_d = error.response) === null || _d === void 0 ? void 0 : _d.status;
+            const isTransient = status === 429 || (status >= 500 && status <= 599);
+            if (isTransient && attempt < MAX_ATTEMPTS) {
+                const waitTime = Math.pow(2, attempt) * 1000; // 2s, 4s
+                functions.logger.warn(`⚠️ [WhatsApp API] ${type} failed (Attempt ${attempt}/${MAX_ATTEMPTS}). Retrying in ${waitTime}ms...`, { error: lastError });
+                await sleep(waitTime);
+                continue;
+            }
+            functions.logger.error(`❌ [WhatsApp API] Error (${type}) on attempt ${attempt}:`, {
+                error: lastError,
+                payload: data,
+                url: url.replace(phoneId, 'HIDDEN_ID')
+            });
+            break;
+        }
     }
-    catch (error) {
-        const errorData = ((_c = error.response) === null || _c === void 0 ? void 0 : _c.data) || error.message;
-        functions.logger.error(`❌ [WhatsApp API] Error (${type}):`, {
-            error: errorData,
-            payload: data,
-            url: url.replace(phoneId, 'HIDDEN_ID')
-        });
-        throw new Error(`WhatsApp API Error: ${JSON.stringify(errorData)}`);
-    }
+    throw new Error(`WhatsApp API Error after ${MAX_ATTEMPTS} attempts: ${JSON.stringify(lastError)}`);
 }
 async function markAsRead(messageId) {
     if (!messageId)
@@ -52,11 +67,19 @@ async function markAsRead(messageId) {
         message_id: messageId
     }, 'MarkAsRead');
 }
-async function sendMessage(to, message) {
+async function sendMessage(to, message, options) {
     if (!message)
         return;
     const cleanTo = cleanNumber(to);
-    return await makeWhatsAppRequest({ messaging_product: 'whatsapp', to: cleanTo, text: { body: message } }, 'Text');
+    const payload = {
+        messaging_product: 'whatsapp',
+        to: cleanTo,
+        text: { body: message }
+    };
+    if (options === null || options === void 0 ? void 0 : options.preview_url) {
+        payload.text.preview_url = true;
+    }
+    return await makeWhatsAppRequest(payload, 'Text');
 }
 async function sendMediaMessage(to, fileUrl, caption = '', fileName = 'file') {
     const mediaType = getMediaType(fileUrl, fileName);
@@ -70,7 +93,7 @@ async function sendMediaMessage(to, fileUrl, caption = '', fileName = 'file') {
         [mediaType]: { link: fileUrl, caption: caption }
     }, 'Media');
 }
-async function sendButtonMessage(to, bodyText, buttons) {
+async function sendButtonMessage(to, bodyText, buttons, header) {
     const validButtons = buttons.slice(0, 3).map((btn, i) => {
         const id = (btn.id || `btn_${i}`).substring(0, 256);
         const title = (btn.title || "Opción").substring(0, 20);
@@ -81,15 +104,28 @@ async function sendButtonMessage(to, bodyText, buttons) {
     });
     if (validButtons.length === 0)
         return;
+    const interactive = {
+        type: 'button',
+        body: { text: bodyText.substring(0, 1024) },
+        action: { buttons: validButtons }
+    };
+    // Add optional header if provided
+    if (header && header.type !== 'none') {
+        if (header.type === 'text' && header.text) {
+            interactive.header = { type: 'text', text: header.text.substring(0, 60) };
+        }
+        else if (['image', 'video', 'document'].includes(header.type) && header.url) {
+            interactive.header = {
+                type: header.type,
+                [header.type]: { link: header.url }
+            };
+        }
+    }
     const payload = {
         messaging_product: 'whatsapp',
         to: cleanNumber(to),
         type: 'interactive',
-        interactive: {
-            type: 'button',
-            body: { text: bodyText.substring(0, 1024) },
-            action: { buttons: validButtons }
-        }
+        interactive
     };
     await makeWhatsAppRequest(payload, 'Buttons');
 }
@@ -141,11 +177,11 @@ function getMediaType(url, fileName) {
     const ext = (_a = (fileName.includes('.') ? fileName.split('.').pop() : url.split('.').pop())) === null || _a === void 0 ? void 0 : _a.toLowerCase();
     if (['jpg', 'jpeg', 'png', 'webp'].includes(ext || ''))
         return 'image';
-    if (['pdf', 'doc', 'docx', 'xls', 'xlsx'].includes(ext || ''))
+    if (['pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt', 'csv'].includes(ext || ''))
         return 'document';
-    if (['mp4', '3gp'].includes(ext || ''))
+    if (['mp4', '3gp', 'mov', 'avi', 'mkv'].includes(ext || ''))
         return 'video';
-    if (['mp3', 'aac', 'ogg'].includes(ext || ''))
+    if (['mp3', 'aac', 'ogg', 'wav', 'm4a'].includes(ext || ''))
         return 'audio';
     return 'image';
 }

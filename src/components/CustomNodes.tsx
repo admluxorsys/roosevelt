@@ -6,7 +6,7 @@ import {
     MessageSquare, Edit2, Zap, AlertTriangle, CheckCircle, Code, Variable,
     StopCircle, Rows, ImageIcon, CheckSquare, Contact, MapPin, BrainCircuit,
     Database, Clock, ShoppingCart, CreditCard, Rocket, Mic, Smile, Users, ThumbsUp, Send, Bot,
-    Mail, Phone, Calendar
+    Mail, Phone, Calendar, FileText, Video
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
@@ -164,25 +164,74 @@ export const ListMessageNode = ({ data = {} }: NodeProps) => (
     </NodeWrapper>
 );
 
-export const MediaMessageNode = ({ data = {} }: NodeProps) => (
-    <NodeWrapper header="Mensaje Multimedia" icon={<ImageIcon size={16} className="text-yellow-400" />} label={data.label} color="border-yellow-500">
-        <p className="text-xs text-neutral-400">{data.url ? 'Archivo:' : 'Envía una imagen, video o documento.'}</p>
-        {data.url && (
-            <div className="space-y-2">
-                <p className="text-[10px] text-yellow-300 truncate bg-yellow-900/50 px-2 py-1 rounded-md border border-yellow-900/30">
-                    {data.filename || data.url}
-                </p>
-                {data.caption && (
-                    <p className="text-[10px] italic text-neutral-400 line-clamp-2 px-1">
-                        "{data.caption}"
+export const MediaMessageNode = ({ data = {} }: NodeProps) => {
+    const isImage = data.mediaType === 'image' || (data.url && /\.(jpg|jpeg|png|gif|webp)/i.test(data.url));
+    const isVideo = data.mediaType === 'video' || (data.url && /\.(mp4|webm|ogg)/i.test(data.url));
+    const isAudio = data.mediaType === 'audio' || (data.url && /\.(mp3|wav|ogg)/i.test(data.url));
+
+    const getIcon = () => {
+        if (isImage) return <ImageIcon size={16} className="text-yellow-400" />;
+        if (isVideo) return <Video size={16} className="text-red-400" />;
+        if (isAudio) return <Mic size={16} className="text-blue-400" />;
+        return <FileText size={16} className="text-neutral-400" />;
+    };
+
+    return (
+        <NodeWrapper 
+            header="Mensaje Multimedia" 
+            icon={getIcon()} 
+            label={data.label} 
+            color="border-yellow-500"
+        >
+            <div className="space-y-3">
+                {!data.url ? (
+                    <p className="text-[10px] text-neutral-500 italic text-center py-2 border border-dashed border-neutral-800 rounded-lg">
+                        Sin archivo seleccionado
                     </p>
+                ) : (
+                    <>
+                        {isImage && data.url && (
+                            <div className="relative group overflow-hidden rounded-lg border border-white/5 shadow-inner bg-neutral-900">
+                                <img 
+                                    src={data.url} 
+                                    alt="Preview" 
+                                    className="w-full h-24 object-cover opacity-80 group-hover:opacity-100 transition-opacity duration-300"
+                                    onError={(e) => {
+                                        (e.target as HTMLImageElement).style.display = 'none';
+                                    }}
+                                />
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                            </div>
+                        )}
+                        
+                        <div className="flex items-center gap-2 p-2 rounded-lg bg-neutral-900/80 border border-white/5 group hover:border-yellow-500/30 transition-colors">
+                            <div className="shrink-0">
+                                {isImage ? <ImageIcon size={14} className="text-yellow-500/70" /> : 
+                                 isVideo ? <Video size={14} className="text-red-500/70" /> :
+                                 isAudio ? <Mic size={14} className="text-blue-500/70" /> :
+                                 <FileText size={14} className="text-neutral-500" />}
+                            </div>
+                            <p className="text-[9px] font-medium text-neutral-300 truncate flex-1">
+                                {data.filename || 'Archivo sin nombre'}
+                            </p>
+                        </div>
+                    </>
+                )}
+
+                {data.caption && (
+                    <div className="relative pt-1">
+                        <div className="absolute left-0 top-1 bottom-0 w-0.5 bg-yellow-500/40 rounded-full" />
+                        <p className="text-[10px] text-neutral-400 leading-relaxed pl-3 italic">
+                            "{data.caption}"
+                        </p>
+                    </div>
                 )}
             </div>
-        )}
-        <HandleStyled type="target" position={Position.Left} />
-        <HandleStyled type="source" position={Position.Right} />
-    </NodeWrapper>
-);
+            <HandleStyled type="target" position={Position.Left} />
+            <HandleStyled type="source" position={Position.Right} />
+        </NodeWrapper>
+    );
+};
 
 export const ConditionNode = ({ data = {} }: NodeProps) => (
     <NodeWrapper header="Condición" icon={<BrainCircuit size={16} className="text-amber-400" />} label={data.label} color="border-amber-500">

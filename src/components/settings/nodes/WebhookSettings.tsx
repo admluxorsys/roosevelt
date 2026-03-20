@@ -15,10 +15,11 @@ interface WebhookData {
 
 interface NodeSettingsProps {
     node: Node<WebhookData>;
+    allNodes: Node[];
     updateNodeConfig: (nodeId: string, data: object) => void;
 }
 
-export const WebhookSettings = ({ node, updateNodeConfig }: NodeSettingsProps) => {
+export const WebhookSettings = ({ node, allNodes, updateNodeConfig }: NodeSettingsProps) => {
     const data = node.data || {};
 
     const updateConfig = useCallback((path: keyof WebhookData, value: any) => {

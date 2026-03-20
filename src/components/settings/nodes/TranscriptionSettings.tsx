@@ -20,10 +20,11 @@ interface TranscriptionData {
 
 interface NodeSettingsProps {
     node: Node<TranscriptionData>;
+    allNodes: Node[];
     updateNodeConfig: (nodeId: string, data: object) => void;
 }
 
-export const TranscriptionSettings = ({ node, updateNodeConfig }: NodeSettingsProps) => {
+export const TranscriptionSettings = ({ node, allNodes, updateNodeConfig }: NodeSettingsProps) => {
     const data = node.data || {};
 
     const updateConfig = useCallback((fn: (draft: TranscriptionData) => void) => {

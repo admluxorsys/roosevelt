@@ -4,7 +4,6 @@ import React from 'react';
 import { Node } from 'reactflow';
 import { Button } from './ui/button';
 import { Trash2, ChevronRight, ChevronLeft, Bot } from 'lucide-react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from '@/lib/utils';
 import { GeneralSettings } from './settings/nodes/GeneralSettings';
 import { TextMessageSettings } from './settings/nodes/TextMessageSettings';
@@ -22,7 +21,8 @@ import { LocationSettings } from './settings/nodes/LocationSettings';
 import { PlaceholderSettings } from './settings/nodes/PlaceholderSettings';
 import { kambanFlowsSettings } from './settings/nodes/kambanFlowsSettings';
 import { CheckoutSettings } from './settings/nodes/CheckoutSettings';
-import { StartSettings } from './settings/nodes/StartSettings'; // Importado
+import { StartSettings } from './settings/nodes/StartSettings'; 
+import { DelaySettings } from './settings/nodes/DelaySettings';
 
 // Nuevos Nodos AI & Management
 import { GenerativeAISettings } from './settings/nodes/GenerativeAISettings';
@@ -33,6 +33,7 @@ import { HumanHandoffSettings } from './settings/nodes/HumanHandoffSettings';
 
 interface SettingsPanelProps {
   selectedNode: Node | null;
+  allNodes: Node[];
   updateNodeConfig: (nodeId: string, data: object) => void;
   deleteNode: (nodeId: string) => void;
   isOpen: boolean;
@@ -41,10 +42,11 @@ interface SettingsPanelProps {
 
 interface NodeSettingsProps {
   node: Node;
+  allNodes: Node[];
   updateNodeConfig: (nodeId: string, data: object) => void;
 }
 
-const SettingsPanel = ({ selectedNode, updateNodeConfig, deleteNode, isOpen, onToggle }: SettingsPanelProps) => {
+const SettingsPanel = ({ selectedNode, allNodes, updateNodeConfig, deleteNode, isOpen, onToggle }: SettingsPanelProps) => {
   if (!isOpen) {
     return (
       <div className="absolute top-1/2 right-0 -translate-y-1/2 z-10">
@@ -68,7 +70,7 @@ const SettingsPanel = ({ selectedNode, updateNodeConfig, deleteNode, isOpen, onT
     contactNode: ContactSettings,
     locationNode: LocationSettings,
     firestoreReadWriteNode: PlaceholderSettings,
-    delayNode: PlaceholderSettings,
+    delayNode: DelaySettings,
     catalogNode: PlaceholderSettings,
     productNode: PlaceholderSettings,
     kambanFlowsNode: kambanFlowsSettings,
@@ -84,7 +86,7 @@ const SettingsPanel = ({ selectedNode, updateNodeConfig, deleteNode, isOpen, onT
 
   return (
     <aside className={cn(
-      "w-80 h-[calc(100%-48px)] my-6 mr-4 bg-neutral-950/90 backdrop-blur-md p-4 border border-neutral-800 text-white flex flex-col transition-transform duration-300 ease-in-out shadow-2xl rounded-2xl",
+      "w-[360px] h-[calc(100%-48px)] my-6 mr-4 bg-neutral-950/90 backdrop-blur-md p-4 border border-neutral-800 text-white flex flex-col transition-transform duration-300 ease-in-out shadow-2xl rounded-2xl",
       isOpen ? "translate-x-0" : "translate-x-[calc(100%+16px)]"
     )}>
       <div className="flex items-center justify-between pb-2 flex-shrink-0 border-b border-neutral-800/50">
@@ -96,20 +98,19 @@ const SettingsPanel = ({ selectedNode, updateNodeConfig, deleteNode, isOpen, onT
 
       {selectedNode ? (
         <div className="flex-grow flex flex-col mt-3 overflow-hidden min-h-0 relative">
-          <Tabs defaultValue="specific" className="flex-grow flex flex-col min-h-0">
-            <TabsList className="grid w-full grid-cols-2 flex-shrink-0 bg-neutral-900/50 h-8 p-1 border border-neutral-800/50 rounded-lg">
-              <TabsTrigger value="specific" className="text-[10px] uppercase font-black tracking-widest data-[state=active]:bg-neutral-800 data-[state=active]:text-white">Ajustes</TabsTrigger>
-              <TabsTrigger value="general" className="text-[10px] uppercase font-black tracking-widest data-[state=active]:bg-neutral-800 data-[state=active]:text-white">Estilo</TabsTrigger>
-            </TabsList>
-            <div className="flex-grow overflow-y-auto mt-3 space-y-3 pr-1 scrollbar-thin scrollbar-thumb-neutral-800 scrollbar-track-transparent min-h-0 pb-4">
-              <TabsContent value="specific" className="mt-0">
-                {NodeSpecificSettings ? <NodeSpecificSettings node={selectedNode} updateNodeConfig={updateNodeConfig} /> : <p className="text-neutral-600 text-center py-6 text-[10px] font-bold uppercase tracking-wider">No settings.</p>}
-              </TabsContent>
-              <TabsContent value="general" className="mt-0">
-                <GeneralSettings node={selectedNode} updateNodeConfig={updateNodeConfig} />
-              </TabsContent>
-            </div>
-          </Tabs>
+          <div className="flex-grow overflow-y-auto space-y-4 pr-1 scrollbar-thin scrollbar-thumb-neutral-800/40 scrollbar-track-transparent min-h-0 pb-4">
+            <GeneralSettings node={selectedNode} allNodes={allNodes} updateNodeConfig={updateNodeConfig} />
+            
+            {NodeSpecificSettings && (
+               <div className="w-full h-px bg-neutral-800/50 my-2" />
+            )}
+            
+            {NodeSpecificSettings ? (
+              <NodeSpecificSettings node={selectedNode} allNodes={allNodes} updateNodeConfig={updateNodeConfig} />
+            ) : (
+              <p className="text-neutral-600 text-center py-6 text-[10px] font-bold uppercase tracking-wider">No additional settings.</p>
+            )}
+          </div>
           <div className="mt-auto pt-4 flex-shrink-0 border-t border-neutral-800/50">
             <Button variant="ghost" onClick={() => deleteNode(selectedNode.id)} className="w-full h-9 text-red-500/60 hover:text-red-400 hover:bg-red-500/10 text-[10px] font-black uppercase tracking-[0.2em] transition-all rounded-xl border border-transparent hover:border-red-500/20">
               <Trash2 className="mr-2 h-4 w-4" /> ELIMINAR NODO

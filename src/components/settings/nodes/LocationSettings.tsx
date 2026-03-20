@@ -19,10 +19,11 @@ const MapPicker = dynamic(() => import('./MapPicker'), {
 
 interface NodeSettingsProps {
     node: Node;
+    allNodes: Node[];
     updateNodeConfig: (nodeId: string, data: object) => void;
 }
 
-export const LocationSettings = ({ node, updateNodeConfig }: NodeSettingsProps) => {
+export const LocationSettings = ({ node, allNodes, updateNodeConfig }: NodeSettingsProps) => {
     const [config, setConfig] = useState({
         latitude: node.data.latitude || '',
         longitude: node.data.longitude || '',

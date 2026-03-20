@@ -24,10 +24,11 @@ interface SentimentData {
 
 interface NodeSettingsProps {
     node: Node<SentimentData>;
+    allNodes: Node[];
     updateNodeConfig: (nodeId: string, data: object) => void;
 }
 
-export const SentimentAnalysisSettings = ({ node, updateNodeConfig }: NodeSettingsProps) => {
+export const SentimentAnalysisSettings = ({ node, allNodes, updateNodeConfig }: NodeSettingsProps) => {
     const data = node.data || {};
 
     const updateConfig = useCallback((fn: (draft: SentimentData) => void) => {

@@ -103,28 +103,32 @@ export const BOOTSTRAP_SCRIPT = (filesJSON: string) => `
         var OMNI_SYMBOL = Symbol('isOmniProxy');
         function createOmniProxy(name, initial) {
             if (initial && (initial[OMNI_SYMBOL] || initial.$$typeof)) return initial;
-            var Mock = function() { 
+            var Mock = function(props) { 
+                // SILENT MOCK: Structural components (Trigger, Content, Portal, Slot, etc)
+                // should just render their children to avoid UI clutter.
+                var n = name.toLowerCase();
+                var isStructural = n.includes('trigger') || n.includes('content') || n.includes('portal') || 
+                                 n.includes('slot') || n.includes('root') || n.includes('item') ||
+                                 n.includes('viewport') || n.includes('scroll') || n.includes('indicator') ||
+                                 n.includes('icon');
+
+                if (isStructural) {
+                    return props && props.children ? props.children : null;
+                }
+
                 console.warn("[v8.5.2-Z Omni] Placeholder: " + name); 
                 return React.createElement('div', { 
                     style: { 
-                        padding: '4px 8px', 
-                        fontSize: '9px',
-                        fontFamily: 'monospace',
-                        color: '#a1a1aa',
-                        background: 'transparent',
+                        display: 'inline-flex',
+                        padding: '2px 6px',
+                        fontSize: '10px',
+                        color: '#71717a',
                         border: '1px dashed #e4e4e7',
                         borderRadius: '4px',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '4px',
                         margin: '1px',
-                        whiteSpace: 'nowrap',
-                        fontWeight: '400',
-                        opacity: 0.8
+                        opacity: 0.7
                     } 
-                }, [
-                    React.createElement('span', { key: 'text' }, '· ' + name.split('.').pop())
-                ]);
+                }, '· ' + name.split('.').pop());
             };
             var t = initial || Mock;
             return new Proxy(t, {
@@ -330,19 +334,24 @@ export const BOOTSTRAP_SCRIPT = (filesJSON: string) => `
             if (p.startsWith('@radix-ui/react-')) {
                 var RadixMock = React.forwardRef(function(props, ref) {
                     if (props.asChild && props.children) {
-                        var child = React.Children.only(props.children);
-                        return React.cloneElement(child, Object.assign({}, props, child.props, {
-                            className: [props.className, child.props.className].filter(Boolean).join(' '),
-                            ref: ref || child.ref
-                        }));
+                        try {
+                            var child = React.Children.only(props.children);
+                            return React.cloneElement(child, Object.assign({}, props, child.props, {
+                                className: [props.className, child.props.className].filter(Boolean).join(' '),
+                                ref: ref || child.ref
+                            }));
+                        } catch(e) { return props.children; }
                     }
                     var p2 = Object.assign({}, props); delete p2.asChild;
-                    return React.createElement('div', Object.assign({}, p2, {ref: ref}), props.children);
+                    // If it's a structural component from Radix, just render children
+                    return React.createElement(props.as ? props.as : 'div', Object.assign({}, p2, {ref: ref}), props.children);
                 });
                 return createOmniProxy(p, { 
                     Slot: RadixMock, Root: RadixMock, Item: RadixMock, Trigger: RadixMock, 
                     Content: RadixMock, Portal: React.Fragment, Label: RadixMock, 
-                    Value: RadixMock, Indicator: RadixMock, Separator: RadixMock 
+                    Value: RadixMock, Indicator: RadixMock, Separator: RadixMock,
+                    Viewport: React.Fragment, ScrollUpButton: React.Fragment, ScrollDownButton: React.Fragment,
+                    Icon: React.Fragment, Arrow: React.Fragment, Close: RadixMock
                 });
             }
 

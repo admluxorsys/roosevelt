@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Search, ChevronRight, List, LayoutGrid, Filter, Trash2 } from 'lucide-react';
+import { Search, ChevronRight, List, LayoutGrid, Filter, Trash2, Command } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -38,6 +38,8 @@ interface ContactFiltersProps {
     filteredCount: number;
     selectedCount: number;
     handleBulkDelete: () => void;
+    currentView: string;
+    setCurrentView: (view: any) => void;
 }
 
 export const ContactFilters: React.FC<ContactFiltersProps> = ({
@@ -61,24 +63,55 @@ export const ContactFilters: React.FC<ContactFiltersProps> = ({
     setSelectedTags,
     filteredCount,
     selectedCount,
-    handleBulkDelete
+    handleBulkDelete,
+    currentView,
+    setCurrentView
 }) => {
     return (
         <motion.div
             initial={{ opacity: 0, y: 5 }}
             animate={{ opacity: 1, y: 0 }}
-            className="flex justify-between items-center relative z-10 p-1 bg-neutral-900 border border-white/5 rounded-md"
+            className="flex justify-between items-center relative z-10 p-1 bg-neutral-900 border border-white/5 rounded-md gap-3"
         >
-            <div className={cn("relative group transition-all", isChatOpen ? "w-full" : "w-80")}>
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-500 group-focus-within:text-blue-500 transition-colors" />
+            <div className="flex items-center gap-3 flex-1 min-w-0">
+                <div className={cn("relative group transition-all shrink-0", isChatOpen ? "w-48" : "w-64")}>
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                    <Search className="w-3.5 h-3.5 text-neutral-500 group-focus-within:text-blue-500 transition-colors" />
+                </div>
                 <Input
+                    id="crm-search-input"
                     type="text"
                     placeholder="Search database..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-10 bg-transparent border-none h-9 focus:ring-0 text-white font-medium placeholder:text-neutral-600 text-xs uppercase tracking-wider"
+                    className="pl-10 pr-16 bg-black/40 border-white/5 h-10 focus:ring-1 focus:ring-blue-500/50 focus:border-blue-500/50 text-white font-medium placeholder:text-neutral-600 text-xs uppercase tracking-wider rounded-lg transition-all"
                 />
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-40 group-focus-within:opacity-100 transition-opacity pointer-events-none">
+                    <kbd className="h-5 px-1.5 rounded border border-white/20 bg-white/5 text-[9px] font-medium text-neutral-400 flex items-center justify-center min-w-[20px]">⌘</kbd>
+                    <kbd className="h-5 px-1.5 rounded border border-white/20 bg-white/5 text-[9px] font-medium text-neutral-400 flex items-center justify-center min-w-[20px]">K</kbd>
+                </div>
             </div>
+
+            {/* Relocated Tabs */}
+            {!isChatOpen && (
+                <div className="flex items-center space-x-1 bg-black/40 p-1 rounded-lg border border-white/5 shrink-0 overflow-hidden">
+                    {(['all', 'Prospecting', 'In Progress', 'Closed'] as const).map((view) => (
+                        <button
+                            key={view}
+                            onClick={() => setCurrentView(view)}
+                            className={cn(
+                                "px-3 py-1 rounded-md text-[9px] font-medium transition-all uppercase tracking-widest whitespace-nowrap",
+                                currentView === view 
+                                    ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20" 
+                                    : "text-neutral-500 hover:text-neutral-300 hover:bg-white/5"
+                            )}
+                        >
+                            {view === 'all' ? 'Core Database' : view}
+                        </button>
+                    ))}
+                </div>
+            )}
+        </div>
 
             {!isChatOpen && (
                 <div className="flex items-center space-x-4 pr-2">

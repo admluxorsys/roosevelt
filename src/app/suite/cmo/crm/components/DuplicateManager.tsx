@@ -432,9 +432,9 @@ export const DuplicateManager: React.FC<DuplicateManagerProps> = ({
                             )}
 
                             <div className="grid grid-cols-1 gap-2 max-h-[350px] overflow-y-auto custom-scrollbar pr-2">
-                                {contacts.map(contact => (
+                                {contacts.map((contact, contactIdx) => (
                                     <div
-                                        key={contact.id}
+                                        key={`${contact.id}-${contactIdx}`}
                                         onClick={() => toggleContactSelection(contact.id)}
                                         className={cn(
                                             "flex items-center gap-3 p-3 rounded-lg border transition-all cursor-pointer",

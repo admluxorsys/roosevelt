@@ -25,6 +25,7 @@ interface ButtonItem {
 
 interface NodeSettingsProps {
     node: Node;
+    allNodes: Node[];
     updateNodeConfig: (nodeId: string, data: object) => void;
 }
 
@@ -34,7 +35,7 @@ const MAX_HEADER_CHARS = 60;
 const MAX_BODY_CHARS = 1024;
 const MAX_FOOTER_CHARS = 60;
 
-export const QuickReplySettings = ({ node, updateNodeConfig }: NodeSettingsProps) => {
+export const QuickReplySettings = ({ node, allNodes, updateNodeConfig }: NodeSettingsProps) => {
     // Estado inicial complejo para soportar todas las features
     const [config, setConfig] = useState({
         headerType: node.data.headerType || 'none', // none, text, image, video, document
