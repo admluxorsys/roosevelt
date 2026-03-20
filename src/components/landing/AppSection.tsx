@@ -16,7 +16,7 @@ export default function AppSection() {
           {/* Video Background */}
           <iframe
             src={`https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&loop=1&playlist=${videoId}&controls=0&modestbranding=1&rel=0&iv_load_policy=3&playsinline=1&enablejsapi=1`}
-            className="absolute inset-0 w-full h-full object-cover scale-[1.01] group-hover:scale-100 transition-transform duration-[5s]"
+            className="absolute inset-0 w-full h-full object-cover scale-[1.01] group-hover:scale-100 transition-transform [transition-duration:5s]"
             allow="autoplay; encrypted-media"
           />
 

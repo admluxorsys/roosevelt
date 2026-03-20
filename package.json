@@ -102,6 +102,7 @@
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "@types/react-speech-recognition": "^3.9.6",
+    "baseline-browser-mapping": "^2.10.9",
     "eslint": "^9.36.0",
     "postcss": "^8",
     "simple-icons": "^15.16.0",

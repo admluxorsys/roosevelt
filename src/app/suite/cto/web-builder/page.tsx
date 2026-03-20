@@ -672,7 +672,7 @@ function WebBuilderContent() {
                                 onMouseMove={handlePanMove}
                                 onMouseUp={handlePanEnd}
                                 onMouseLeave={handlePanEnd}
-                                className={`transition-all duration-500 ease-[cubic-bezier(0.25,0.8,0.25,1)] shadow-2xl ${isMaximized
+                                className={`transition-all duration-500 [transition-timing-function:cubic-bezier(0.25,0.8,0.25,1)] shadow-2xl ${isMaximized
                                     ? 'w-full h-full rounded-none border-0'
                                     : viewMode === 'mobile' ? 'w-[375px] h-[812px] rounded-[3rem] border-8 border-[#1a1a1a]'
                                         : viewMode === 'tablet' ? 'w-[768px] h-[1024px] rounded-[2rem] border-8 border-[#1a1a1a]'
