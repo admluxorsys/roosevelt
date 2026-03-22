@@ -10,13 +10,12 @@ if (!admin.apps.length) {
         // Note: In Next.js Edge Runtime this might have issues, but we are using Node.js runtime for api routes by default.
 
         // 1. Check for Service Account in Environment Variable (Preferred for security/CI/Vercel)
-        const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'udreamms-platform-1';
+        const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
         const serviceAccountEnv = process.env.FIREBASE_SERVICE_ACCOUNT;
         // Search in current dir and parent to be safe (Next.js context can vary)
         const possiblePaths = [
             path.join(process.cwd(), 'serviceAccountKey.json'),
             path.join(__dirname, '..', '..', '..', '..', 'serviceAccountKey.json'), // Inside .next or src
-            '/home/julio_romero/.gemini/antigravity/scratch/autonomous/serviceAccountKey.json' // Hardcoded absolute
         ];
 
         let serviceAccountPath = possiblePaths.find(p => fs.existsSync(p));

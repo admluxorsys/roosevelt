@@ -2,7 +2,8 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
+import { auth, db } from '@/lib/firebase';
+import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 
 interface AuthContextType {
     currentUser: User | null;
@@ -23,8 +24,31 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     useEffect(() => {
         console.log("AuthContext: Starting effect, subscribing to onAuthStateChanged...");
         try {
-            const unsubscribe = onAuthStateChanged(auth, (user) => {
+            const unsubscribe = onAuthStateChanged(auth, async (user) => {
                 console.log("AuthContext: onAuthStateChanged fired! User:", user?.email || "null");
+                if (user) {
+                    try {
+                        const userDocRef = doc(db, 'users', user.uid);
+                        const docSnap = await getDoc(userDocRef);
+                        if (!docSnap.exists()) {
+                            await setDoc(userDocRef, {
+                                name: user.displayName || 'Unnamed User',
+                                email: user.email,
+                                createdAt: new Date(),
+                                lastLogin: new Date()
+                            });
+                            console.log("User isolated document created in /users/[USER_ID]");
+                        } else {
+                            // If user already exists, only update their last login
+                            await updateDoc(userDocRef, {
+                                lastLogin: new Date()
+                            });
+                            console.log("Existing user tracked: updated lastLogin.");
+                        }
+                    } catch (error) {
+                        console.error("Error creating isolated user document:", error);
+                    }
+                }
                 setCurrentUser(user);
                 setLoading(false);
             });

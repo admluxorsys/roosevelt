@@ -8,13 +8,13 @@ import { getFunctions } from 'firebase/functions';
 
 // Your web app's Firebase configuration
 export const firebaseConfig = {
-  apiKey: "AIzaSyBKkNyleaQC52S1s1v13WfQ7-U7wol-SVA",
-  authDomain: "udreamms-platform-1.firebaseapp.com",
-  projectId: "udreamms-platform-1",
-  storageBucket: "udreamms-platform-1.firebasestorage.app", // <--- CORREGIDO
-  messagingSenderId: "860170719759",
-  appId: "1:860170719759:web:cb8e6008e08c19b0e7897a",
-  measurementId: "G-GP2PVZBTQP"
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
 };
 
 // Initialize Firebase App
@@ -27,6 +27,9 @@ const db = initializeFirestore(app, {});
 const auth = getAuth(app);
 const storage = getStorage(app);
 const functions = getFunctions(app);
+
+// Prueba de Conexión y Confirmación para Roosevelt
+console.log("🚀 [ROOSEVELT INFRASTRUCTURE]: Sistema de bases de datos Firebase inicializado con éxito. Listo para operar en la cuenta del nuevo dueño.");
 
 // Export the services
 export { app, db, auth, storage, functions };

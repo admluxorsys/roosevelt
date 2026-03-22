@@ -10,7 +10,7 @@ export class FirebaseHostingService {
     private auth: GoogleAuth;
 
     constructor() {
-        this.projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'udreamms-platform-1';
+        this.projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID as string;
 
         // Load credentials from environment variable
         const serviceAccountEnv = process.env.FIREBASE_SERVICE_ACCOUNT;
