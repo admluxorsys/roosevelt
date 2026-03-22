@@ -21,3 +21,4 @@ const GitHubIcon = (props: React.SVGProps<SVGSVGElement>) => (
 );
 
 export default GitHubIcon;
+

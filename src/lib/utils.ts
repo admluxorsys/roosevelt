@@ -75,3 +75,4 @@ export function formatPhoneNumber(phone: string | undefined | null) {
   // If no prefix matches, return as is (or maybe with some generic spacing)
   return cleanPhone;
 }
+

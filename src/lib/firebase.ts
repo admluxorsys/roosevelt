@@ -33,3 +33,4 @@ console.log("🚀 [ROOSEVELT INFRASTRUCTURE]: Sistema de bases de datos Firebase
 
 // Export the services
 export { app, db, auth, storage, functions };
+

@@ -239,3 +239,4 @@ export const ListMessageSettings = ({ node, allNodes, updateNodeConfig }: NodeSe
         </div>
     );
 };
+

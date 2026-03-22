@@ -247,3 +247,4 @@ export const TextMessageSettings = ({ node, allNodes, updateNodeConfig }: NodeSe
         </SettingsSection>
     );
 };
+

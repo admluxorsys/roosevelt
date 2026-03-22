@@ -210,3 +210,4 @@ export const CheckoutSettings = ({ node, allNodes, updateNodeConfig }: NodeSetti
         </div>
     );
 };
+

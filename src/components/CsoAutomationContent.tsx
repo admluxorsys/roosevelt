@@ -23,7 +23,7 @@ export function CsoAutomationContent() {
       title: "Chatbots",
       description: "Construye y despliega chatbots para gestionar conversaciones automáticamente 24/7.",
       action: "Ir a Chatbots",
-      href: "/suite/cto/automation/chatbots"
+      href: "/nucleo/udreamms/cto/automation/chatbots"
     },
     {
       icon: <Zap className="w-8 h-8 text-amber-400" />,
@@ -97,3 +97,4 @@ export function CsoAutomationContent() {
     </main>
   );
 }
+

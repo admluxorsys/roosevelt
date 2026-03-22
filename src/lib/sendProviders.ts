@@ -126,3 +126,4 @@ export async function sendWhatsAppMessage(toNumber: string, message: string, opt
         throw new Error(`WhatsApp API Error: ${JSON.stringify(errorData)}`);
     }
 }
+

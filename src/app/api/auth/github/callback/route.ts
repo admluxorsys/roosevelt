@@ -14,7 +14,7 @@ export async function GET(req: Request) {
     }
 
     if (!code) {
-        return NextResponse.redirect(`${origin}/suite/cto/web-builder?github_error=no_code`);
+        return NextResponse.redirect(`${origin}/nucleo/udreamms/cto/web-builder?github_error=no_code`);
     }
 
     try {
@@ -37,7 +37,7 @@ export async function GET(req: Request) {
 
         if (!accessToken) {
             console.error('[GitHub OAuth] Token exchange failed:', tokenData);
-            return NextResponse.redirect(`${origin}/suite/cto/web-builder?github_error=token_failed`);
+            return NextResponse.redirect(`${origin}/nucleo/udreamms/cto/web-builder?github_error=token_failed`);
         }
 
         // Get GitHub user info
@@ -50,7 +50,7 @@ export async function GET(req: Request) {
         const userData = await userRes.json();
 
         // Build redirect back to the web builder with success
-        const redirectUrl = new URL(`${origin}/suite/cto/web-builder`);
+        const redirectUrl = new URL(`${origin}/nucleo/udreamms/cto/web-builder`);
         if (projectId) redirectUrl.searchParams.set('projectId', projectId);
         redirectUrl.searchParams.set('github_connected', '1');
         redirectUrl.searchParams.set('github_user', userData.login || '');
@@ -68,6 +68,7 @@ export async function GET(req: Request) {
         return response;
     } catch (error: any) {
         console.error('[GitHub OAuth] Error:', error);
-        return NextResponse.redirect(`${origin}/suite/cto/web-builder?github_error=${encodeURIComponent(error.message)}`);
+        return NextResponse.redirect(`${origin}/nucleo/udreamms/cto/web-builder?github_error=${encodeURIComponent(error.message)}`);
     }
 }
+

@@ -495,3 +495,4 @@ export const BOOTSTRAP_SCRIPT = (filesJSON: string) => `
         }
     })();
 `;
+

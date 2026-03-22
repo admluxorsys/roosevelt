@@ -41,3 +41,4 @@ Every project generated must be a "Full-Stack" application powered by PostgreSQL
 - Si el usuario pide una base de datos, utiliza EXCLUSIVAMENTE el cliente de Supabase ('src/lib/database.ts').
 - SIEMPRE que utilices Supabase, asegúrate de añadir '@supabase/supabase-js' a la sección de dependencies en el archivo package.json.
 `;
+

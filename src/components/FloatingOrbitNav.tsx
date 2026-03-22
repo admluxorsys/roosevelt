@@ -3,6 +3,7 @@ import { motion, AnimatePresence, useAnimationFrame, PanInfo, useMotionValue, us
 import Link from 'next/link';
 import { ChevronLeft, LucideIcon } from 'lucide-react';
 import { usePathname } from 'next/navigation';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface NavItem {
     href: string;
@@ -28,10 +29,11 @@ export function FloatingOrbitNav({ items, title, colorClass = "bg-purple-600" }:
     const lastRotation = useRef(0);
     const isDragging = useRef(false);
     const pathname = usePathname();
+    const { activeEntity } = useAuth();
 
     const allItems = [
-        { href: "/suite", icon: ChevronLeft, label: "Back" },
-        ...items,
+        { href: `/nucleo/${activeEntity || ''}`, icon: ChevronLeft, label: "Back" },
+        ...items.map(item => ({ ...item, href: item.href.replace('{entity}', activeEntity || '') })),
     ];
 
     useAnimationFrame(() => {
@@ -102,6 +104,7 @@ export function FloatingOrbitNav({ items, title, colorClass = "bg-purple-600" }:
                                     total={allItems.length}
                                     rotation={rotation}
                                     pathname={pathname}
+                                    activeEntity={activeEntity}
                                 />
                             ))}
                         </div>
@@ -112,12 +115,13 @@ export function FloatingOrbitNav({ items, title, colorClass = "bg-purple-600" }:
     );
 }
 
-function OrbitingItem({ item, index, total, rotation, pathname }: { 
+function OrbitingItem({ item, index, total, rotation, pathname, activeEntity }: { 
     item: any, 
     index: number, 
     total: number, 
     rotation: any, 
-    pathname: string 
+    pathname: string,
+    activeEntity: string | null
 }) {
     const angleOffset = (360 / total) * index;
     
@@ -137,7 +141,8 @@ function OrbitingItem({ item, index, total, rotation, pathname }: {
     const y = useTransform(z, (zv: number) => (zv * 0.05) - 45);
     const zIndex = useTransform(z, (zv: number) => Math.round(zv + 200));
 
-    const isActive = pathname === item.href || (item.href !== '/suite' && pathname.startsWith(item.href));
+    const backHref = `/nucleo/${activeEntity || ''}`;
+    const isActive = pathname === item.href || (item.href !== backHref && pathname.startsWith(item.href));
 
     return (
         <motion.div
@@ -172,4 +177,5 @@ function OrbitingItem({ item, index, total, rotation, pathname }: {
         </motion.div>
     );
 }
+
 

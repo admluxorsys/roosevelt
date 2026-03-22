@@ -261,3 +261,4 @@ export const MediaMessageSettings = ({ node, allNodes, updateNodeConfig }: NodeS
         </SettingsSection>
     );
 };
+

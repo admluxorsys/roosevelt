@@ -98,3 +98,4 @@ export const ApplicationLogin = ({ contact, onLoginSuccess }: ApplicationLoginPr
         </div>
     );
 };
+

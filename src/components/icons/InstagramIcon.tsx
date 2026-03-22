@@ -15,3 +15,4 @@ const InstagramIcon = (props: React.SVGProps<SVGSVGElement>) => (
 );
 
 export default InstagramIcon;
+

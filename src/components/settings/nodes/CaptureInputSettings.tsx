@@ -272,3 +272,4 @@ export const CaptureInputSettings = ({ node, allNodes, updateNodeConfig }: NodeS
         </div>
     );
 };
+

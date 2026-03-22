@@ -173,3 +173,4 @@ export const GenerativeAISettings = ({ node, allNodes, updateNodeConfig }: NodeS
         </div>
     );
 };
+

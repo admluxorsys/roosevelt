@@ -209,3 +209,4 @@ export const ALL_COUNTRY_CODES: CountryCode[] = [
     { code: '+996', country: 'Kyrgyzstan', flag: '🇰🇬', iso: 'KG' },
     { code: '+998', country: 'Uzbekistan', flag: '🇺🇿', iso: 'UZ' },
 ];
+

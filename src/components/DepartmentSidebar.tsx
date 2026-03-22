@@ -15,6 +15,7 @@ import {
     TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { useSidebar } from '@/components/SidebarContext';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface NavItem {
     href: string;
@@ -31,6 +32,7 @@ interface DepartmentSidebarProps {
 export function DepartmentSidebar({ items, title, colorClass = "bg-blue-600" }: DepartmentSidebarProps) {
     const { isCollapsed, toggleSidebar } = useSidebar();
     const pathname = usePathname();
+    const { activeEntity } = useAuth();
 
     return (
         <TooltipProvider delayDuration={0}>
@@ -50,7 +52,8 @@ export function DepartmentSidebar({ items, title, colorClass = "bg-blue-600" }: 
                 <nav className="flex-grow p-2 flex flex-col overflow-y-auto custom-scrollbar">
                     <ul className="space-y-1 flex-grow">
                         {items.map((item) => {
-                            const isActive = pathname.startsWith(item.href);
+                            const actualHref = item.href.replace('{entity}', activeEntity || '');
+                            const isActive = pathname.startsWith(actualHref);
                             const linkContent = (
                                 <div className={`flex items-center p-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${isActive
                                     ? `${colorClass} text-white shadow-lg`
@@ -63,18 +66,18 @@ export function DepartmentSidebar({ items, title, colorClass = "bg-blue-600" }: 
                             );
 
                             return (
-                                <li key={item.href}>
+                                <li key={actualHref}>
                                     {isCollapsed ? (
                                         <Tooltip>
                                             <TooltipTrigger asChild>
-                                                <Link href={item.href}>{linkContent}</Link>
+                                                <Link href={actualHref}>{linkContent}</Link>
                                             </TooltipTrigger>
                                             <TooltipContent side="right" className="bg-neutral-800 text-white border-neutral-700">
                                                 {item.label}
                                             </TooltipContent>
                                         </Tooltip>
                                     ) : (
-                                        <Link href={item.href}>{linkContent}</Link>
+                                        <Link href={actualHref}>{linkContent}</Link>
                                     )}
                                 </li>
                             );
@@ -85,7 +88,7 @@ export function DepartmentSidebar({ items, title, colorClass = "bg-blue-600" }: 
                         <Tooltip>
                             <TooltipTrigger asChild>
                                 <Link
-                                    href="/suite"
+                                    href={`/nucleo/${activeEntity || ''}`}
                                     className={`group flex items-center justify-center ${isCollapsed ? 'p-2' : 'px-4 py-2'} mx-auto rounded-full bg-neutral-900 border border-neutral-800 hover:border-neutral-700 hover:bg-neutral-800 text-neutral-400 hover:text-white transition-all duration-200`}
                                 >
                                     <ChevronLeft className={`w-4 h-4 ${isCollapsed ? '' : 'mr-2 group-hover:-translate-x-0.5 transition-transform'}`} />
@@ -104,3 +107,4 @@ export function DepartmentSidebar({ items, title, colorClass = "bg-blue-600" }: 
         </TooltipProvider>
     );
 }
+

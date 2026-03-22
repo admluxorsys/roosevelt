@@ -133,3 +133,4 @@ const SettingsPanel = ({ selectedNode, allNodes, updateNodeConfig, deleteNode, i
 
 export default SettingsPanel;
 
+

@@ -30,3 +30,4 @@ Ensure the Generated Website looks professional by using high-quality, relevant 
    - Use "aspect-video" or specific height classes (h-64, h-96) to ensure the layout remains stable while images load.
    - If you need a category not listed, use a descriptive path: https://source.unsplash.com/featured/?{category} (Example: /featured/?gym, /featured/?fitness).
 `;
+

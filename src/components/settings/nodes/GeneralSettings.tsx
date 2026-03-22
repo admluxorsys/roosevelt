@@ -34,3 +34,4 @@ export const GeneralSettings = ({ node, allNodes, updateNodeConfig }: NodeSettin
         </SettingsSection>
     );
 };
+

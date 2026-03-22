@@ -13,3 +13,4 @@ const DiscordIcon = (props: React.SVGProps<SVGSVGElement>) => (
 );
 
 export default DiscordIcon;
+

@@ -25,3 +25,4 @@ export const normalizePhoneNumber = (phone: string): string => {
     // Default: just add the plus if it had digits but was short/long
     return clean ? `+${clean}` : '';
 };
+

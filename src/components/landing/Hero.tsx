@@ -98,3 +98,4 @@ export default function Hero({ onStartQuote }: HeroProps) {
     </section>
   );
 }
+

@@ -159,3 +159,4 @@ export const TemplateSettings = ({ node, allNodes, updateNodeConfig }: NodeSetti
         </div>
     );
 };
+

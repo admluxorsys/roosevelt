@@ -280,3 +280,4 @@ export const SetVariableSettings = ({ node, allNodes, updateNodeConfig }: NodeSe
         </div>
     );
 };
+

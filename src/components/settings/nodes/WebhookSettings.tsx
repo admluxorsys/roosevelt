@@ -71,3 +71,4 @@ export const WebhookSettings = ({ node, allNodes, updateNodeConfig }: NodeSettin
         </div>
     );
 };
+

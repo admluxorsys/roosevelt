@@ -797,3 +797,4 @@ NEVER use placeholders like 'your-project-url'. Use the exact values provided ab
     return NextResponse.json({ type: "message", content: "Error: " + e.message }, { status: 500 });
   }
 }
+

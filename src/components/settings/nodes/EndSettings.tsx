@@ -195,3 +195,4 @@ export const EndSettings = ({ node, allNodes, updateNodeConfig }: NodeSettingsPr
         </div>
     );
 };
+

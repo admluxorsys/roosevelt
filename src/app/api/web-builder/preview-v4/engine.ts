@@ -113,3 +113,4 @@ export function generatePreviewHTML(files: Record<string, string>): string {
         '</html>'
     ].join('\n');
 }
+

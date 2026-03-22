@@ -100,3 +100,4 @@ const MapPicker = ({ lat, lng, onLocationSelect }: MapPickerProps) => {
 };
 
 export default MapPicker;
+

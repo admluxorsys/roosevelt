@@ -21,3 +21,4 @@ export async function GET(req: Request) {
 
     return NextResponse.redirect(`https://github.com/login/oauth/authorize?${params.toString()}`);
 }
+

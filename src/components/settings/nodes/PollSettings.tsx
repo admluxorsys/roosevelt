@@ -227,3 +227,4 @@ export const PollSettings = ({ node, allNodes, updateNodeConfig }: NodeSettingsP
         </div>
     );
 };
+

@@ -12,3 +12,4 @@ export function ThemeProvider({
 }: ComponentProps<typeof NextThemesProvider>) {
   return <NextThemesProvider {...props}>{children}</NextThemesProvider>
 }
+

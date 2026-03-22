@@ -164,3 +164,4 @@ export const LocationSettings = ({ node, allNodes, updateNodeConfig }: NodeSetti
         </div>
     );
 };
+
