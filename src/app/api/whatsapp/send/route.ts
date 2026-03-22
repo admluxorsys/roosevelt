@@ -29,13 +29,6 @@ export async function POST(req: Request) {
                 responseData = await sendMetaMessage(toNumber, message);
                 messageId = responseData?.message_id;
 
-            } else if (targetPlatform === 'telegram') {
-                console.log(`[Omnichannel API] Sending to Telegram (ChatID: ${toNumber})`);
-                // For Telegram, toNumber is ChatID
-                const { sendTelegramMessage } = await import('@/lib/sendProviders');
-                responseData = await sendTelegramMessage(toNumber, message);
-                messageId = responseData?.result?.message_id?.toString();
-
             } else {
                 // --- Default: WhatsApp Logic ---
                 const { sendWhatsAppMessage } = await import('@/lib/sendProviders');
