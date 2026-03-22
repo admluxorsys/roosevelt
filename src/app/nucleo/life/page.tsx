@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { Briefcase, Pencil, Fingerprint, BadgeCheck, Gem, TrendingDown, Mail, Lock, Calendar } from 'lucide-react';
 import { FloatingOrbitNav } from '@/components/FloatingOrbitNav';
 import ProtectedRoute from '@/components/ProtectedRoute';
+import { IdentitySwitcher } from '@/components/IdentitySwitcher';
 
 const personalInformationItems = [
     { href: '#id', icon: Fingerprint, label: 'Identity' },
@@ -19,7 +20,6 @@ const personalInformationItems = [
 ];
 
 export default function LifeDashboard() {
-    const [isSuiteHovered, setIsSuiteHovered] = useState(false);
 
     return (
         <ProtectedRoute>
@@ -37,38 +37,8 @@ export default function LifeDashboard() {
                 {/* Main layout - Fixed height, no scrolling */}
                 <div className="relative z-10 w-full h-screen flex flex-col items-center justify-between pt-10 pb-6 overflow-hidden no-scrollbar">
 
-                    {/* Top Left Suite Hover Trigger Zone */}
-                    <div 
-                        className="fixed top-0 left-0 w-64 h-32 z-[7000]"
-                        onMouseEnter={() => setIsSuiteHovered(true)}
-                        onMouseLeave={() => setIsSuiteHovered(false)}
-                    />
-
-                    <AnimatePresence>
-                        {isSuiteHovered && (
-                            <motion.div
-                                initial={{ opacity: 0, y: -40, scale: 0.8 }}
-                                animate={{ opacity: 1, y: 0, scale: 1 }}
-                                exit={{ opacity: 0, y: -40, scale: 0.8 }}
-                                transition={{ type: "spring", stiffness: 200, damping: 20 }}
-                                className="fixed top-12 left-12 z-[8000]"
-                                onMouseEnter={() => setIsSuiteHovered(true)}
-                                onMouseLeave={() => setIsSuiteHovered(false)}
-                            >
-                                <Link href="/nucleo" className="relative group block">
-                                    <div className="w-20 h-20 rounded-full border border-white/20 bg-black/40 backdrop-blur-xl flex items-center justify-center hover:bg-white/10 hover:border-white/40 transition-all duration-300">
-                                        <Briefcase className="w-10 h-10 text-white/70 group-hover:text-white transition-colors" />
-                                    </div>
-                                    <div className="absolute -bottom-2 bg-black/80 text-white/70 text-[9px] uppercase tracking-widest px-3 py-1 rounded-full border border-white/10 left-1/2 -translate-x-1/2 whitespace-nowrap shadow-lg">CORE HUB</div>
-                                    {/* Pencil Edit Icon */}
-                                    <div className="absolute -top-1 -right-1 w-8 h-8 bg-amber-600 rounded-full flex items-center justify-center shadow-lg border-2 border-black transform transition-transform hover:scale-110 hover:bg-amber-500 cursor-pointer">
-                                        <Pencil className="w-4 h-4 text-white" />
-                                    </div>
-                                </Link>
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
-
+                    {/* Global Identity Switcher Glass Pill */}
+                    <IdentitySwitcher />
                     {/* 1. Greeting Section */}
                     <motion.div
                         initial={{ opacity: 0 }}

@@ -1,5 +1,6 @@
 
 import axios from 'axios';
+import { db } from './firebase-admin'; // Use admin to fetch tokens on server
 
 // --- Meta (Instagram & Messenger) ---
 
@@ -14,7 +15,6 @@ async function callMetaSendApi(messageData: object, token?: string): Promise<any
         throw new Error('Access Token is not configured.');
     }
 
-    // Using v19.0 as per plan
     const url = `https://graph.facebook.com/v19.0/me/messages?access_token=${accessToken}`;
 
     try {
@@ -27,67 +27,61 @@ async function callMetaSendApi(messageData: object, token?: string): Promise<any
     }
 }
 
-/**
- * Sends a message via Meta API (Instagram or Messenger).
- * Note: Platform distinction is handled by the recipient ID (PSID/IGSID).
- */
 export async function sendMetaMessage(recipientId: string, text: string, token?: string): Promise<any> {
     if (!text) return;
-
     const messageData = {
         recipient: { id: recipientId },
         message: { text: text }
     };
-
     return await callMetaSendApi(messageData, token);
 }
 
-// --- Telegram ---
+// --- WhatsApp Business Cloud API (Multi-Tenant Aware) ---
 
-/**
- * Generic function to make requests to Telegram Bot API
- */
-async function callTelegramApi(method: string, data: object): Promise<any> {
-    const botToken = process.env.TELEGRAM_BOT_TOKEN;
-
-    if (!botToken) {
-        console.error('Missing TELEGRAM_BOT_TOKEN in environment.');
-        throw new Error('Telegram Bot Token is not configured.');
-    }
-
-    const url = `https://api.telegram.org/bot${botToken}/${method}`;
-
-    try {
-        const response = await axios.post(url, data);
-        return response.data;
-    } catch (error: any) {
-        const errorData = error.response?.data || error.message;
-        console.error(`Telegram API Error (${method}):`, errorData);
-        throw new Error(`Telegram API Error: ${JSON.stringify(errorData)}`);
-    }
+interface WhatsAppSendOptions {
+    type?: 'text' | 'template' | 'quick_reply' | 'list' | 'media';
+    template?: any;
+    buttons?: any[];
+    button?: string;
+    sections?: any[];
+    url?: string;
+    filename?: string;
+    // Multi-tenant context
+    userId?: string;
+    entityId?: string;
 }
 
 /**
- * Sends a text message to a user via Telegram.
+ * Sends a message via WhatsApp Business API.
+ * If userId and entityId are provided, it fetches the credentials from Firestore.
  */
-export async function sendTelegramMessage(chatId: string, text: string): Promise<any> {
-    if (!text) return;
-    return await callTelegramApi('sendMessage', {
-        chat_id: chatId,
-        text: text
-    });
-}
-// --- WhatsApp ---
+export async function sendWhatsAppMessage(
+    toNumber: string, 
+    message: string, 
+    options: WhatsAppSendOptions = {}
+): Promise<any> {
+    let token = process.env.WHATSAPP_ACCESS_TOKEN;
+    let phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
 
-/**
- * Sends a message via WhatsApp Business API
- */
-export async function sendWhatsAppMessage(toNumber: string, message: string, options: { type?: 'text' | 'template', template?: any } = {}): Promise<any> {
-    const token = process.env.WHATSAPP_ACCESS_TOKEN;
-    const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+    // 1. Multi-Tenant Token Resolution
+    if (options.userId && options.entityId) {
+        const configPath = `users/${options.userId}/entities/${options.entityId}/integrations/whatsapp`;
+        try {
+            const configDoc = await db.doc(configPath).get();
+            if (configDoc.exists) {
+                const data = configDoc.data();
+                if (data?.accessToken && data?.phoneNumberId) {
+                    token = data.accessToken;
+                    phoneNumberId = data.phoneNumberId;
+                }
+            }
+        } catch (err) {
+            console.error(`[sendWhatsAppMessage] Failed to fetch tenant config for ${options.entityId}:`, err);
+        }
+    }
 
     if (!token || !phoneNumberId) {
-        throw new Error('Missing WhatsApp configuration (Token or Phone ID)');
+        throw new Error(`Missing WhatsApp configuration for ${options.entityId || 'Global'}`);
     }
 
     const url = `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`;
@@ -99,12 +93,38 @@ export async function sendWhatsAppMessage(toNumber: string, message: string, opt
         to: cleanTo,
     };
 
+    // Construct Payload based on type
     if (options.type === 'template' && options.template) {
         payload.type = 'template';
         payload.template = {
             name: options.template.name,
             language: { code: options.template.language?.code || 'es' },
             components: options.template.components || []
+        };
+    } else if (options.type === 'quick_reply') {
+        payload.type = 'interactive';
+        payload.interactive = {
+            type: 'button',
+            body: { text: message },
+            action: { buttons: options.buttons }
+        };
+    } else if (options.type === 'list') {
+        payload.type = 'interactive';
+        payload.interactive = {
+            type: 'list',
+            header: { type: 'text', text: 'Opciones' },
+            body: { text: message },
+            action: {
+                button: options.button || 'Seleccionar',
+                sections: options.sections
+            }
+        };
+    } else if (options.type === 'media') {
+        payload.type = 'document'; // or image/video based on filename? defaulting to document
+        payload.document = {
+            link: options.url,
+            filename: options.filename,
+            caption: message
         };
     } else {
         payload.type = 'text';
@@ -116,14 +136,10 @@ export async function sendWhatsAppMessage(toNumber: string, message: string, opt
             headers: { Authorization: `Bearer ${token}` }
         });
 
-        return {
-            ...response.data,
-            sentTo: cleanTo
-        };
+        return { ...response.data, sentTo: cleanTo };
     } catch (error: any) {
         const errorData = error.response?.data || error.message;
         console.error('WhatsApp API Error:', JSON.stringify(errorData, null, 2));
         throw new Error(`WhatsApp API Error: ${JSON.stringify(errorData)}`);
     }
 }
-

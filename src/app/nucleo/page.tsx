@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Plus, X, LogOut } from 'lucide-react';
+import { Plus, X, LogOut, Briefcase } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { auth, db } from '@/lib/firebase';
 import { signOut } from 'firebase/auth';
@@ -170,47 +170,80 @@ export default function NucleoPage() {
         </div>
       </motion.div>
 
-      {/* Modal Crear Nueva Entidad */}
-      {isCreating && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-            <div className="bg-[#111] border border-neutral-800 p-6 rounded-xl w-[400px] shadow-2xl relative">
-                <button 
-                    onClick={() => setIsCreating(false)}
-                    className="absolute top-4 right-4 text-neutral-500 hover:text-white"
-                >
-                    <X className="w-5 h-5"/>
-                </button>
-                <div className="flex items-center gap-3 mb-6">
-                    <div className="w-10 h-10 bg-neutral-900 rounded-lg flex items-center justify-center">
-                        <Plus className="w-5 h-5 text-blue-400" />
-                    </div>
-                    <h2 className="text-xl font-medium text-white">Registrar Empresa</h2>
-                </div>
-                <p className="text-sm text-neutral-400 mb-6">
-                    Al crear una nueva empresa se generará un "Motor Vacío" con su propia base de datos aislada, sus propias configuraciones e integraciones.
-                </p>
-                <div className="mb-6">
-                    <label className="block text-xs font-medium text-neutral-500 mb-2 uppercase tracking-wider">Nombre del Proyecto o Empresa</label>
-                    <input 
-                        type="text" 
-                        value={newEntityName}
-                        onChange={(e) => setNewEntityName(e.target.value)}
-                        className="w-full bg-neutral-900 border border-neutral-800 text-white px-3 py-2 rounded-lg focus:outline-none focus:border-blue-500"
-                        placeholder="Ej: Starlink, LuxorSys..."
-                        autoFocus
-                    />
-                </div>
-                <div className="flex justify-end gap-3">
-                    <Button variant="outline" onClick={() => setIsCreating(false)} className="bg-transparent border-neutral-800 text-white hover:bg-neutral-800">
-                        Cancelar
-                    </Button>
-                    <Button onClick={handleCreateEntity} disabled={creatingProgress || !newEntityName.trim()} className="bg-white hover:bg-neutral-200 text-black">
-                        {creatingProgress ? 'Creando Motor...' : 'Crear Entidad'}
-                    </Button>
-                </div>
-            </div>
-        </div>
-      )}
+      {/* Modal Crear Nueva Entidad Premium */}
+      <AnimatePresence>
+        {isCreating && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md"
+          >
+              <motion.div 
+                initial={{ scale: 0.95, y: 20 }}
+                animate={{ scale: 1, y: 0 }}
+                exit={{ scale: 0.95, y: 20 }}
+                transition={{ type: "spring", stiffness: 300, damping: 25 }}
+                className="bg-[#0A0A0A]/80 border border-white/10 p-8 rounded-2xl w-[440px] shadow-[0_0_50px_rgba(59,130,246,0.15)] relative overflow-hidden backdrop-blur-3xl"
+              >
+                  {/* Decorative glowing orb inside modal */}
+                  <div className="absolute -top-24 -right-24 w-48 h-48 bg-blue-500/20 rounded-full blur-[60px] pointer-events-none" />
+                  
+                  <button 
+                      onClick={() => setIsCreating(false)}
+                      className="absolute top-5 right-5 text-neutral-500 hover:text-white transition-colors bg-white/5 hover:bg-white/10 p-1.5 rounded-full"
+                  >
+                      <X className="w-4 h-4"/>
+                  </button>
+                  
+                  <div className="flex items-center gap-4 mb-8 relative z-10">
+                      <div className="w-12 h-12 bg-gradient-to-br from-blue-500/20 to-purple-500/20 border border-white/10 rounded-xl flex items-center justify-center shadow-inner">
+                          <Plus className="w-6 h-6 text-blue-400 drop-shadow-[0_0_8px_rgba(59,130,246,0.8)]" />
+                      </div>
+                      <div>
+                        <h2 className="text-xl font-medium tracking-wide text-white">Registrar Empresa</h2>
+                        <span className="text-[10px] text-blue-400 tracking-[0.2em] uppercase font-semibold">Generador de Motor</span>
+                      </div>
+                  </div>
+                  
+                  <p className="text-sm border-l-2 border-blue-500/30 pl-4 text-neutral-400 mb-8 font-light leading-relaxed relative z-10">
+                      Al crear una nueva empresa se desplegará un <strong className="text-white font-normal">SaaS Vacío</strong> con base de datos autónoma, aislamiento criptográfico y ajustes heredados del Molde Maestro.
+                  </p>
+                  
+                  <div className="mb-8 relative z-10 group">
+                      <label className="block text-[10px] font-bold text-neutral-500 mb-2 uppercase tracking-[0.15em] ml-1 group-focus-within:text-blue-400 transition-colors">Nombre del Proyecto</label>
+                      <div className="relative">
+                        <input 
+                            type="text" 
+                            value={newEntityName}
+                            onChange={(e) => setNewEntityName(e.target.value)}
+                            className="w-full bg-black/40 border border-white/10 text-white px-4 py-3.5 rounded-xl focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all font-light placeholder:text-neutral-700"
+                            placeholder="Ej: Starlink, LuxorSys..."
+                            autoFocus
+                        />
+                        <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none opacity-20">
+                           <Briefcase className="w-5 h-5" />
+                        </div>
+                      </div>
+                  </div>
+                  
+                  <div className="flex justify-end gap-3 relative z-10">
+                      <Button variant="ghost" onClick={() => setIsCreating(false)} className="text-neutral-400 hover:text-white hover:bg-white/5 rounded-full px-6 font-light">
+                          Cancelar
+                      </Button>
+                      <Button onClick={handleCreateEntity} disabled={creatingProgress || !newEntityName.trim()} className="bg-white hover:bg-neutral-200 text-black rounded-full px-8 tracking-wide font-medium shadow-[0_0_20px_rgba(255,255,255,0.2)] disabled:opacity-50 disabled:shadow-none transition-all duration-300">
+                          {creatingProgress ? (
+                            <div className="flex items-center gap-2">
+                              <div className="w-3 h-3 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                              Creando Motor...
+                            </div>
+                          ) : 'Crear Entidad'}
+                      </Button>
+                  </div>
+              </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Admin Branding */}
       <motion.div
