@@ -6,6 +6,8 @@ import { NextRequest, NextResponse } from 'next/server';
  * Bypasses network blocks by fetching CDNs through the backend.
  */
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: NextRequest) {
     const url = req.nextUrl.searchParams.get('url');
 

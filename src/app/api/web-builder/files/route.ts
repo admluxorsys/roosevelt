@@ -6,6 +6,8 @@ import { db } from '@/lib/firebase-admin';
 const encodePath = (p: string) => encodeURIComponent(p).replace(/\./g, '%2E');
 // const decodePath = (p: string) => decodeURIComponent(p.replace(/%2E/g, '.'));
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const projectId = searchParams.get('projectId');

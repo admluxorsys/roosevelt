@@ -15,6 +15,8 @@ function debugLog(msg: string) {
 }
 
 // Meta Webhook Verification (Handshake)
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const mode = searchParams.get('hub.mode');
