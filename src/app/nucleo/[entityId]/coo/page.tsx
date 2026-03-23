@@ -10,14 +10,14 @@ const tools = [
         name: 'Visa Consulting',
         description: 'Process F-1 student visas, DS-160 forms, and manage embassy appointments.',
         icon: Plane,
-        path: '/nucleo/udreamms/coo/visas',
+        path: '/nucleo/roosevelt/coo/visas',
         color: 'bg-sky-500/10 text-sky-400 border-sky-500/20'
     },
     {
         name: 'Customer Experience',
         description: 'Onboarding flows and post-sales support tickets.',
         icon: Users,
-        path: '/nucleo/udreamms/coo/cx',
+        path: '/nucleo/roosevelt/coo/cx',
         color: 'bg-teal-500/10 text-teal-400 border-teal-500/20'
     },
     {

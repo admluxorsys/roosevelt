@@ -6,6 +6,7 @@ import { Upload, FileText, Image as ImageIcon, X, Loader2, Eye, Plus } from 'luc
 import { storage } from '@/lib/firebase'; // Ensure this exports your storage instance
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { toast } from 'sonner';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface TabFilesProps {
     contact: any;
@@ -14,6 +15,11 @@ interface TabFilesProps {
 }
 
 export const TabFiles: React.FC<TabFilesProps> = ({ contact, updateField, isEditing = false }) => {
+    const { currentUser, activeEntity } = useAuth();
+    const getTenantPath = () => {
+        if (!currentUser?.uid || !activeEntity) return '';
+        return `users/${currentUser.uid}/entities/${activeEntity}`;
+    };
     const [uploading, setUploading] = useState(false);
 
     // Documents structure: contact.documents = [{ name: 'ID Front', url: '...', type: 'image/jpeg', path: '...' }]
@@ -34,7 +40,7 @@ export const TabFiles: React.FC<TabFilesProps> = ({ contact, updateField, isEdit
             // Create a unique path: contacts/{contactId}/{timestamp}_{filename}
             // If contact.id doesn't exist yet (new contact), use a temp ID or timestamp
             const contactId = contact.id || `temp_${Date.now()}`;
-            const path = `contacts/${contactId}/${Date.now()}_${file.name}`;
+            const path = `${getTenantPath()}/contacts/${contactId}/${Date.now()}_${file.name}`;
             const storageRef = ref(storage, path);
 
             await uploadBytes(storageRef, file);

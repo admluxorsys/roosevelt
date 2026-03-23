@@ -3,14 +3,10 @@
 import { useState } from 'react';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { storage } from '@/lib/firebase';
-import { useAuthState } from 'react-firebase-hooks/auth';
-import { auth } from '@/lib/firebase';
-import { httpsCallable } from 'firebase/functions';
-import { functions, db } from '@/lib/firebase';
 import { doc, updateDoc, arrayUnion, Timestamp } from 'firebase/firestore';
 import { toast } from 'sonner';
-
-const sendkambanMediaMessage = httpsCallable(functions, 'sendkambanMediaMessage');
+import { useAuth } from '@/contexts/AuthContext';
+import { db } from '@/lib/firebase';
 
 interface FileUploadOptions {
     cardId: string;
@@ -19,7 +15,7 @@ interface FileUploadOptions {
 }
 
 export const useFileUpload = () => {
-    const [user] = useAuthState(auth);
+    const { currentUser: user, activeEntity } = useAuth();
     const [uploading, setUploading] = useState(false);
     const [progress, setProgress] = useState(0);
 
@@ -30,8 +26,8 @@ export const useFileUpload = () => {
         }
 
         const { cardId, groupId, toNumber } = options;
-        if (!cardId || !groupId || !toNumber) {
-            toast.error("Faltan datos para enviar el archivo multimedia.");
+        if (!cardId || !groupId || !toNumber || !activeEntity) {
+            toast.error("Faltan datos o contexto (entidad) para enviar el archivo multimedia.");
             return;
         }
 
@@ -58,15 +54,27 @@ export const useFileUpload = () => {
                     try {
                         const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
 
-                        await sendkambanMediaMessage({
-                            cardId,
-                            groupId,
-                            fileUrl: downloadURL,
-                            toNumber,
-                            fileName: file.name
+                        const response = await fetch('/api/whatsapp/send', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                message: `Archivo enviado: ${file.name}`,
+                                toNumber: toNumber,
+                                cardId: cardId,
+                                groupId: groupId,
+                                type: 'media',
+                                url: downloadURL,
+                                filename: file.name,
+                                userId: user.uid,
+                                entityId: activeEntity
+                            })
                         });
 
-                        // Save document metadata to Firestore
+                        if (!response.ok) {
+                            throw new Error('Error enviando archivo a través de la API');
+                        }
+
+                        // Save document metadata to Firestore (Multi-Tenant path)
                         const fileData = {
                             id: `doc_${Date.now()}`,
                             name: file.name,
@@ -76,7 +84,7 @@ export const useFileUpload = () => {
                             uploadedAt: Timestamp.now()
                         };
 
-                        await updateDoc(doc(db, 'kamban-groups', groupId, 'cards', cardId), {
+                        await updateDoc(doc(db, 'users', user.uid, 'entities', activeEntity, 'kamban-groups', groupId, 'cards', cardId), {
                             documents: arrayUnion(fileData),
                             history: arrayUnion({
                                 id: `hist_${Date.now()}`,

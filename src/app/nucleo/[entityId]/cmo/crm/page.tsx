@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';import { useAuth } from '@/contexts/AuthContext';
+
 import { AnimatePresence, Variants, motion } from 'framer-motion';
 
 import { db } from '@/lib/firebase';
@@ -128,6 +129,12 @@ const itemVariants: Variants = {
 };
 
 export default function ContactsPage() {
+    const { currentUser, activeEntity } = useAuth();
+    const getTenantPath = () => {
+        if (!currentUser?.uid || !activeEntity) return '';
+        return `users/${currentUser.uid}/entities/${activeEntity}`;
+    };
+
     const [contacts, setContacts] = useState<any[]>([]);
     const [rawContacts, setRawContacts] = useState<any[]>([]); // Unprocessed contacts for duplicate detection
     const [searchQuery, setSearchQuery] = useState('');
@@ -193,7 +200,7 @@ export default function ContactsPage() {
     const [activeCard, setActiveCard] = useState<any>(null); // To pass to modal
 
     useEffect(() => {
-        const groupsQuery = query(collection(db, 'kanban-groups'), orderBy("order", "asc"));
+        const groupsQuery = query(collection(db, `${getTenantPath()}/kanban-groups`), orderBy("order", "asc"));
         const unsubscribe = onSnapshot(groupsQuery, (snapshot) => {
             const groupsFromDb = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
             setGroups(groupsFromDb);
@@ -204,7 +211,10 @@ export default function ContactsPage() {
     useEffect(() => {
         const cardsQuery = query(collectionGroup(db, 'cards'));
         const unsubscribe = onSnapshot(cardsQuery, (snapshot) => {
-            const allCardsFromDb = snapshot.docs.map(doc => {
+            const tenantPath = getTenantPath();
+            const allCardsFromDb = snapshot.docs
+                .filter(doc => doc.ref.path.includes(tenantPath))
+                .map(doc => {
                 // Use Regex to safely extract groupId from path
                 const match = doc.ref.path.match(/kanban-groups\/([^\/]+)\/cards/);
                 const groupId = match ? match[1] : undefined;
@@ -217,7 +227,7 @@ export default function ContactsPage() {
 
     useEffect(() => {
         setIsLoadingContacts(true);
-        const contactsQuery = query(collection(db, 'contacts'));
+        const contactsQuery = query(collection(db, `${getTenantPath()}/contacts`));
         const unsubscribe = onSnapshot(contactsQuery, (snapshot) => {
             const allContacts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
@@ -553,12 +563,12 @@ export default function ContactsPage() {
                         clientId: generateClientId()
                     };
 
-                    await setDoc(doc(db, 'contacts', contactId), sanitizeData(finalContact));
+                    await setDoc(doc(db, `${getTenantPath()}/contacts`, contactId), sanitizeData(finalContact));
                     importedCount++;
                 }
 
                 setSyncStatus(`✅ Importación: ${importedCount} añadidos, ${skippedCount} duplicados omitidos.`);
-                const querySnapshot = await getDocs(collection(db, 'contacts'));
+                const querySnapshot = await getDocs(collection(db, `${getTenantPath()}/contacts`));
                 const allContacts = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 setContacts(processContacts(allContacts));
                 setTimeout(() => { setIsImportModalOpen(false); setSyncStatus(''); }, 2000);
@@ -643,7 +653,7 @@ export default function ContactsPage() {
                 // 1. Check if contact already exists by phone (normalized match)
                 // We fetch all and filter in memory to be safe with formatting variations, 
                 // but usually the normalizePhoneNumber is stable.
-                const existingContactQuery = query(collection(db, 'contacts'), where('phone', '==', phone));
+                const existingContactQuery = query(collection(db, `${getTenantPath()}/contacts`), where('phone', '==', phone));
                 const existingDocs = await getDocs(existingContactQuery);
 
                 const contactData: any = {
@@ -666,7 +676,7 @@ export default function ContactsPage() {
                     const combinedTags = Array.from(new Set([...(existingData.tags || []), ...(primaryCard.tags || [])]));
                     mergedData.tags = combinedTags;
 
-                    await updateDoc(doc(db, 'contacts', existingDoc.id), mergedData);
+                    await updateDoc(doc(db, `${getTenantPath()}/contacts`, existingDoc.id), mergedData);
                     updatedCount++;
                 } else {
                     // CREATE NEW
@@ -680,14 +690,14 @@ export default function ContactsPage() {
                         tags: primaryCard.tags || [],
                         clientId: generateClientId()
                     };
-                    await setDoc(doc(db, 'contacts', primaryCard.id), newContactData);
+                    await setDoc(doc(db, `${getTenantPath()}/contacts`, primaryCard.id), newContactData);
                     importedCount++;
                 }
             }
             setSyncStatus(`✅ Sincronización: ${importedCount} nuevos, ${updatedCount} actualizados.`);
 
             // Refresh local state
-            const querySnapshot = await getDocs(collection(db, 'contacts'));
+            const querySnapshot = await getDocs(collection(db, `${getTenantPath()}/contacts`));
             const allContacts = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             setRawContacts(allContacts); // Update raw contacts for duplicate manager
             setContacts(processContacts(allContacts));
@@ -802,7 +812,7 @@ export default function ContactsPage() {
             const contactToSave = { ...newContact, name: finalName, phone: sanitizedPhone };
 
             // Create contact in Firestore (let Firestore generate the ID)
-            const contactRef = await addDoc(collection(db, 'contacts'), {
+            const contactRef = await addDoc(collection(db, `${getTenantPath()}/contacts`), {
                 ...sanitizeData(contactToSave),
                 createdAt: serverTimestamp(),
                 lastUpdated: serverTimestamp()
@@ -880,7 +890,7 @@ export default function ContactsPage() {
             const sanitizedPhone = normalizePhoneNumber(selectedContact.phone);
             const contactToSave = { ...selectedContact, phone: sanitizedPhone };
 
-            const contactRef = doc(db, 'contacts', selectedContact.id);
+            const contactRef = doc(db, `${getTenantPath()}/contacts`, selectedContact.id);
             await setDoc(contactRef, { ...sanitizeData(contactToSave), lastUpdated: serverTimestamp() }, { merge: true });
 
             if (sanitizedPhone) {
@@ -929,7 +939,7 @@ export default function ContactsPage() {
                 const phone = contactToDelete?.phone;
 
                 // 1. Delete CRM Contact
-                await deleteDoc(doc(db, 'contacts', deleteTarget.id));
+                await deleteDoc(doc(db, `${getTenantPath()}/contacts`, deleteTarget.id));
                 
                 // 2. Delete associated Kanban Cards
                 if (phone) {
@@ -949,7 +959,7 @@ export default function ContactsPage() {
                     const phone = contact?.phone;
                     
                     // Delete CRM Doc
-                    results.push(deleteDoc(doc(db, 'contacts', id)));
+                    results.push(deleteDoc(doc(db, `${getTenantPath()}/contacts`, id)));
                     
                     // Delete Cards
                     if (phone) {

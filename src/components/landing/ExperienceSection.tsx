@@ -96,7 +96,7 @@ export default function ExperienceSection() {
                         </h2>
                         <div className="w-20 h-20 md:w-32 md:h-32 rounded-3xl flex items-center justify-center shadow-2xl group-hover:scale-105 transition-transform duration-500 overflow-hidden">
                             <img
-                                src="/assets/udreamms-app-shield.png"
+                                src="/assets/roosevelt-app-shield.png"
                                 alt="Udreamms App Logo"
                                 className="w-full h-full object-cover"
                             />

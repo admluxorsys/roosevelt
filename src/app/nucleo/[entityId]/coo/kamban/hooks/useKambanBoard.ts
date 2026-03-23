@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';import { useAuth } from '@/contexts/AuthContext';
+
 import { db } from '@/lib/firebase';
 import { collection, query, orderBy, onSnapshot, doc, updateDoc, arrayUnion, Timestamp, addDoc } from 'firebase/firestore';
 import { functions } from '@/lib/firebase';
@@ -6,13 +7,19 @@ import { httpsCallable } from 'firebase/functions';
 import { toast } from 'sonner';
 
 export const useKambanBoard = (filterTerm: string = '') => {
+    const { currentUser, activeEntity } = useAuth();
+    const getTenantPath = () => {
+        if (!currentUser?.uid || !activeEntity) return '';
+        return `users/${currentUser.uid}/entities/${activeEntity}`;
+    };
+
     const [groups, setGroups] = useState<any[]>([]);
     const [cards, setCards] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
     // Load Groups
     useEffect(() => {
-        const q = query(collection(db, 'kanban-groups'), orderBy('order', 'asc'));
+        const q = query(collection(db, `${getTenantPath()}/kanban-groups`), orderBy('order', 'asc'));
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const groupsData = snapshot.docs.map(doc => ({
                 id: doc.id,
@@ -29,7 +36,7 @@ export const useKambanBoard = (filterTerm: string = '') => {
         const unsubscribes: (() => void)[] = [];
 
         groups.forEach(group => {
-            const q = query(collection(db, 'kanban-groups', group.id, 'cards'));
+            const q = query(collection(db, `${getTenantPath()}/kanban-groups`, group.id, 'cards'));
             const unsub = onSnapshot(q, (snapshot) => {
                 const groupCards = snapshot.docs.map(doc => ({
                     id: doc.id,
@@ -89,10 +96,12 @@ export const useKambanBoard = (filterTerm: string = '') => {
             await moveCardCallable({
                 cardId: activeId,
                 sourceGroupId,
-                destGroupId
+                destGroupId,
+                userId: currentUser?.uid,
+                entityId: activeEntity
             });
 
-            await updateDoc(doc(db, 'kanban-groups', destGroupId, 'cards', activeId), {
+            await updateDoc(doc(db, `${getTenantPath()}/kanban-groups`, destGroupId, 'cards', activeId), {
                 history: arrayUnion({
                     id: `hist_${Date.now()}`,
                     type: 'status',
@@ -110,7 +119,7 @@ export const useKambanBoard = (filterTerm: string = '') => {
 
     const handleUpdateColor = async (groupId: string, color: string) => {
         try {
-            await updateDoc(doc(db, 'kanban-groups', groupId), { color });
+            await updateDoc(doc(db, `${getTenantPath()}/kanban-groups`, groupId), { color });
         } catch (error) {
             console.error('Error updating color:', error);
             toast.error('Error changing color.');
@@ -119,7 +128,7 @@ export const useKambanBoard = (filterTerm: string = '') => {
 
     const handleAddGroup = async (name: string) => {
         try {
-            await addDoc(collection(db, 'kanban-groups'), {
+            await addDoc(collection(db, `${getTenantPath()}/kanban-groups`), {
                 name,
                 order: groups.length,
                 color: 'bg-[#121212]/50', // Default color

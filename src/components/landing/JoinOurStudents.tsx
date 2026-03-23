@@ -17,43 +17,43 @@ const studentVideos = [
   {
     id: 1,
     videoId: baseVideos[0],
-    handle: "@udreamms",
+    handle: "@roosevelt",
     title: "Cumpliendo metas en USA 🇺🇸"
   },
   {
     id: 2,
     videoId: baseVideos[1],
-    handle: "@udreamms",
+    handle: "@roosevelt",
     title: "Tu futuro empieza aquí ✨"
   },
   {
     id: 3,
     videoId: baseVideos[2],
-    handle: "@udreamms",
+    handle: "@roosevelt",
     title: "Experiencias inolvidables 🎓"
   },
   {
     id: 4,
     videoId: baseVideos[3],
-    handle: "@udreamms",
+    handle: "@roosevelt",
     title: "Viviendo el sueño americano 🗽"
   },
   {
     id: 5,
     videoId: baseVideos[0],
-    handle: "@udreamms",
+    handle: "@roosevelt",
     title: "Explorando nuevas ciudades 🌆"
   },
   {
     id: 6,
     videoId: baseVideos[1],
-    handle: "@udreamms",
+    handle: "@roosevelt",
     title: "Comunidad Udreamms 🤝"
   },
   {
     id: 7,
     videoId: baseVideos[2],
-    handle: "@udreamms",
+    handle: "@roosevelt",
     title: "Historias que inspiran 🚀"
   }
 ];
@@ -209,7 +209,7 @@ export default function JoinOurStudents() {
         <div className="flex justify-center">
           <Button
             className="rounded-full bg-gradient-to-r from-purple-600 to-orange-500 hover:from-purple-700 hover:to-orange-600 text-white font-medium px-10 py-6 text-lg shadow-xl shadow-orange-500/20 transition-all hover:scale-105 flex items-center gap-2"
-            onClick={() => window.open('https://www.instagram.com/udreamms/?hl=en', '_blank')}
+            onClick={() => window.open('https://www.instagram.com/roosevelt/?hl=en', '_blank')}
           >
             Ver más en Instagram
             <Instagram className="w-5 h-5" />

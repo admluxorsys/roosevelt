@@ -4,6 +4,7 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   addEdge,
   applyNodeChanges,
@@ -26,17 +27,18 @@ function FlowPage() {
   const [chatbotName, setChatbotName] = useState('Cargando...');
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [isLoading, setIsLoading] = useState(true);
-  const params = useParams();
-  const router = useRouter();
-  const chatbotId = params.id as string;
-  const debounceTimeout = useRef<NodeJS.Timeout | null>(null);
+    const params = useParams();
+    const router = useRouter();
+    const { currentUser, activeEntity } = useAuth();
+    const chatbotId = params.id as string;
+    const debounceTimeout = useRef<NodeJS.Timeout | null>(null);
 
   const saveData = useCallback(async (currentNodes: Node[], currentEdges: Edge[], name: string) => {
-    if (!chatbotId) return;
+    if (!chatbotId || !currentUser || !activeEntity) return;
 
     setSaveStatus('saving');
     try {
-      const chatbotRef = doc(db, 'chatbots', chatbotId);
+      const chatbotRef = doc(db, 'users', currentUser.uid, 'entities', activeEntity, 'chatbots', chatbotId);
       const edgesToSave = currentEdges.map(({ selected, ...edge }) => edge);
 
       await setDoc(chatbotRef, {
@@ -57,14 +59,14 @@ function FlowPage() {
 
   useEffect(() => {
     const fetchChatbotData = async () => {
-      if (!chatbotId) {
+      if (!chatbotId || !currentUser || !activeEntity) {
         setIsLoading(false);
         setChatbotName('ID de chatbot no encontrado');
         return;
       }
 
       setIsLoading(true);
-      const docRef = doc(db, 'chatbots', chatbotId);
+      const docRef = doc(db, 'users', currentUser.uid, 'entities', activeEntity, 'chatbots', chatbotId);
       const docSnap = await getDoc(docRef);
 
       if (docSnap.exists()) {
@@ -93,7 +95,7 @@ function FlowPage() {
     };
 
     fetchChatbotData();
-  }, [chatbotId, saveData]);
+  }, [chatbotId, saveData, currentUser, activeEntity]);
 
   // Efecto de Auto-guardado (Triggered by nodes/edges/name changes)
   useEffect(() => {
@@ -144,7 +146,11 @@ function FlowPage() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => router.push('/nucleo/udreamms/cto/automation/chatbots')}
+            onClick={() => {
+              if (activeEntity) {
+                router.push(`/nucleo/${activeEntity}/cto/automation/chatbots`);
+              }
+            }}
             className="text-neutral-400 hover:text-white hover:bg-neutral-800"
             title="Volver a mis bots"
           >

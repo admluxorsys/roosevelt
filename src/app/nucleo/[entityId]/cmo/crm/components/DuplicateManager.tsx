@@ -9,6 +9,7 @@ import { db } from '@/lib/firebase';
 import { deleteDoc, doc, updateDoc, serverTimestamp, collection, collectionGroup, query, where, getDocs, writeBatch } from 'firebase/firestore';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface DuplicateManagerProps {
     isOpen: boolean;
@@ -23,6 +24,12 @@ export const DuplicateManager: React.FC<DuplicateManagerProps> = ({
     contacts,
     onContactsUpdated
 }) => {
+    const { currentUser, activeEntity } = useAuth();
+    const getTenantPath = () => {
+        if (!currentUser?.uid || !activeEntity) return '';
+        return `users/${currentUser.uid}/entities/${activeEntity}`;
+    };
+
     const [analyzing, setAnalyzing] = useState(false);
     const [duplicates, setDuplicates] = useState<any[]>([]); // Array of groups
     const [selectedGroupIndex, setSelectedGroupIndex] = useState<number | null>(null);
@@ -132,8 +139,8 @@ export const DuplicateManager: React.FC<DuplicateManagerProps> = ({
 
             // Execute Updates
             // 1. Update Primary (if it still exists)
-            const primaryRef = doc(db, 'contacts', primaryContactId);
-            const primarySnap = await getDocs(query(collection(db, 'contacts'), where('__name__', '==', primaryContactId)));
+            const primaryRef = doc(db, `${getTenantPath()}/contacts`, primaryContactId);
+            const primarySnap = await getDocs(query(collection(db, `${getTenantPath()}/contacts`), where('__name__', '==', primaryContactId)));
 
             if (primarySnap.empty) {
                 toast.error("El contacto principal ya no existe.");
@@ -146,7 +153,7 @@ export const DuplicateManager: React.FC<DuplicateManagerProps> = ({
 
             // 2. Delete Others (only if they exist)
             for (const other of others) {
-                const otherRef = doc(db, 'contacts', other.id);
+                const otherRef = doc(db, `${getTenantPath()}/contacts`, other.id);
                 // We try a silent delete to be fast, but verify first if possible
                 await deleteDoc(otherRef).catch(err => console.error("Error deleting duplicate:", err));
             }
@@ -167,10 +174,10 @@ export const DuplicateManager: React.FC<DuplicateManagerProps> = ({
 
             if (allContactIds.length > 0 || allPhones.length > 0) {
                 // 1. Fetch all groups first (infallible method, no index needed)
-                const groupsSnapshot = await getDocs(collection(db, 'kamban-groups'));
+                const groupsSnapshot = await getDocs(collection(db, `${getTenantPath()}/kamban-groups`));
 
                 for (const groupDoc of groupsSnapshot.docs) {
-                    const cardsSnapshot = await getDocs(collection(db, 'kamban-groups', groupDoc.id, 'cards'));
+                    const cardsSnapshot = await getDocs(collection(db, `${getTenantPath()}/kamban-groups`, groupDoc.id, 'cards'));
                     cardsSnapshot.forEach(docSnap => {
                         const cardData = docSnap.data() as any;
 

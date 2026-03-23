@@ -71,12 +71,12 @@ const menuData: MenuItemData[] = [
         { title: "Embajadores", desc: "Representa a Udreamms", href: "/contact", icon: Users, colorClass: "text-amber-400 bg-amber-500/10" },
       ],
       socials: [
-        { label: "Facebook", href: "https://www.facebook.com/udreamms/", imgSrc: "/assets/f.jpg" },
-        { label: "Instagram", href: "https://www.instagram.com/udreamms/", imgSrc: "/assets/i.jpg" },
+        { label: "Facebook", href: "https://www.facebook.com/roosevelt/", imgSrc: "/assets/f.jpg" },
+        { label: "Instagram", href: "https://www.instagram.com/roosevelt/", imgSrc: "/assets/i.jpg" },
         { label: "kamban", href: "https://wa.me/16507840581", imgSrc: "/assets/w.jpg" },
-        { label: "X", href: "https://x.com/udreamms", imgSrc: "/assets/x.jpg" },
-        { label: "YouTube", href: "https://www.youtube.com/@udreamms", imgSrc: "/assets/y.jpg" },
-        { label: "TikTok", href: "https://www.tiktok.com/@udreamms", imgSrc: "/assets/t.jpg" },
+        { label: "X", href: "https://x.com/roosevelt", imgSrc: "/assets/x.jpg" },
+        { label: "YouTube", href: "https://www.youtube.com/@roosevelt", imgSrc: "/assets/y.jpg" },
+        { label: "TikTok", href: "https://www.tiktok.com/@roosevelt", imgSrc: "/assets/t.jpg" },
       ]
     }
   },

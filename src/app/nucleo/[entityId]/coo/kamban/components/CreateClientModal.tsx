@@ -20,6 +20,7 @@ import { db } from '@/lib/firebase';
 import { collection, addDoc, serverTimestamp, query, collectionGroup, where, getDocs, doc, setDoc, updateDoc } from 'firebase/firestore';
 import { toast } from 'sonner';
 import { normalizePhoneNumber } from '@/lib/phoneUtils';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface GroupData {
     id: string;
@@ -36,6 +37,11 @@ interface CreateClientModalProps {
 import { ALL_COUNTRY_CODES } from '@/lib/countryCodes';
 
 export function CreateClientModal({ isOpen, onClose, groups, initialGroupId }: CreateClientModalProps) {
+    const { currentUser, activeEntity } = useAuth();
+    const getTenantPath = () => {
+        if (!currentUser?.uid || !activeEntity) return '';
+        return `users/${currentUser.uid}/entities/${activeEntity}`;
+    };
     const [name, setName] = useState('');
     const [phone, setPhone] = useState('');
     const [countryCode, setCountryCode] = useState('+593');
@@ -63,7 +69,7 @@ export function CreateClientModal({ isOpen, onClose, groups, initialGroupId }: C
 
         try {
             // --- PREVENT DUPLICATES ---
-            const querySnapshot = await getDocs(collection(db, 'contacts'));
+            const querySnapshot = await getDocs(collection(db, `${getTenantPath()}/contacts`));
             const existingContact = querySnapshot.docs.find(doc => {
                 const num = (doc.data().phone || '').replace(/\D/g, '');
                 return num === fullPhone.replace(/\D/g, '');
@@ -77,7 +83,7 @@ export function CreateClientModal({ isOpen, onClose, groups, initialGroupId }: C
             const groupIdToUse = selectedGroupId || groups[0]?.id;
 
             // 1. Create CRM Contact first (let Firestore generate the ID)
-            const contactRef = await addDoc(collection(db, 'contacts'), {
+            const contactRef = await addDoc(collection(db, `${getTenantPath()}/contacts`), {
                 name: name,
                 phone: fullPhone,
                 source: 'Manual (kamban)',
@@ -98,7 +104,7 @@ export function CreateClientModal({ isOpen, onClose, groups, initialGroupId }: C
             });
 
             // 2. Create kamban Card linked by ID
-            await addDoc(collection(db, 'kamban-groups', groupIdToUse, 'cards'), {
+            await addDoc(collection(db, `${getTenantPath()}/kamban-groups`, groupIdToUse, 'cards'), {
                 contactName: name,
                 contactNumber: fullPhone,
                 contactId: contactId, // LINK BY FIRESTORE ID

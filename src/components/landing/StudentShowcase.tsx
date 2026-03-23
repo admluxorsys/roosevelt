@@ -12,7 +12,7 @@ const studentFeatures = [
     title: "Aplicación I-20 y Gestión de Visa",
     description: "Gestionamos todo tu proceso migratorio para que obtengas tu visa F-1: preparación profesional de documentos, seguimiento personalizado y simulaciones de entrevista consular.",
     image: "/assets/generated/student_showcase_campus.png",
-    video: "https://firebasestorage.googleapis.com/v0/b/udreamms-platform-1.firebasestorage.app/o/chatbot_media%2FVideo%20completo.mov?alt=media&token=f11b4b46-3521-45e7-bbd0-46c18a10bcb8"
+    video: "https://firebasestorage.googleapis.com/v0/b/roosevelt-platform-1.firebasestorage.app/o/chatbot_media%2FVideo%20completo.mov?alt=media&token=f11b4b46-3521-45e7-bbd0-46c18a10bcb8"
   },
   {
     id: "nivelacion",

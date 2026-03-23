@@ -4,6 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, addDoc, doc, deleteDoc, updateDoc, serverTimestamp, query, writeBatch, Timestamp } from 'firebase/firestore';
+import { useAuth } from '@/contexts/AuthContext';
 import Card from './Card';
 import { Plus, Trash2, MoreVertical, Palette, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -55,6 +56,11 @@ const Group = ({ group, allGroups = [], onCardClick, onUpdateColor, contacts = [
   onUpdateColor: any;
   contacts?: any[];
 }) => {
+  const { currentUser, activeEntity } = useAuth();
+  const getTenantPath = () => {
+    if (!currentUser?.uid || !activeEntity) return '';
+    return `users/${currentUser.uid}/entities/${activeEntity}`;
+  };
   const [cards, setCards] = useState<CardData[]>([]);
   const [isSelectContactOpen, setIsSelectContactOpen] = useState(false);
   const [isCreateClientOpen, setIsCreateClientOpen] = useState(false);
@@ -77,7 +83,7 @@ const Group = ({ group, allGroups = [], onCardClick, onUpdateColor, contacts = [
 
   useEffect(() => {
     if (!group.id) return;
-    const cardsQuery = query(collection(db, `kamban-groups/${group.id}/cards`));
+    const cardsQuery = query(collection(db, `${getTenantPath()}/kamban-groups/${group.id}/cards`));
 
     const unsubscribe = onSnapshot(cardsQuery, (snapshot) => {
       const cardsData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id, groupId: group.id })) as CardData[];
@@ -101,7 +107,7 @@ const Group = ({ group, allGroups = [], onCardClick, onUpdateColor, contacts = [
         messages: [],
       };
 
-      await addDoc(collection(db, `kamban-groups/${group.id}/cards`), cardData);
+      await addDoc(collection(db, `${getTenantPath()}/kamban-groups/${group.id}/cards`), cardData);
       toast.success(contact ? `Contacto "${contact.name}" añadido.` : "Nueva conversación creada.");
       setIsSelectContactOpen(false);
     } catch (error) {
@@ -158,7 +164,7 @@ const Group = ({ group, allGroups = [], onCardClick, onUpdateColor, contacts = [
           messages: [],
         };
 
-        const newCardRef = doc(collection(db, `kamban-groups/${group.id}/cards`));
+        const newCardRef = doc(collection(db, `${getTenantPath()}/kamban-groups/${group.id}/cards`));
         batch.set(newCardRef, cardData);
         importCount++;
       }
@@ -196,7 +202,7 @@ const Group = ({ group, allGroups = [], onCardClick, onUpdateColor, contacts = [
       // Move all cards to the Inbox
       cards.forEach((card) => {
         // Create new card in Inbox
-        const newCardRef = doc(collection(db, `kamban-groups/${inbox.id}/cards`));
+        const newCardRef = doc(collection(db, `${getTenantPath()}/kamban-groups/${inbox.id}/cards`));
         const { id, groupId, ...cardData } = card; // Remove old ID and groupId
         batch.set(newCardRef, {
           ...cardData,
@@ -204,12 +210,12 @@ const Group = ({ group, allGroups = [], onCardClick, onUpdateColor, contacts = [
         });
 
         // Delete old card
-        const oldCardRef = doc(db, `kamban-groups/${group.id}/cards`, card.id);
+        const oldCardRef = doc(db, `${getTenantPath()}/kamban-groups/${group.id}/cards`, card.id);
         batch.delete(oldCardRef);
       });
 
       // Delete the group itself
-      const groupRef = doc(db, 'kamban-groups', group.id);
+      const groupRef = doc(db, `${getTenantPath()}/kamban-groups`, group.id);
       batch.delete(groupRef);
 
       try {
@@ -257,7 +263,7 @@ const Group = ({ group, allGroups = [], onCardClick, onUpdateColor, contacts = [
                     if (newName && newName !== group.name) {
                       // We'll need to lift this to kambanBoard or use a local handler if passed via props
                       // For now, I'll rely on a prop update if available or direct Firestore update
-                      updateDoc(doc(db, 'kamban-groups', group.id), { name: newName });
+                      updateDoc(doc(db, `${getTenantPath()}/kamban-groups`, group.id), { name: newName });
                     }
                   }}
                   className="cursor-pointer hover:bg-neutral-800 rounded-lg py-2"

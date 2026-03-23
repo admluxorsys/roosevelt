@@ -12,6 +12,7 @@ import { doc, onSnapshot, updateDoc, setDoc, runTransaction } from 'firebase/fir
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { toast } from 'sonner';
 
+import { useAuth } from '@/contexts/AuthContext';
 export interface ConversationModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -91,6 +92,11 @@ function BadgeSelect({
 function FileRow({
   label, fieldKey, cardId, groupId, url,
 }: { label: string; fieldKey: string; cardId: string; groupId: string; url?: string }) {
+  const { currentUser, activeEntity } = useAuth();
+  const getTenantPath = () => {
+    if (!currentUser?.uid || !activeEntity) return '';
+    return `users/${currentUser.uid}/entities/${activeEntity}`;
+  };
   const [uploading, setUploading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -102,7 +108,7 @@ function FileRow({
       const storageRef = ref(storage, `cards/${cardId}/${fieldKey}/${file.name}`);
       await uploadBytes(storageRef, file);
       const downloadURL = await getDownloadURL(storageRef);
-      await updateDoc(doc(db, 'kanban-groups', groupId, 'cards', cardId), {
+      await updateDoc(doc(db, `${getTenantPath()}/kanban-groups`, groupId, 'cards', cardId), {
         [`documents.${fieldKey}`]: { url: downloadURL, name: file.name },
       });
       toast.success(`${label} subido`);
@@ -148,6 +154,12 @@ function FileRow({
 export default function ConversationModal({
   isOpen, onClose, card,
 }: ConversationModalProps) {
+    const { currentUser, activeEntity } = useAuth();
+    const getTenantPath = () => {
+        if (!currentUser?.uid || !activeEntity) return '';
+        return `users/${currentUser.uid}/entities/${activeEntity}`;
+    };
+
   const [liveData, setLiveData]           = useState<any>(null);
   const [contactData, setContactData]     = useState<any>(null);
   const [editingName, setEditingName]     = useState(false);
@@ -160,7 +172,7 @@ export default function ConversationModal({
   useEffect(() => {
     if (!card?.id || !card?.groupId || !isOpen) return;
     return onSnapshot(
-      doc(db, 'kanban-groups', card.groupId, 'cards', card.id),
+      doc(db, `${getTenantPath()}/kanban-groups`, card.groupId, 'cards', card.id),
       snap => { if (snap.exists()) setLiveData({ id: snap.id, ...snap.data() }); }
     );
   }, [card?.id, card?.groupId, isOpen]);
@@ -169,7 +181,7 @@ export default function ConversationModal({
     const crmId = liveData?.crmId;
     if (!crmId || !isOpen) { setContactData(null); return; }
     return onSnapshot(
-      doc(db, 'contacts', crmId),
+      doc(db, `${getTenantPath()}/contacts`, crmId),
       snap => { if (snap.exists()) setContactData({ id: snap.id, ...snap.data() }); }
     );
   }, [liveData?.crmId, isOpen]);
@@ -184,7 +196,7 @@ export default function ConversationModal({
   const update = async (fields: Record<string, any>) => {
     if (!card?.id || !card?.groupId) return;
     try {
-      await updateDoc(doc(db, 'kanban-groups', card.groupId, 'cards', card.id), fields);
+      await updateDoc(doc(db, `${getTenantPath()}/kanban-groups`, card.groupId, 'cards', card.id), fields);
     } catch { toast.error('Error al guardar'); }
   };
 
@@ -200,8 +212,8 @@ export default function ConversationModal({
           tx.set(counterRef, { count: next }, { merge: true });
           numericId = String(next).padStart(10, '0');
         });
-        await updateDoc(doc(db, 'kanban-groups', card.groupId, 'cards', card.id), { crmId: numericId });
-        await setDoc(doc(db, 'contacts', numericId), {
+        await updateDoc(doc(db, `${getTenantPath()}/kanban-groups`, card.groupId, 'cards', card.id), { crmId: numericId });
+        await setDoc(doc(db, `${getTenantPath()}/contacts`, numericId), {
           crmId: numericId,
           contactName: liveData.contactName || '',
           contactNumber: liveData.contactNumber || '',
@@ -217,7 +229,7 @@ export default function ConversationModal({
   const handleCopyLink = () => {
     const crmId = liveData?.crmId;
     if (!crmId) return;
-    const link = `${window.location.origin}/nucleo/udreamms/coo/kamban/application/${crmId}`;
+    const link = `${window.location.origin}/nucleo/roosevelt/coo/kamban/application/${crmId}`;
     navigator.clipboard.writeText(link);
     window.open(link, '_blank');
     toast.success('Link copiado');

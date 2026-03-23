@@ -4,6 +4,7 @@ import { doc, updateDoc, arrayUnion, arrayRemove, Timestamp, addDoc, collection,
 import { toast } from 'sonner';
 import { CardData, CheckIn, Note, PaymentMethod } from '../types';
 import { normalizePhoneNumber } from '@/lib/phoneUtils';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface UseCardOperationsProps {
     currentCardId: string | null;
@@ -29,6 +30,8 @@ export const useCardOperations = ({
     isEditing,
     setIsEditing
 }: UseCardOperationsProps) => {
+    const { currentUser, activeEntity } = useAuth();
+
     // Local State for operations
     const [isAddingNote, setIsAddingNote] = useState(false);
     const [newNote, setNewNote] = useState('');
@@ -47,12 +50,20 @@ export const useCardOperations = ({
         latestContactInfo.current = contactInfo;
     }, [contactInfo]);
 
+    const getTenantPath = () => {
+        if (!currentUser?.uid || !activeEntity) return null;
+        return `users/${currentUser.uid}/entities/${activeEntity}`;
+    };
+
     const handleInfoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
         setContactInfo((prev) => ({ ...prev, [name]: value }));
     };
 
     const handleInfoSave = async () => {
+        const tenantPath = getTenantPath();
+        if (!tenantPath) return null;
+
         const rawPhone = liveCardData?.contactNumber || card?.contactNumber;
         const originalPhone = normalizePhoneNumber(rawPhone || '');
         if (!originalPhone) return null;
@@ -61,12 +72,12 @@ export const useCardOperations = ({
             const dataToSave = latestContactInfo.current;
             // 1. Update Kanban Card
             if (currentCardId && currentGroupId && !currentCardId.startsWith('temp-')) {
-                await updateDoc(doc(db, 'kanban-groups', currentGroupId, 'cards', currentCardId), dataToSave);
+                await updateDoc(doc(db, `${tenantPath}/kanban-groups`, currentGroupId, 'cards', currentCardId), dataToSave);
             }
 
             // 2. Update CRM Contacts
             const cleanDigits = originalPhone.replace(/\D/g, '');
-            const contactsQuery = query(collection(db, 'contacts'), where('phone', 'in', [`+${cleanDigits}`, cleanDigits]));
+            const contactsQuery = query(collection(db, `${tenantPath}/contacts`), where('phone', 'in', [`+${cleanDigits}`, cleanDigits]));
             const contactsSnapshot = await getDocs(contactsQuery);
             let contactId = dataToSave.id;
 
@@ -87,7 +98,7 @@ export const useCardOperations = ({
                     lastUpdated: serverTimestamp(),
                     source: 'chat_restored'
                 };
-                const docRef = await addDoc(collection(db, 'contacts'), newContact);
+                const docRef = await addDoc(collection(db, `${tenantPath}/contacts`), newContact);
                 contactId = docRef.id;
             }
 
@@ -101,7 +112,7 @@ export const useCardOperations = ({
                     timestamp: Timestamp.now(),
                     author: 'Agente'
                 };
-                await updateDoc(doc(db, 'kanban-groups', currentGroupId, 'cards', currentCardId), {
+                await updateDoc(doc(db, `${tenantPath}/kanban-groups`, currentGroupId, 'cards', currentCardId), {
                     history: arrayUnion(historyEvent)
                 });
             }
@@ -117,6 +128,9 @@ export const useCardOperations = ({
     };
 
     const handleSaveNote = async () => {
+        const tenantPath = getTenantPath();
+        if (!tenantPath) return;
+
         if (!newNote.trim() || !currentCardId || !currentGroupId || currentCardId.startsWith('temp-')) {
             toast.error("Necesitas enviar un mensaje primero.");
             return;
@@ -128,7 +142,7 @@ export const useCardOperations = ({
             timestamp: Timestamp.now()
         };
         toast.promise(
-            updateDoc(doc(db, 'kanban-groups', currentGroupId, 'cards', currentCardId), {
+            updateDoc(doc(db, `${tenantPath}/kanban-groups`, currentGroupId, 'cards', currentCardId), {
                 notes: arrayUnion(noteObject),
                 history: arrayUnion({
                     id: `hist_${Date.now()}`, type: 'comment', content: `Nota: ${newNote}`, timestamp: Timestamp.now(), author: 'Agente'
@@ -143,6 +157,9 @@ export const useCardOperations = ({
     };
 
     const handleSaveCheckIn = async (customText?: string) => {
+        const tenantPath = getTenantPath();
+        if (!tenantPath) return;
+
         const textToSave = customText || newCheckIn;
         if (!textToSave.trim() || !currentCardId || !currentGroupId || currentCardId.startsWith('temp-')) {
             toast.error("Necesitas enviar un mensaje primero.");
@@ -150,7 +167,7 @@ export const useCardOperations = ({
         }
         const checkInObject = { id: `checkin_${Date.now()}`, text: textToSave, author: 'Agente', timestamp: Timestamp.now() };
         toast.promise(
-            updateDoc(doc(db, 'kanban-groups', currentGroupId, 'cards', currentCardId), {
+            updateDoc(doc(db, `${tenantPath}/kanban-groups`, currentGroupId, 'cards', currentCardId), {
                 checkIns: arrayUnion(checkInObject),
                 history: arrayUnion({
                     id: `hist_${Date.now()}`, type: 'status', content: `Tarea: ${textToSave}`, timestamp: Timestamp.now(), author: 'Agente'
@@ -165,13 +182,16 @@ export const useCardOperations = ({
     };
 
     const toggleChecklistItem = async (item: string) => {
+        const tenantPath = getTenantPath();
+        if (!tenantPath) return;
+
         if (!currentCardId || !currentGroupId) return;
         const newStatus = !liveCardData?.checklistStatus?.[item];
         const updatedChecklistStatus = { ...(liveCardData?.checklistStatus || {}), [item]: newStatus };
 
         // Optimistic update optional here as live subscription will catch it
         try {
-            await updateDoc(doc(db, 'kanban-groups', currentGroupId, 'cards', currentCardId), {
+            await updateDoc(doc(db, `${tenantPath}/kanban-groups`, currentGroupId, 'cards', currentCardId), {
                 checklistStatus: updatedChecklistStatus,
                 history: arrayUnion({
                     id: `hist_${Date.now()}`, type: 'checklist', content: `${newStatus ? 'Completado' : 'Pendiente'}: ${item}`, timestamp: Timestamp.now(), author: 'Agente'
@@ -181,20 +201,26 @@ export const useCardOperations = ({
     };
 
     const handleToggleCheckIn = async (checkIn: CheckIn) => {
+        const tenantPath = getTenantPath();
+        if (!tenantPath) return;
+
         if (!currentCardId || !currentGroupId) return;
         const newStatus = !liveCardData?.checkIns?.find(c => c.id === checkIn.id)?.completed;
         const updatedCheckIns = liveCardData?.checkIns?.map(c => c.id === checkIn.id ? { ...c, completed: newStatus } : c) || [];
-        await updateDoc(doc(db, 'kanban-groups', currentGroupId, 'cards', currentCardId), {
+        await updateDoc(doc(db, `${tenantPath}/kanban-groups`, currentGroupId, 'cards', currentCardId), {
             checkIns: updatedCheckIns
         });
     };
 
     const handleSavePaymentMethod = async () => {
+        const tenantPath = getTenantPath();
+        if (!tenantPath) return;
+
         if (!currentCardId || !currentGroupId || !newPayment.last4 || currentCardId.startsWith('temp-')) return;
         const paymentMethodObject = {
             id: `pm_${Date.now()}`, ...newPayment, isDefault: (liveCardData?.paymentMethods?.length || 0) === 0
         };
-        await updateDoc(doc(db, 'kanban-groups', currentGroupId, 'cards', currentCardId), {
+        await updateDoc(doc(db, `${tenantPath}/kanban-groups`, currentGroupId, 'cards', currentCardId), {
             paymentMethods: arrayUnion(paymentMethodObject)
         });
         setIsAddingPayment(false);
@@ -207,11 +233,14 @@ export const useCardOperations = ({
     };
 
     const handleSaveEditedCheckIn = async () => {
+        const tenantPath = getTenantPath();
+        if (!tenantPath) return;
+
         if (!currentCardId || !currentGroupId || !editingCheckInId) return;
         const updatedCheckIns = liveCardData?.checkIns?.map(c =>
             c.id === editingCheckInId ? { ...c, text: editText } : c
         ) || [];
-        await updateDoc(doc(db, 'kanban-groups', currentGroupId, 'cards', currentCardId), {
+        await updateDoc(doc(db, `${tenantPath}/kanban-groups`, currentGroupId, 'cards', currentCardId), {
             checkIns: updatedCheckIns,
             history: arrayUnion({
                 id: `hist_${Date.now()}`, type: 'status', content: `Check-in editado: ${editText}`, timestamp: Timestamp.now(), author: 'Agente'
@@ -227,11 +256,14 @@ export const useCardOperations = ({
     };
 
     const handleSaveEditedNote = async () => {
+        const tenantPath = getTenantPath();
+        if (!tenantPath) return;
+
         if (!currentCardId || !currentGroupId || !editingNoteId) return;
         const updatedNotes = liveCardData?.notes?.map(n =>
             n.id === editingNoteId ? { ...n, text: editText } : n
         ) || [];
-        await updateDoc(doc(db, 'kanban-groups', currentGroupId, 'cards', currentCardId), {
+        await updateDoc(doc(db, `${tenantPath}/kanban-groups`, currentGroupId, 'cards', currentCardId), {
             notes: updatedNotes,
             history: arrayUnion({
                 id: `hist_${Date.now()}`, type: 'comment', content: `Nota editada: ${editText}`, timestamp: Timestamp.now(), author: 'Agente'
@@ -242,22 +274,31 @@ export const useCardOperations = ({
     };
 
     const handleDeleteNote = async (noteId: string) => {
+        const tenantPath = getTenantPath();
+        if (!tenantPath) return;
+
         if (!currentCardId || !currentGroupId) return;
-        await updateDoc(doc(db, 'kanban-groups', currentGroupId, 'cards', currentCardId), {
+        await updateDoc(doc(db, `${tenantPath}/kanban-groups`, currentGroupId, 'cards', currentCardId), {
             notes: liveCardData?.notes?.filter(n => n.id !== noteId)
         });
     };
 
     const handleDeleteCheckIn = async (checkInId: string) => {
+        const tenantPath = getTenantPath();
+        if (!tenantPath) return;
+
         if (!currentCardId || !currentGroupId) return;
-        await updateDoc(doc(db, 'kanban-groups', currentGroupId, 'cards', currentCardId), {
+        await updateDoc(doc(db, `${tenantPath}/kanban-groups`, currentGroupId, 'cards', currentCardId), {
             checkIns: liveCardData?.checkIns?.filter(n => n.id !== checkInId)
         });
     };
 
     const handleSaveHistoryComment = async () => {
+        const tenantPath = getTenantPath();
+        if (!tenantPath) return;
+
         if (!currentCardId || !currentGroupId) return;
-        await updateDoc(doc(db, 'kanban-groups', currentGroupId, 'cards', currentCardId), {
+        await updateDoc(doc(db, `${tenantPath}/kanban-groups`, currentGroupId, 'cards', currentCardId), {
             history: arrayUnion({
                 id: `hist_${Date.now()}`, type: 'comment', content: newHistoryComment, timestamp: Timestamp.now(), author: 'Agente'
             })
@@ -266,6 +307,9 @@ export const useCardOperations = ({
     };
 
     const handleSaveMute = async (duration: string | null) => {
+        const tenantPath = getTenantPath();
+        if (!tenantPath) return;
+
         if (!currentCardId || !currentGroupId) return;
         let mutedUntil: Timestamp | null = null;
         if (duration) {
@@ -275,15 +319,18 @@ export const useCardOperations = ({
             if (duration === 'always') now.setFullYear(now.getFullYear() + 100);
             mutedUntil = Timestamp.fromDate(now);
         }
-        await updateDoc(doc(db, 'kanban-groups', currentGroupId, 'cards', currentCardId), { mutedUntil });
+        await updateDoc(doc(db, `${tenantPath}/kanban-groups`, currentGroupId, 'cards', currentCardId), { mutedUntil });
         toast.success(duration ? 'Silenciado' : 'Reactivado');
     };
 
     const handleUpdateAssignee = async (agentName: string) => {
+        const tenantPath = getTenantPath();
+        if (!tenantPath) return;
+
         if (!currentCardId || !currentGroupId || currentCardId.startsWith('temp-')) return;
         
         try {
-            await updateDoc(doc(db, 'kanban-groups', currentGroupId, 'cards', currentCardId), {
+            await updateDoc(doc(db, `${tenantPath}/kanban-groups`, currentGroupId, 'cards', currentCardId), {
                 assignedTo: agentName,
                 history: arrayUnion({
                     id: `hist_${Date.now()}`,
@@ -301,9 +348,12 @@ export const useCardOperations = ({
     };
 
     const handleAddLabel = async (label: string) => {
+        const tenantPath = getTenantPath();
+        if (!tenantPath) return;
+
         if (!currentCardId || !currentGroupId || currentCardId.startsWith('temp-')) return;
         try {
-            await updateDoc(doc(db, 'kanban-groups', currentGroupId, 'cards', currentCardId), {
+            await updateDoc(doc(db, `${tenantPath}/kanban-groups`, currentGroupId, 'cards', currentCardId), {
                 labels: arrayUnion(label),
                 history: arrayUnion({
                     id: `hist_${Date.now()}`,
@@ -321,9 +371,12 @@ export const useCardOperations = ({
     };
 
     const handleRemoveLabel = async (label: string) => {
+        const tenantPath = getTenantPath();
+        if (!tenantPath) return;
+
         if (!currentCardId || !currentGroupId || currentCardId.startsWith('temp-')) return;
         try {
-            await updateDoc(doc(db, 'kanban-groups', currentGroupId, 'cards', currentCardId), {
+            await updateDoc(doc(db, `${tenantPath}/kanban-groups`, currentGroupId, 'cards', currentCardId), {
                 labels: arrayRemove(label),
                 history: arrayUnion({
                     id: `hist_${Date.now()}`,
@@ -341,10 +394,13 @@ export const useCardOperations = ({
     };
 
     const handleToggleBlock = async () => {
+        const tenantPath = getTenantPath();
+        if (!tenantPath) return;
+
         if (!currentCardId || !currentGroupId || currentCardId.startsWith('temp-')) return;
         const newStatus = !liveCardData?.isBlocked;
         try {
-            await updateDoc(doc(db, 'kanban-groups', currentGroupId, 'cards', currentCardId), {
+            await updateDoc(doc(db, `${tenantPath}/kanban-groups`, currentGroupId, 'cards', currentCardId), {
                 isBlocked: newStatus,
                 history: arrayUnion({
                     id: `hist_${Date.now()}`,
@@ -375,4 +431,3 @@ export const useCardOperations = ({
         handleAddLabel, handleRemoveLabel, handleToggleBlock
     };
 };
-

@@ -5,6 +5,7 @@ import { useAuthState } from "react-firebase-hooks/auth";
 import { auth, db } from "@/lib/firebase";
 import { doc, updateDoc } from "firebase/firestore";
 import { useSearchParams, useRouter } from "next/navigation";
+import { useAuth } from "@/contexts/AuthContext";
 import { Maximize2, Minimize2, Sparkles, Plus, History } from "lucide-react";
 
 import { INITIAL_FILES } from "./constants";
@@ -30,6 +31,7 @@ import { BrowserAddressBar } from "./components/BrowserAddressBar";
 import { Suspense } from "react";
 
 function WebBuilderContent() {
+    const { currentUser, activeEntity } = useAuth();
     // --- Global UI State ---
     const [activeTool, setActiveTool] = useState("select");
     const [viewMode, setViewMode] = useState<"desktop" | "tablet" | "mobile">("desktop");
@@ -71,27 +73,30 @@ function WebBuilderContent() {
             loadGitHubUser();
 
             // Save per-project GitHub owner directly to Firestore using projectId from URL
-            if ((projectIdFromUrl || activeProjectId) && githubLoginParam) {
+            if ((projectIdFromUrl || activeProjectId) && githubLoginParam && currentUser && activeEntity) {
                 const targetProjectId = projectIdFromUrl || activeProjectId!;
+                const projectRef = doc(db, 'users', currentUser.uid, 'entities', activeEntity, 'web-projects', targetProjectId);
+
                 fetch(`https://api.github.com/users/${githubLoginParam}`)
                     .then(r => r.json())
-                    .then(u => updateDoc(doc(db, 'web-projects', targetProjectId), {
+                    .then(u => updateDoc(projectRef, {
                         githubOwner: u.login || githubLoginParam,
                         githubAvatar: u.avatar_url || '',
                         githubConnected: true
                     }))
-                    .catch(() => updateDoc(doc(db, 'web-projects', targetProjectId), {
+                    .catch(() => updateDoc(projectRef, {
                         githubOwner: githubLoginParam,
                         githubConnected: true
                     }));
             }
 
+            // Remove query params to prevent re-triggering
             router.replace(window.location.pathname);
         } else if (error) {
             showToast(`Error conectando GitHub: ${decodeURIComponent(error)}`, 'info');
             router.replace(window.location.pathname);
         }
-    }, [searchParams]);
+    }, [searchParams, currentUser, activeEntity]);
 
     // AI Config
     const [selectedModel, setSelectedModel] = useState("Gemini 2.0 Flash");
@@ -154,8 +159,12 @@ function WebBuilderContent() {
         // Clear project from memory and localStorage (via switch to null)
         handleSwitchProject('');
         // Force refresh to the dashboard URL to ensure a clean state
-        window.location.href = "/nucleo/udreamms/cto/web-builder";
-    }, [handleSwitchProject]);
+        if (activeEntity) {
+            window.location.href = `/nucleo/${activeEntity}/cto/web-builder`;
+        } else {
+            router.push('/');
+        }
+    }, [handleSwitchProject, activeEntity, router]);
 
     // Derived states
     const deploymentUrl = activeProject?.deploymentUrl || "";
@@ -437,7 +446,9 @@ function WebBuilderContent() {
                         autoCreate: true,
                         projectName: activeProject.name,
                         message: `Initial commit — ${activeProject.name}`,
-                        files: files // Enviar archivos actuales!
+                        files: files, // Enviar archivos actuales!
+                        userId: currentUser?.uid,
+                        entityId: activeEntity
                     })
                 });
                 const result = await res.json();
@@ -532,7 +543,9 @@ function WebBuilderContent() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         siteId: finalSiteId,
-                        files: files
+                        files: files,
+                        userId: currentUser?.uid,
+                        entityId: activeEntity
                     })
                 });
 

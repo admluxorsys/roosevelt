@@ -2,6 +2,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
 import { db } from '@/lib/firebase';
 import { doc, deleteDoc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
@@ -39,6 +40,11 @@ import {
 } from "@/components/ui/tooltip"
 
 const Card = ({ card, groupId, onClick, cardColor = 'bg-neutral-800', contacts = [], isCompact }: any) => {
+  const { currentUser, activeEntity } = useAuth();
+  const getTenantPath = () => {
+    if (!currentUser?.uid || !activeEntity) return '';
+    return `users/${currentUser.uid}/entities/${activeEntity}`;
+  };
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState('');
 
@@ -73,7 +79,7 @@ const Card = ({ card, groupId, onClick, cardColor = 'bg-neutral-800', contacts =
   const handleDeleteCard = async () => {
     if (deleteConfirmation === 'delete') {
       try {
-        await deleteDoc(doc(db, `kamban-groups/${groupId}/cards`, card.id));
+        await deleteDoc(doc(db, `${getTenantPath()}/kamban-groups/${groupId}/cards`, card.id));
         handleCloseDeleteDialog();
       } catch (error) {
         console.error("Error deleting card: ", error);

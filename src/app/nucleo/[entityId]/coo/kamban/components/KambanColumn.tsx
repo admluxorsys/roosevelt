@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, doc, deleteDoc, updateDoc, serverTimestamp, writeBatch, Timestamp } from 'firebase/firestore';
 import Card from './Card';
@@ -67,6 +68,11 @@ export const kambanColumn = ({
     contacts = [],
     isCompact
 }: kambanColumnProps) => {
+    const { currentUser, activeEntity } = useAuth();
+    const getTenantPath = () => {
+        if (!currentUser?.uid || !activeEntity) return '';
+        return `users/${currentUser.uid}/entities/${activeEntity}`;
+    };
     const [isSelectContactOpen, setIsSelectContactOpen] = useState(false);
     const [isCreateClientOpen, setIsCreateClientOpen] = useState(false);
     const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -93,7 +99,7 @@ export const kambanColumn = ({
                 updatedAt: serverTimestamp(),
                 messages: [],
             };
-            await addDoc(collection(db, `kamban-groups/${group.id}/cards`), cardData);
+            await addDoc(collection(db, `${getTenantPath()}/kamban-groups/${group.id}/cards`), cardData);
             toast.success(contact ? `Contact "${contact.name}" added.` : 'New conversation created.');
             setIsSelectContactOpen(false);
         } catch (error) {
@@ -142,7 +148,7 @@ export const kambanColumn = ({
                     messages: [],
                 };
 
-                const newCardRef = doc(collection(db, `kamban-groups/${group.id}/cards`));
+                const newCardRef = doc(collection(db, `${getTenantPath()}/kamban-groups/${group.id}/cards`));
                 batch.set(newCardRef, cardData);
                 importCount++;
             }
@@ -175,13 +181,13 @@ export const kambanColumn = ({
         const batch = writeBatch(db);
 
         cards.forEach((card) => {
-            const newCardRef = doc(collection(db, `kamban-groups/${inbox.id}/cards`));
+            const newCardRef = doc(collection(db, `${getTenantPath()}/kamban-groups/${inbox.id}/cards`));
             const { id, groupId, ...cardData } = card;
             batch.set(newCardRef, { ...cardData, groupId: inbox.id, updatedAt: serverTimestamp() });
-            batch.delete(doc(db, `kamban-groups/${group.id}/cards`, card.id));
+            batch.delete(doc(db, `${getTenantPath()}/kamban-groups/${group.id}/cards`, card.id));
         });
 
-        batch.delete(doc(db, 'kamban-groups', group.id));
+        batch.delete(doc(db, `${getTenantPath()}/kamban-groups`, group.id));
 
         try {
             await batch.commit();
@@ -229,7 +235,7 @@ export const kambanColumn = ({
                                     onClick={() => {
                                         const newName = window.prompt('Editar nombre de la bandeja:', group.name);
                                         if (newName && newName !== group.name) {
-                                            updateDoc(doc(db, 'kamban-groups', group.id), { name: newName });
+                                            updateDoc(doc(db, `${getTenantPath()}/kamban-groups`, group.id), { name: newName });
                                         }
                                     }}
                                     className="cursor-pointer hover:bg-neutral-800 rounded-lg py-2"

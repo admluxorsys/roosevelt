@@ -10,14 +10,14 @@ const tools = [
         name: 'AI Automation Center',
         description: 'Manage specialized agents, training data, and conversation flows.',
         icon: Bot,
-        path: '/nucleo/udreamms/cto/automation/chatbots', // Updated path
+        path: '/nucleo/roosevelt/cto/automation/chatbots', // Updated path
         color: 'bg-purple-500/10 text-purple-400 border-purple-500/20'
     },
     {
         name: 'Smart Contracts Hub',
         description: 'Deploy and audit Solana programs directly from the dashboard.',
         icon: Code2,
-        path: '/nucleo/udreamms/cto/smart-contracts', // Updated path
+        path: '/nucleo/roosevelt/cto/smart-contracts', // Updated path
         color: 'bg-blue-500/10 text-blue-400 border-blue-500/20'
     },
     {

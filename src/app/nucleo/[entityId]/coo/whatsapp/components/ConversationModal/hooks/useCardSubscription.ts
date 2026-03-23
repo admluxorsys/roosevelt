@@ -3,13 +3,20 @@ import { db } from '@/lib/firebase';
 import { doc, onSnapshot, getDoc, query, collection, where, getDocs, orderBy } from 'firebase/firestore';
 import { CardData, ConversationModalProps } from '../types';
 import { normalizePhoneNumber } from '@/lib/phoneUtils';
+import { useAuth } from '@/contexts/AuthContext';
 
 export const useCardSubscription = ({ card, groups = [], groupName }: ConversationModalProps) => {
+    const { currentUser, activeEntity } = useAuth();
     const [liveCardData, setLiveCardData] = useState<CardData | null>(null);
     const [contactInfo, setContactInfo] = useState<Partial<CardData>>({});
     const [crmData, setCrmData] = useState<Partial<CardData> | null>(null);
     const [forcedCardId, setForcedCardId] = useState<string | null>(null);
     const [forcedGroupId, setForcedGroupId] = useState<string | null>(null);
+
+    const getTenantPath = () => {
+        if (!currentUser?.uid || !activeEntity) return null;
+        return `users/${currentUser.uid}/entities/${activeEntity}`;
+    };
 
     // Reset state and forced IDs when props change to prevent data leak
     useEffect(() => {
@@ -35,6 +42,7 @@ export const useCardSubscription = ({ card, groups = [], groupName }: Conversati
     }, [currentGroupId, groups, groupName]);
 
     useEffect(() => {
+        const tenantPath = getTenantPath();
         if (!card && !forcedCardId) {
             setLiveCardData(null);
             return;
@@ -46,11 +54,11 @@ export const useCardSubscription = ({ card, groups = [], groupName }: Conversati
 
         const initLogic = async () => {
             try {
-                if (!isMounted) return;
+                if (!isMounted || !tenantPath) return;
 
                 // Priority 1: Forced ID
                 if (forcedCardId && forcedGroupId) {
-                    const cardRef = doc(db, 'kanban-groups', forcedGroupId, 'cards', forcedCardId);
+                    const cardRef = doc(db, `${tenantPath}/kanban-groups`, forcedGroupId, 'cards', forcedCardId);
                     const unsub = onSnapshot(cardRef, (docSnap) => {
                         if (!isMounted) return;
                         if (docSnap.exists()) {
@@ -67,7 +75,7 @@ export const useCardSubscription = ({ card, groups = [], groupName }: Conversati
 
                 let finalGroups = groups;
                 if (!finalGroups || finalGroups.length === 0) {
-                    const groupsSnap = await getDocs(query(collection(db, 'kanban-groups'), orderBy('order', 'asc')));
+                    const groupsSnap = await getDocs(query(collection(db, `${tenantPath}/kanban-groups`), orderBy('order', 'asc')));
                     if (!isMounted) return;
                     finalGroups = groupsSnap.docs.map(d => ({ id: d.id, ...d.data() })) as any[];
                 }
@@ -76,11 +84,11 @@ export const useCardSubscription = ({ card, groups = [], groupName }: Conversati
                     for (const group of finalGroups) {
                         if (!isMounted) return false;
                         try {
-                            let cardRef = cardIdToFind ? doc(db, 'kanban-groups', group.id, 'cards', cardIdToFind) : null;
+                            let cardRef = cardIdToFind ? doc(db, `${tenantPath}/kanban-groups`, group.id, 'cards', cardIdToFind) : null;
                             let cardSnap = cardRef ? await getDoc(cardRef) : null;
 
                             if ((!cardSnap || !cardSnap.exists()) && phoneNumberToFind) {
-                                const allCardsSnap = await getDocs(collection(db, 'kanban-groups', group.id, 'cards'));
+                                const allCardsSnap = await getDocs(collection(db, `${tenantPath}/kanban-groups`, group.id, 'cards'));
                                 if (!isMounted) return false;
 
                                 const phoneVariants = [
@@ -146,19 +154,20 @@ export const useCardSubscription = ({ card, groups = [], groupName }: Conversati
         };
 
         const initCRM = async () => {
+            if (!tenantPath) return;
             const phone = card?.contactNumber || (card as any)?.phone;
             let targetId = (card?.id && !card.id.startsWith('temp-') && (card as any).contactId) || null;
             if (card?.id && !card.id.startsWith('temp-') && (card as any).contactId) targetId = (card as any).contactId;
 
             if (!targetId && phone) {
                 const digits = phone.replace(/\D/g, '');
-                const crmQuery = query(collection(db, 'contacts'), where('phone', 'in', [`+${digits}`, digits]));
+                const crmQuery = query(collection(db, `${tenantPath}/contacts`), where('phone', 'in', [`+${digits}`, digits]));
                 const snap = await getDocs(crmQuery);
                 if (!snap.empty) targetId = snap.docs[0].id;
             }
 
             if (targetId && isMounted) {
-                const unsub = onSnapshot(doc(db, 'contacts', targetId), (snap) => {
+                const unsub = onSnapshot(doc(db, `${tenantPath}/contacts`, targetId), (snap) => {
                     if (!isMounted) return;
                     if (snap.exists()) {
                         const data = snap.data();
@@ -184,7 +193,7 @@ export const useCardSubscription = ({ card, groups = [], groupName }: Conversati
             if (unsubscribe) unsubscribe();
             if (unsubscribeCRM) unsubscribeCRM();
         };
-    }, [card?.id, card?.groupId, groups, card?.contactNumber, forcedCardId, forcedGroupId]);
+    }, [card?.id, card?.groupId, groups, card?.contactNumber, forcedCardId, forcedGroupId, currentUser?.uid, activeEntity]);
 
     return {
         liveCardData,
@@ -200,4 +209,3 @@ export const useCardSubscription = ({ card, groups = [], groupName }: Conversati
         setCrmData
     };
 };
-

@@ -24,7 +24,7 @@ export default function YouTubeSubscription() {
           </div>
 
           <a
-            href="https://www.youtube.com/@udreamms"
+            href="https://www.youtube.com/@roosevelt"
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center justify-center px-10 py-5 text-lg font-medium bg-white text-primary rounded-lg shadow-2xl hover:scale-105 transition-all hover:shadow-[0_20px_60px_-10px_rgba(255,255,255,0.5)] group"

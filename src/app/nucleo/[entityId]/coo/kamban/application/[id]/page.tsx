@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, use } from 'react';
+import React, { useState, useEffect, use } from 'react';import { useAuth } from '@/contexts/AuthContext';
+
 import { db, storage, auth } from '@/lib/firebase';
 import { doc, onSnapshot, getDoc, updateDoc, serverTimestamp, Timestamp, query, collection, where, getDocs } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -32,6 +33,12 @@ interface ApplicationPageProps {
 }
 
 export default function ApplicationPage({ params }: ApplicationPageProps) {
+    const { currentUser, activeEntity } = useAuth();
+    const getTenantPath = () => {
+        if (!currentUser?.uid || !activeEntity) return '';
+        return `users/${currentUser.uid}/entities/${activeEntity}`;
+    };
+
     const { id } = use(params);
     const [loading, setLoading] = useState(true);
     const [contact, setContact] = useState<any>(null);
@@ -194,7 +201,7 @@ export default function ApplicationPage({ params }: ApplicationPageProps) {
             if (!id) return;
             try {
                 // 1. Try to find in 'contacts' (Primary CRM source)
-                const docRef = doc(db, 'contacts', id);
+                const docRef = doc(db, `${getTenantPath()}/contacts`, id);
 
                 const unsubscribe = onSnapshot(docRef, (docSnap) => {
                     if (docSnap.exists()) {
@@ -222,7 +229,7 @@ export default function ApplicationPage({ params }: ApplicationPageProps) {
                     const cleanId = id.replace(/\D/g, '');
                     if (cleanId.length >= 7) {
                         const formats = [`+${cleanId}`, cleanId];
-                        const contactsQuery = query(collection(db, 'contacts'), where('phone', 'in', formats));
+                        const contactsQuery = query(collection(db, `${getTenantPath()}/contacts`), where('phone', 'in', formats));
                         const snap = await getDocs(contactsQuery);
                         if (!snap.empty) {
                             console.log('[Application] Found contact via phone search, redirecting or setting...');
@@ -264,7 +271,7 @@ export default function ApplicationPage({ params }: ApplicationPageProps) {
     // Bypass para administradores
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, (user) => {
-            if (user && user.email === 'udreamms@gmail.com') {
+            if (user && user.email === 'roosevelt@gmail.com') {
                 console.log('[Application] Admin detected, bypassing login gate.');
                 setIsAdmin(true);
                 setIsLoggedIn(true);
@@ -292,7 +299,7 @@ export default function ApplicationPage({ params }: ApplicationPageProps) {
         if (!targetId) return;
 
         try {
-            const docRef = doc(db, 'contacts', targetId);
+            const docRef = doc(db, `${getTenantPath()}/contacts`, targetId);
 
             // Only update fields that the user explicitly filled
             const dataToUpdate: any = {};
@@ -1377,7 +1384,7 @@ export default function ApplicationPage({ params }: ApplicationPageProps) {
             {/* Footer logo/info */}
             <footer className="absolute bottom-8 left-0 right-0 text-center animate-fade-in pointer-events-none">
                 <p className="text-[10px] font-bold text-neutral-600 tracking-wide">
-                    Powered by uDreamms © 2024
+                    Powered by Roosevelt © 2024
                 </p>
             </footer>
 

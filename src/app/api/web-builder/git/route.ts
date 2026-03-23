@@ -37,9 +37,9 @@ async function filesToDisk(files: Record<string, string>, diskPath: string) {
 }
 
 // Fallback Firestore fetch (might fail if no credentials)
-async function syncFirestoreToDisk(projectId: string, diskPath: string) {
+async function syncFirestoreToDisk(userId: string, entityId: string, projectId: string, diskPath: string) {
     try {
-        const filesSnapshot = await db.collection('web-projects').doc(projectId).collection('files').get();
+        const filesSnapshot = await db.collection('users').doc(userId).collection('entities').doc(entityId).collection('web-projects').doc(projectId).collection('files').get();
         const files: Record<string, string> = {};
         filesSnapshot.forEach(doc => {
             const data = doc.data();
@@ -57,11 +57,11 @@ async function syncFirestoreToDisk(projectId: string, diskPath: string) {
 export async function POST(req: Request) {
     let tmpPath = '';
     try {
-        const { projectId, action, repoUrl, message, files, autoCreate, projectName } = await req.json();
+        const { projectId, action, repoUrl, message, files, autoCreate, projectName, userId, entityId } = await req.json();
         logToFile(`[Git API] Action: ${action}, Project: ${projectId}, Repo: ${repoUrl || 'Fetch from DB'}, Files provided: ${files ? Object.keys(files).length : 0}`);
 
-        if (!projectId || !action) {
-            return NextResponse.json({ error: 'Missing projectId or action' }, { status: 400 });
+        if (!projectId || !action || !userId || !entityId) {
+            return NextResponse.json({ error: 'Missing projectId, action, userId or entityId' }, { status: 400 });
         }
 
         // Create a unique temporary directory for this operation
@@ -80,7 +80,7 @@ export async function POST(req: Request) {
 
         try {
             logToFile(`[Git API] Fetching project details for isolation: ${projectId}`);
-            const projectDoc = await db.collection('web-projects').doc(projectId).get();
+            const projectDoc = await db.collection('users').doc(userId).collection('entities').doc(entityId).collection('web-projects').doc(projectId).get();
             if (projectDoc.exists) {
                 dbRepoUrl = projectDoc.data()?.repoUrl || '';
                 dbRepoName = projectDoc.data()?.repoName || '';
@@ -168,7 +168,7 @@ export async function POST(req: Request) {
 
             // Update Firestore with the new repoUrl (Safe to ignore failure here)
             try {
-                await db.collection('web-projects').doc(projectId).update({
+                await db.collection('users').doc(userId).collection('entities').doc(entityId).collection('web-projects').doc(projectId).update({
                     repoUrl: effectiveRepoUrl,
                     repoName: effectiveRepoName || effectiveRepoUrl.split('/').slice(-2).join('/'),
                     githubConnected: true,
@@ -199,7 +199,7 @@ export async function POST(req: Request) {
                 // 1. Initialize Git in tmp path
                 await execAsync('git init', { cwd: tmpPath });
                 await execAsync('git config user.name "Web Builder"', { cwd: tmpPath });
-                await execAsync('git config user.email "builder@udreamms.com"', { cwd: tmpPath });
+                await execAsync('git config user.email "builder@roosevelt.com"', { cwd: tmpPath });
                 await execAsync('git branch -M main', { cwd: tmpPath });
                 await execAsync(`git remote add origin ${effectiveRepoUrl}`, { cwd: tmpPath });
 
@@ -220,7 +220,7 @@ export async function POST(req: Request) {
                 if (projectFiles) {
                     await filesToDisk(projectFiles, tmpPath);
                 } else {
-                    await syncFirestoreToDisk(projectId, tmpPath);
+                    await syncFirestoreToDisk(userId, entityId, projectId, tmpPath);
                 }
 
                 // 3. Git Operations

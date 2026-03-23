@@ -4,15 +4,26 @@ import { collection, query, orderBy, onSnapshot, doc, updateDoc, arrayUnion, Tim
 import { functions } from '@/lib/firebase';
 import { httpsCallable } from 'firebase/functions';
 import { toast } from 'sonner';
+import { useAuth } from '@/contexts/AuthContext';
 
 export const useKanbanBoard = (filterTerm: string = '') => {
+    const { currentUser, activeEntity } = useAuth();
     const [groups, setGroups] = useState<any[]>([]);
     const [cards, setCards] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
+    // Get multi-tenant root path
+    const getTenantPath = () => {
+        if (!currentUser?.uid || !activeEntity) return null;
+        return `users/${currentUser.uid}/entities/${activeEntity}`;
+    };
+
     // Load Groups
     useEffect(() => {
-        const q = query(collection(db, 'kanban-groups'), orderBy('order', 'asc'));
+        const tenantPath = getTenantPath();
+        if (!tenantPath) return;
+
+        const q = query(collection(db, `${tenantPath}/kanban-groups`), orderBy('order', 'asc'));
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const groupsData = snapshot.docs.map(doc => ({
                 id: doc.id,
@@ -26,10 +37,13 @@ export const useKanbanBoard = (filterTerm: string = '') => {
     // Load Cards
     useEffect(() => {
         if (groups.length === 0) return;
+        const tenantPath = getTenantPath();
+        if (!tenantPath) return;
+
         const unsubscribes: (() => void)[] = [];
 
         groups.forEach(group => {
-            const q = query(collection(db, 'kanban-groups', group.id, 'cards'));
+            const q = query(collection(db, `${tenantPath}/kanban-groups/${group.id}/cards`));
             const unsub = onSnapshot(q, (snapshot) => {
                 const groupCards = snapshot.docs.map(doc => ({
                     id: doc.id,
@@ -86,13 +100,18 @@ export const useKanbanBoard = (filterTerm: string = '') => {
         const destGroup = groups.find(g => g.id === destGroupId);
 
         try {
+            const tenantPath = getTenantPath();
+            if (!tenantPath) return;
+
             await moveCardCallable({
                 cardId: activeId,
                 sourceGroupId,
-                destGroupId
+                destGroupId,
+                userId: currentUser?.uid,
+                entityId: activeEntity
             });
 
-            await updateDoc(doc(db, 'kanban-groups', destGroupId, 'cards', activeId), {
+            await updateDoc(doc(db, `${tenantPath}/kanban-groups/${destGroupId}/cards/${activeId}`), {
                 history: arrayUnion({
                     id: `hist_${Date.now()}`,
                     type: 'status',
@@ -110,7 +129,10 @@ export const useKanbanBoard = (filterTerm: string = '') => {
 
     const handleUpdateColor = async (groupId: string, color: string) => {
         try {
-            await updateDoc(doc(db, 'kanban-groups', groupId), { color });
+            const tenantPath = getTenantPath();
+            if (!tenantPath) return;
+
+            await updateDoc(doc(db, `${tenantPath}/kanban-groups/${groupId}`), { color });
         } catch (error) {
             console.error('Error updating color:', error);
             toast.error('Error al cambiar el color.');

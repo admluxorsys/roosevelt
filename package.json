@@ -1,13 +1,13 @@
 {
-  "name": "autonomous-platform",
+  "name": "roosevelt-platform",
   "version": "1.0.0",
-  "description": "Plataforma de desarrollo de software impulsada por IA para crear, desplegar y gestionar aplicaciones full-stack.",
+  "description": "Roosevelt - Plataforma SaaS Multi-Tenant para Gestión y Automatización de Negocios.",
   "main": "index.js",
   "scripts": {
     "dev": "next dev -p 3000",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "next lint --dir src",
     "postinstall": "patch-package",
     "deploy:functions": "firebase deploy --only functions"
   },
@@ -19,7 +19,7 @@
     "firebase",
     "google cloud"
   ],
-  "author": "uDreamms",
+  "author": "Roosevelt Corp",
   "license": "ISC",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.36.3",
@@ -108,7 +108,7 @@
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "@types/react-speech-recognition": "^3.9.6",
-    "baseline-browser-mapping": "^2.10.9",
+    "baseline-browser-mapping": "^2.10.10",
     "eslint": "^9.36.0",
     "postcss": "^8",
     "simple-icons": "^15.16.0",

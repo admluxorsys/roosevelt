@@ -64,7 +64,7 @@ function getVertexAI() {
       } catch (e) { }
     }
 
-    const project = saProject || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'udreamms-platform-1';
+    const project = saProject || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'roosevelt-platform-1';
     const location = 'us-central1';
 
     vertexAI = new VertexAI({
@@ -85,7 +85,7 @@ function getVertexAI() {
 
 async function callVertex(modelName: string, messages: any[], fileContext: string): Promise<string> {
   logToFile(`[callVertex] Model: ${modelName}, Context Length: ${fileContext.length}`);
-  const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'udreamms-platform-1';
+  const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'roosevelt-platform-1';
 
   // Vertex AI is permanently broken (403 Permission Denied) — skip directly to Gemini API
   let lastError: any = new Error('Vertex AI skipped - going directly to Gemini API');
@@ -620,7 +620,7 @@ async function agenticFlow(messages: any[], fileContext: string, currentFiles: R
 
 export async function POST(req: Request) {
   try {
-    const { messages, currentFiles, model, supabaseConfig } = await req.json();
+    const { messages, currentFiles, model, supabaseConfig, projectId, userId, entityId } = await req.json();
     logToFile(`[POST] Request started. Model: ${model}, Messages: ${messages.length}`);
 
     const fileEntries = Object.entries(currentFiles || {}) as [string, string][];
@@ -764,6 +764,17 @@ export const supabase = createClient(import.meta.env.VITE_SUPABASE_URL, import.m
 NEVER use placeholders like 'your-project-url'. Use the exact values provided above.
 `;
       logToFile(`[POST] Injected Supabase Config for AI.`);
+    }
+
+    if (userId && entityId && projectId) {
+      generationStrategy += `
+🚨 STRICT FIRESTORE MULTI-TENANT ARCHITECTURE 🚨
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+If you need to use Firebase Firestore to store data (like web forms, leads), you MUST ALWAYS use this EXACT path structure:
+\`collection(db, "users", "${userId}", "entities", "${entityId}", "web-projects", "${projectId}", "[YOUR_COLLECTION_NAME]")\`
+ NEVER use a root-level collection like "contacts" or "web-projects".
+`;
+      logToFile(`[POST] Injected Multi-Tenant DB Config for AI.`);
     }
 
     let fileContext = filteredFiles.length > 0 ? "\n\nCONTEXT:\n" + filteredFiles

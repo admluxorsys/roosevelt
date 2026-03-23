@@ -4,14 +4,14 @@ import { db } from '@/lib/firebase-admin';
 // Update project metadata
 export async function PATCH(req: Request) {
     try {
-        const { projectId, ...updates } = await req.json();
+        const { projectId, userId, entityId, ...updates } = await req.json();
 
-        if (!projectId) {
-            return NextResponse.json({ error: 'Project ID is required' }, { status: 400 });
+        if (!projectId || !userId || !entityId) {
+            return NextResponse.json({ error: 'Project ID, User ID and Entity ID are required' }, { status: 400 });
         }
 
         // Update project in Firestore
-        await db.collection('web-projects').doc(projectId).update({
+        await db.collection('users').doc(userId).collection('entities').doc(entityId).collection('web-projects').doc(projectId).update({
             ...updates,
             lastModified: Date.now()
         });
@@ -34,12 +34,14 @@ export async function DELETE(req: Request) {
     try {
         const { searchParams } = new URL(req.url);
         const projectId = searchParams.get('projectId');
+        const userId = searchParams.get('userId');
+        const entityId = searchParams.get('entityId');
 
-        if (!projectId) {
-            return NextResponse.json({ error: 'Project ID is required' }, { status: 400 });
+        if (!projectId || !userId || !entityId) {
+            return NextResponse.json({ error: 'Project ID, User ID and Entity ID are required' }, { status: 400 });
         }
 
-        const projectRef = db.collection('web-projects').doc(projectId);
+        const projectRef = db.collection('users').doc(userId).collection('entities').doc(entityId).collection('web-projects').doc(projectId);
 
         // Delete files subcollection
         const filesSnapshot = await projectRef.collection('files').get();

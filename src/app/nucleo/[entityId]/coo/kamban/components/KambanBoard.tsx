@@ -19,7 +19,14 @@ import Card from './Card';
 import ConversationModal from './ConversationModal';
 import { useSidebar } from '@/components/SidebarContext';
 
+import { useAuth } from '@/contexts/AuthContext';
 export default function KambanBoard() {
+    const { currentUser, activeEntity } = useAuth();
+    const getTenantPath = () => {
+        if (!currentUser?.uid || !activeEntity) return '';
+        return `users/${currentUser.uid}/entities/${activeEntity}`;
+    };
+
   const [searchTerm, setSearchTerm] = useState('');
   const [activeId, setActiveId] = useState<string | null>(null);
   const [selectedCard, setSelectedCard] = useState<any | null>(null);

@@ -5,11 +5,18 @@ import { db, admin } from '@/lib/firebase-admin';
 export async function POST(req: Request) {
     try {
         const bodyValue = await req.json();
-        const { message, toNumber, cardId, groupId, type, template, platform = 'kamban' } = bodyValue;
+        const { message, toNumber, cardId, groupId, type, template, url, filename, platform = 'kamban', userId, entityId } = bodyValue;
 
         if (!message || !toNumber) {
             return NextResponse.json(
                 { error: 'Missing required fields: message and toNumber' },
+                { status: 400 }
+            );
+        }
+
+        if (!userId || !entityId) {
+            return NextResponse.json(
+                { error: 'Missing tenant context: userId and entityId are required' },
                 { status: 400 }
             );
         }
@@ -32,7 +39,7 @@ export async function POST(req: Request) {
             } else {
                 // --- Default: WhatsApp Logic ---
                 const { sendWhatsAppMessage } = await import('@/lib/sendProviders');
-                responseData = await sendWhatsAppMessage(toNumber, message, { type, template });
+                responseData = await sendWhatsAppMessage(toNumber, message, { type, template, url, filename, userId, entityId });
                 messageId = responseData?.messages?.[0]?.id;
                 cleanTo = responseData?.sentTo || toNumber;
             }
@@ -53,7 +60,12 @@ export async function POST(req: Request) {
 
         if (finalCardId && finalGroupId) {
             try {
-                const cardRef = db.collection('kamban-groups').doc(finalGroupId).collection('cards').doc(finalCardId);
+                // MULTI-TENANT ISOLATION
+                const cardRef = db
+                    .collection('users').doc(userId)
+                    .collection('entities').doc(entityId)
+                    .collection('kamban-groups').doc(finalGroupId)
+                    .collection('cards').doc(finalCardId);
                 
                 await cardRef.update({
                     lastMessage: message.length > 40 ? message.substring(0, 37) + '...' : message,

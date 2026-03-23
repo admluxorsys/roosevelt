@@ -1,7 +1,8 @@
 
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';import { useAuth } from '@/contexts/AuthContext';
+
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '@/lib/firebase';
 
@@ -10,6 +11,12 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 
 export default function CsoKambanPage() {
+    const { currentUser, activeEntity } = useAuth();
+    const getTenantPath = () => {
+        if (!currentUser?.uid || !activeEntity) return '';
+        return `users/${currentUser.uid}/entities/${activeEntity}`;
+    };
+
   const [user, loading, error] = useAuthState(auth);
 
   if (loading) {

@@ -14,6 +14,11 @@ import { WhatsAppQRPersonalModal } from './components/whatsapp_qr_personal/Whats
 
 export default function IntegrationsPage() {
     const { currentUser, activeEntity } = useAuth();
+    const getTenantPath = () => {
+        if (!currentUser?.uid || !activeEntity) return '';
+        return `users/${currentUser.uid}/entities/${activeEntity}`;
+    };
+
     const [selectedCategory, setSelectedCategory] = useState<Category>('All');
     const [searchQuery, setSearchQuery] = useState('');
     const [connectedIds, setConnectedIds] = useState<string[]>([]);

@@ -4,7 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Plus, Loader2, MessageCircle, Power, ArrowLeft, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { collection, onSnapshot, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, updateDoc, deleteDoc, runTransaction } from 'firebase/firestore';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   Dialog,
   DialogContent,
@@ -25,6 +26,7 @@ interface Bot {
 
 const ChatbotsPage = () => {
   const router = useRouter();
+  const { currentUser, activeEntity } = useAuth();
   const [bots, setBots] = useState<Bot[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [updatingBots, setUpdatingBots] = useState<string[]>([]);
@@ -32,7 +34,9 @@ const ChatbotsPage = () => {
   const [deleteConfirmation, setDeleteConfirmation] = useState('');
 
   useEffect(() => {
-    const botsCollection = collection(db, 'chatbots');
+    if (!currentUser || !activeEntity) return;
+
+    const botsCollection = collection(db, 'users', currentUser.uid, 'entities', activeEntity, 'chatbots');
 
     const unsubscribe = onSnapshot(
       botsCollection,
@@ -57,18 +61,56 @@ const ChatbotsPage = () => {
     );
 
     return () => unsubscribe();
-  }, []);
+  }, [currentUser, activeEntity]);
 
   const handleGoBack = () => {
-    router.push('/nucleo/udreamms/cto/automation');
+    router.push(`/nucleo/${activeEntity}/cto/automation`);
   };
 
-  const handleCreateNewBot = () => {
-    router.push('/nucleo/udreamms/cto/automation/chatbots/new');
+  const handleCreateNewBot = async () => {
+    if (!currentUser || !activeEntity) return;
+    setIsLoading(true);
+
+    try {
+        const counterRef = doc(db, 'users', currentUser.uid, 'entities', activeEntity, 'system_metadata', 'chatbot_counter');
+        
+        const newBotId = await runTransaction(db, async (transaction) => {
+            const counterDoc = await transaction.get(counterRef);
+            let currentCount = 0;
+            if (counterDoc.exists()) {
+                currentCount = counterDoc.data().count || 0;
+            }
+            
+            const nextCount = currentCount + 1;
+            transaction.set(counterRef, { count: nextCount }, { merge: true });
+            
+            const formattedId = String(nextCount).padStart(20, '0');
+            
+            const botRef = doc(db, 'users', currentUser.uid, 'entities', activeEntity, 'chatbots', formattedId);
+            transaction.set(botRef, {
+                id: formattedId,
+                name: 'Nuevo Chatbot',
+                isActive: false,
+                createdAt: new Date(),
+                flow: {
+                    nodes: [{ id: '1', type: 'startNode', position: { x: 250, y: 5 }, data: { label: 'Inicio' } }],
+                    edges: []
+                }
+            });
+            
+            return formattedId;
+        });
+
+        router.push(`/nucleo/${activeEntity}/cto/automation/chatbots/${newBotId}`);
+    } catch (error) {
+        console.error("Error creating bot:", error);
+        toast.error("No se pudo crear el chatbot.");
+        setIsLoading(false);
+    }
   };
 
   const handleBotClick = (botId: string) => {
-    router.push(`/nucleo/udreamms/cto/automation/chatbots/${botId}`);
+    router.push(`/nucleo/${activeEntity}/cto/automation/chatbots/${botId}`);
   };
 
   const handleToggleBotStatus = async (bot: Bot) => {
@@ -80,12 +122,12 @@ const ChatbotsPage = () => {
       if (newStatus) {
         const otherActiveBots = bots.filter(b => b.isActive && b.id !== bot.id);
         for (const otherBot of otherActiveBots) {
-          const otherBotRef = doc(db, 'chatbots', otherBot.id);
+          const otherBotRef = doc(db, 'users', currentUser!.uid, 'entities', activeEntity!, 'chatbots', otherBot.id);
           await updateDoc(otherBotRef, { isActive: false });
         }
       }
 
-      const botRef = doc(db, 'chatbots', bot.id);
+      const botRef = doc(db, 'users', currentUser!.uid, 'entities', activeEntity!, 'chatbots', bot.id);
       await updateDoc(botRef, { isActive: newStatus });
 
       toast.success(
@@ -109,7 +151,7 @@ const ChatbotsPage = () => {
     if (!botToDelete || deleteConfirmation !== 'delete') return;
 
     try {
-      await deleteDoc(doc(db, 'chatbots', botToDelete.id));
+      await deleteDoc(doc(db, 'users', currentUser!.uid, 'entities', activeEntity!, 'chatbots', botToDelete.id));
       toast.success(`Bot "${botToDelete.name}" eliminado correctamente.`);
       setBotToDelete(null);
     } catch (error) {

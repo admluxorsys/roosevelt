@@ -5,7 +5,7 @@ export async function POST(req: Request) {
     try {
         const { prompt, prefix, suffix, filePath } = await req.json();
 
-        const project = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'udreamms-platform-1';
+        const project = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'roosevelt-platform-1';
         const location = 'us-central1';
 
         let keyOptions = {};

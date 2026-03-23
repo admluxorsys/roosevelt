@@ -2,6 +2,7 @@
 // src/helpers/whatsappAPI.ts
 import * as functions from 'firebase-functions';
 import axios from 'axios';
+import * as admin from 'firebase-admin';
 
 const whatsappConfig = functions.config().whatsapp;
 // Updated with user provided keys as primary or fallback
@@ -14,10 +15,27 @@ function cleanNumber(phone: string): string {
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-async function makeWhatsAppRequest(data: object, type: string) {
+async function makeWhatsAppRequest(data: object, type: string, ctx?: { userId?: string, entityId?: string }) {
     // Priority: Cloud Config > Environment Variables
-    const apiToken = functions.config().whatsapp?.access_token || process.env.WHATSAPP_ACCESS_TOKEN || accessToken;
-    const phoneId = functions.config().whatsapp?.phone_number_id || process.env.WHATSAPP_PHONE_NUMBER_ID || phoneNumberId;
+    let apiToken = functions.config().whatsapp?.access_token || process.env.WHATSAPP_ACCESS_TOKEN || accessToken;
+    let phoneId = functions.config().whatsapp?.phone_number_id || process.env.WHATSAPP_PHONE_NUMBER_ID || phoneNumberId;
+
+    if (ctx?.userId && ctx?.entityId) {
+        try {
+            const configPath = `users/${ctx.userId}/entities/${ctx.entityId}/integrations/whatsapp`;
+            const docRef = admin.firestore().doc(configPath);
+            const snapshot = await docRef.get();
+            if (snapshot.exists) {
+                const configData = snapshot.data();
+                if (configData?.accessToken && configData?.phoneNumberId) {
+                    apiToken = configData.accessToken;
+                    phoneId = configData.phoneNumberId;
+                }
+            }
+        } catch (e) {
+            functions.logger.error("Failed to fetch custom credentials", e);
+        }
+    }
 
     if (!apiToken || !phoneId) {
         functions.logger.error('❌ [WhatsApp API] Missing credentials!', { hasToken: !!apiToken, hasPhoneId: !!phoneId });
@@ -62,16 +80,16 @@ async function makeWhatsAppRequest(data: object, type: string) {
     throw new Error(`WhatsApp API Error after ${MAX_ATTEMPTS} attempts: ${JSON.stringify(lastError)}`);
 }
 
-export async function markAsRead(messageId: string): Promise<any> {
+export async function markAsRead(messageId: string, ctx?: { userId?: string, entityId?: string }): Promise<any> {
     if (!messageId) return;
     return await makeWhatsAppRequest({
         messaging_product: 'whatsapp',
         status: 'read',
         message_id: messageId
-    }, 'MarkAsRead');
+    }, 'MarkAsRead', ctx);
 }
 
-export async function sendMessage(to: string, message: string, options?: { preview_url?: boolean }): Promise<any> {
+export async function sendMessage(to: string, message: string, options?: { preview_url?: boolean, userId?: string, entityId?: string }): Promise<any> {
     if (!message) return;
     const cleanTo = cleanNumber(to);
     const payload: any = {
@@ -82,10 +100,10 @@ export async function sendMessage(to: string, message: string, options?: { previ
     if (options?.preview_url) {
         payload.text.preview_url = true;
     }
-    return await makeWhatsAppRequest(payload, 'Text');
+    return await makeWhatsAppRequest(payload, 'Text', options);
 }
 
-export async function sendMediaMessage(to: string, fileUrl: string, caption: string = '', fileName: string = 'file'): Promise<any> {
+export async function sendMediaMessage(to: string, fileUrl: string, caption: string = '', fileName: string = 'file', ctx?: { userId?: string, entityId?: string }): Promise<any> {
     const mediaType = getMediaType(fileUrl, fileName);
     if (mediaType === 'unsupported') {
         functions.logger.warn(`Unsupported media: ${fileName}`);
@@ -95,10 +113,10 @@ export async function sendMediaMessage(to: string, fileUrl: string, caption: str
     return await makeWhatsAppRequest({
         messaging_product: 'whatsapp', to: cleanTo, type: mediaType,
         [mediaType]: { link: fileUrl, caption: caption }
-    }, 'Media');
+    }, 'Media', ctx);
 }
 
-export async function sendButtonMessage(to: string, bodyText: string, buttons: any[], header?: { type: string, text?: string, url?: string }): Promise<void> {
+export async function sendButtonMessage(to: string, bodyText: string, buttons: any[], header?: { type: string, text?: string, url?: string }, ctx?: { userId?: string, entityId?: string }): Promise<void> {
     const validButtons = buttons.slice(0, 3).map((btn, i) => {
         const id = (btn.id || `btn_${i}`).substring(0, 256);
         const title = (btn.title || "Opción").substring(0, 20);
@@ -135,10 +153,10 @@ export async function sendButtonMessage(to: string, bodyText: string, buttons: a
         interactive
     };
 
-    await makeWhatsAppRequest(payload, 'Buttons');
+    await makeWhatsAppRequest(payload, 'Buttons', ctx);
 }
 
-export async function sendListMessage(to: string, bodyText: string, buttonText: string, sections: any[]): Promise<void> {
+export async function sendListMessage(to: string, bodyText: string, buttonText: string, sections: any[], ctx?: { userId?: string, entityId?: string }): Promise<void> {
     if (!sections || sections.length === 0) return;
 
     const formattedSections: any[] = [];
@@ -177,10 +195,10 @@ export async function sendListMessage(to: string, bodyText: string, buttonText: 
         }
     };
 
-    await makeWhatsAppRequest(payload, 'List');
+    await makeWhatsAppRequest(payload, 'List', ctx);
 }
 
-export async function sendLocationMessage(to: string, lat: number, long: number, name: string, address: string): Promise<void> {
+export async function sendLocationMessage(to: string, lat: number, long: number, name: string, address: string, ctx?: { userId?: string, entityId?: string }): Promise<void> {
     await makeWhatsAppRequest({
         messaging_product: 'whatsapp', to: cleanNumber(to), type: 'location',
         location: { latitude: lat, longitude: long, name: name, address: address }

@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Search, UserPlus, X } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { collection, getDocs } from 'firebase/firestore';
+import { useAuth } from '@/contexts/AuthContext';
 // Removed ScrollArea import as it doesn't exist
 
 interface Contact {
@@ -29,6 +30,11 @@ interface SelectContactModalProps {
 }
 
 export function SelectContactModal({ isOpen, onClose, onSelect, onAddNew }: SelectContactModalProps) {
+    const { currentUser, activeEntity } = useAuth();
+    const getTenantPath = () => {
+        if (!currentUser?.uid || !activeEntity) return '';
+        return `users/${currentUser.uid}/entities/${activeEntity}`;
+    };
     const [contacts, setContacts] = useState<Contact[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -42,7 +48,7 @@ export function SelectContactModal({ isOpen, onClose, onSelect, onAddNew }: Sele
     const fetchContacts = async () => {
         setIsLoading(true);
         try {
-            const querySnapshot = await getDocs(collection(db, 'contacts'));
+            const querySnapshot = await getDocs(collection(db, `${getTenantPath()}/contacts`));
             const contactsData = querySnapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data()

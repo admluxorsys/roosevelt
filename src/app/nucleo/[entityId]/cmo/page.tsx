@@ -10,21 +10,21 @@ const tools = [
         name: 'Global CRM',
         description: 'Manage leads, contacts, and customer relationships across all regions.',
         icon: Users,
-        path: '/nucleo/udreamms/cmo/crm', // Updated path
+        path: '/nucleo/roosevelt/cmo/crm', // Updated path
         color: 'bg-rose-500/10 text-rose-400 border-rose-500/20'
     },
     {
         name: 'Campaign Manager',
         description: 'Orchestrate ad campaigns and track conversion funnels.',
         icon: Megaphone,
-        path: '/nucleo/udreamms/cmo/campaigns', // Updated path
+        path: '/nucleo/roosevelt/cmo/campaigns', // Updated path
         color: 'bg-pink-500/10 text-pink-400 border-pink-500/20'
     },
     {
         name: 'Revenue Analytics',
         description: 'Real-time dashboards for sales performance and growth metrics.',
         icon: BarChart,
-        path: '/nucleo/udreamms/cmo/analytics', // Updated path
+        path: '/nucleo/roosevelt/cmo/analytics', // Updated path
         color: 'bg-orange-500/10 text-orange-400 border-orange-500/20'
     }
 ];

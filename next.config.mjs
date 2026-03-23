@@ -60,9 +60,6 @@ const nextConfig = {
       { source: '/cso/conexion', destination: '/suite/cto/integrations', permanent: true },
     ];
   },
-  eslint: {
-    ignoreDuringBuilds: false,
-  },
   typescript: {
     ignoreBuildErrors: false,
   },

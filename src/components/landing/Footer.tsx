@@ -86,7 +86,7 @@ const Footer = () => {
               </li>
               <li className="pt-4">
                 <span className="text-gray-400 block">📞 +1 650 784 0581</span>
-                <span className="text-gray-400 block">✉️ udreamms@gmail.com</span>
+                <span className="text-gray-400 block">✉️ roosevelt@gmail.com</span>
                 <span className="text-gray-400 block">📍 Salt Lake City, Utah</span>
               </li>
             </ul>
@@ -116,22 +116,22 @@ const Footer = () => {
             <h4 className="font-medium mb-3 text-sm text-slate-200">Síguenos</h4>
             <ul className="text-gray-400 space-y-4 text-sm">
               <li>
-                <a href="https://www.facebook.com/udreamms/" target="_blank" rel="noopener noreferrer" className="hover:opacity-80 transition-opacity"><Image src="/assets/f.jpg" alt="Facebook" width={32} height={32} style={{ height: 'auto' }} className="rounded-md" /></a>
+                <a href="https://www.facebook.com/roosevelt/" target="_blank" rel="noopener noreferrer" className="hover:opacity-80 transition-opacity"><Image src="/assets/f.jpg" alt="Facebook" width={32} height={32} style={{ height: 'auto' }} className="rounded-md" /></a>
               </li>
               <li>
-                <a href="https://www.instagram.com/udreamms/" target="_blank" rel="noopener noreferrer" className="hover:opacity-80 transition-opacity"><Image src="/assets/i.jpg" alt="Instagram" width={32} height={32} style={{ height: 'auto' }} className="rounded-md" /></a>
+                <a href="https://www.instagram.com/roosevelt/" target="_blank" rel="noopener noreferrer" className="hover:opacity-80 transition-opacity"><Image src="/assets/i.jpg" alt="Instagram" width={32} height={32} style={{ height: 'auto' }} className="rounded-md" /></a>
               </li>
               <li>
                 <a href="https://wa.me/16507840581" target="_blank" rel="noopener noreferrer" className="hover:opacity-80 transition-opacity"><Image src="/assets/w.jpg" alt="kamban" width={32} height={32} style={{ height: 'auto' }} className="rounded-md" /></a>
               </li>
               <li>
-                <a href="https://x.com/udreamms" target="_blank" rel="noopener noreferrer" className="hover:opacity-80 transition-opacity"><Image src="/assets/x.jpg" alt="X" width={32} height={32} style={{ height: 'auto' }} className="rounded-md" /></a>
+                <a href="https://x.com/roosevelt" target="_blank" rel="noopener noreferrer" className="hover:opacity-80 transition-opacity"><Image src="/assets/x.jpg" alt="X" width={32} height={32} style={{ height: 'auto' }} className="rounded-md" /></a>
               </li>
               <li>
-                <a href="https://www.youtube.com/@udreamms" target="_blank" rel="noopener noreferrer" className="hover:opacity-80 transition-opacity"><Image src="/assets/y.jpg" alt="YouTube" width={32} height={32} style={{ height: 'auto' }} className="rounded-md" /></a>
+                <a href="https://www.youtube.com/@roosevelt" target="_blank" rel="noopener noreferrer" className="hover:opacity-80 transition-opacity"><Image src="/assets/y.jpg" alt="YouTube" width={32} height={32} style={{ height: 'auto' }} className="rounded-md" /></a>
               </li>
               <li>
-                <a href="https://www.tiktok.com/@udreamms" target="_blank" rel="noopener noreferrer" className="hover:opacity-80 transition-opacity"><Image src="/assets/t.jpg" alt="TikTok" width={32} height={32} style={{ height: 'auto' }} className="rounded-md" /></a>
+                <a href="https://www.tiktok.com/@roosevelt" target="_blank" rel="noopener noreferrer" className="hover:opacity-80 transition-opacity"><Image src="/assets/t.jpg" alt="TikTok" width={32} height={32} style={{ height: 'auto' }} className="rounded-md" /></a>
               </li>
             </ul>
           </div>

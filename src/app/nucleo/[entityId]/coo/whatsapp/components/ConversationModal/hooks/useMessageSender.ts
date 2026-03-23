@@ -6,6 +6,7 @@ import { normalizePhoneNumber } from '@/lib/phoneUtils';
 import { Timestamp } from 'firebase/firestore';
 import { CardData, Message } from '../types';
 import { socialPlatforms } from '../constants';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface UseMessageSenderProps {
     currentCardId: string | null;
@@ -28,6 +29,7 @@ export const useMessageSender = ({
     setForcedGroupId,
     activePlatform
 }: UseMessageSenderProps) => {
+    const { currentUser, activeEntity } = useAuth();
     const [newMessage, setNewMessage] = useState('');
     const [isSending, setIsSending] = useState(false);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -97,7 +99,9 @@ export const useMessageSender = ({
                 toNumber: phoneNumber,
                 cardId: apiCardId,
                 groupId: currentGroupId,
-                platform: activePlatform
+                platform: activePlatform,
+                userId: currentUser?.uid,
+                entityId: activeEntity
             };
 
             if (activePlatform === 'WhatsApp' && !isWithin24Hours) {
@@ -199,7 +203,9 @@ export const useMessageSender = ({
                     cardId: currentCardId?.startsWith('temp-') ? undefined : currentCardId,
                     groupId: currentGroupId,
                     type: 'template',
-                    template: { name: templateName, language: { code: templateName === 'hello_world' ? 'en_US' : 'es' } }
+                    template: { name: templateName, language: { code: templateName === 'hello_world' ? 'en_US' : 'es' } },
+                    userId: currentUser?.uid,
+                    entityId: activeEntity
                 })
             });
 

@@ -4,10 +4,10 @@ import { db } from '@/lib/firebase-admin';
 
 export async function POST(req: Request) {
     try {
-        const { projectId, region } = await req.json();
+        const { projectId, region, userId, entityId } = await req.json();
 
-        if (!projectId) {
-            return NextResponse.json({ error: 'Missing projectId' }, { status: 400 });
+        if (!projectId || !userId || !entityId) {
+            return NextResponse.json({ error: 'Missing projectId, userId or entityId' }, { status: 400 });
         }
 
         console.log(`[Cloud Provision] Automating database setup for project: ${projectId} in ${region}`);
@@ -18,7 +18,7 @@ export async function POST(req: Request) {
         // PROJECT ISOLATION: The AI prompt will be instructed to prefix tables with the projectId.
 
         const managedConfig = {
-            supabaseUrl: "https://managed-db.udreamms.com",
+            supabaseUrl: "https://managed-db.roosevelt.com",
             supabaseAnonKey: `sb_anon_${projectId}_dev_key_placeholder`,
             databaseMode: 'automatic' as const,
             cloudRegion: region,
@@ -26,7 +26,7 @@ export async function POST(req: Request) {
         };
 
         // Update Firestore project document
-        await db.collection('web-projects').doc(projectId).update(managedConfig);
+        await db.collection('users').doc(userId).collection('entities').doc(entityId).collection('web-projects').doc(projectId).update(managedConfig);
 
         return NextResponse.json({
             success: true,

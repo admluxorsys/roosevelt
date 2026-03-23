@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { INITIAL_FILES } from "../constants";
 import { db } from "@/lib/firebase";
+import { useAuth } from "@/contexts/AuthContext";
 import {
     collection,
     doc,
@@ -38,6 +39,7 @@ const stripMarkdownFences = (content: string) => {
 };
 
 export const useFileSystem = (activeProjectId: string | null, updateProjectLastModified: (id: string) => void) => {
+    const { currentUser, activeEntity } = useAuth();
     const [files, setFiles] = useState<Record<string, string>>(INITIAL_FILES);
     const [history, setHistory] = useState<Record<string, string>[]>([]);
     const [future, setFuture] = useState<Record<string, string>[]>([]);
@@ -100,7 +102,8 @@ export const useFileSystem = (activeProjectId: string | null, updateProjectLastM
             }
 
             // 2. Fetch from Firestore (Background / Revalidation)
-            const filesCollection = collection(db, "web-projects", projectId, "files");
+            if (!currentUser || !activeEntity) return;
+            const filesCollection = collection(db, "users", currentUser.uid, "entities", activeEntity, "web-projects", projectId, "files");
             const snapshot = await getDocs(filesCollection);
 
             if (!snapshot.empty) {
@@ -135,6 +138,7 @@ export const useFileSystem = (activeProjectId: string | null, updateProjectLastM
     };
 
     const triggerSync = useCallback(async (options?: { projectId?: string, autoCreate?: boolean, projectName?: string, dryRun?: boolean, repoUrl?: string }) => {
+        if (!currentUser || !activeEntity) return null;
         const targetProjectId = options?.projectId || activeProjectId;
         if (!targetProjectId) return null;
 
@@ -163,7 +167,9 @@ export const useFileSystem = (activeProjectId: string | null, updateProjectLastM
                     repoUrl: options?.repoUrl,
                     message: 'Auto-save from Web Builder',
                     autoCreate: options?.autoCreate,
-                    projectName: options?.projectName
+                    projectName: options?.projectName,
+                    userId: currentUser.uid,
+                    entityId: activeEntity
                 })
             });
 
@@ -189,16 +195,17 @@ export const useFileSystem = (activeProjectId: string | null, updateProjectLastM
             if (!options?.dryRun) setSyncStatus('error');
             return { error: 'Sync request failed' };
         }
-    }, [activeProjectId, files]);
+    }, [activeProjectId, files, currentUser, activeEntity]);
 
     const checkChanges = useCallback(async (repoUrl?: string) => {
         return await triggerSync({ dryRun: true, repoUrl });
     }, [triggerSync]);
 
     const saveFileToFirestore = async (projectId: string, path: string, content: string) => {
+        if (!currentUser || !activeEntity) return;
         try {
             const sanitizedContent = stripMarkdownFences(content);
-            const fileRef = doc(db, "web-projects", projectId, "files", encodePath(path));
+            const fileRef = doc(db, "users", currentUser.uid, "entities", activeEntity, "web-projects", projectId, "files", encodePath(path));
             await setDoc(fileRef, {
                 path,
                 content: sanitizedContent,
@@ -244,11 +251,12 @@ export const useFileSystem = (activeProjectId: string | null, updateProjectLastM
     }, [activeProjectId, checkChanges]);
 
     const saveFilesToFirestore = async (projectId: string, filesToSave: Record<string, string>) => {
+        if (!currentUser || !activeEntity) return;
         try {
             const batch = writeBatch(db);
             Object.entries(filesToSave).forEach(([path, content]) => {
                 const sanitized = stripMarkdownFences(content);
-                const fileRef = doc(db, "web-projects", projectId, "files", encodePath(path));
+                const fileRef = doc(db, "users", currentUser.uid, "entities", activeEntity, "web-projects", projectId, "files", encodePath(path));
                 batch.set(fileRef, {
                     path,
                     content: sanitized,

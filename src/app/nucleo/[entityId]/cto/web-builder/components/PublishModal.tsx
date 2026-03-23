@@ -59,7 +59,7 @@ export const PublishModal = ({ show, setShow, projectName, onPublish, isPublishi
                         <div className="space-y-1.5">
                             <label className="text-xs font-bold text-gray-400 ml-1">URL del Sitio</label>
                             <div className="relative flex items-center group">
-                                <div className="absolute left-4 text-gray-500 text-sm font-medium border-r border-[#333] pr-3 py-1 group-focus-within:border-blue-500/50 transition-colors">udreamms.com/</div>
+                                <div className="absolute left-4 text-gray-500 text-sm font-medium border-r border-[#333] pr-3 py-1 group-focus-within:border-blue-500/50 transition-colors">roosevelt.com/</div>
                                 <input
                                     type="text"
                                     value={url}

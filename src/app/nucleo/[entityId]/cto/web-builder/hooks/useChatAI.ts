@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { ChatMessage, ChatStep, ConversationState, ReasoningLevel, ChatConversation } from "../types";
 import { generateCodePrompt, detectIndustry, generateDesignSpec } from "../ai/promptTemplates";
 import { db } from "@/lib/firebase";
+import { useAuth } from "@/contexts/AuthContext";
 import {
     collection,
     addDoc,
@@ -39,6 +40,7 @@ export const useChatAI = (
     reasoningLevel: ReasoningLevel,
     supabaseConfig?: { url: string; key: string }
 ) => {
+    const { currentUser, activeEntity } = useAuth();
     const [isGenerating, setIsGenerating] = useState(false);
     const [conversations, setConversations] = useState<ChatConversation[]>([]);
     const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
@@ -50,13 +52,13 @@ export const useChatAI = (
 
     // Fetch Conversations when project changes
     useEffect(() => {
-        if (!activeProjectId) {
+        if (!activeProjectId || !currentUser || !activeEntity) {
             setConversations([]);
             setActiveConversationId(null);
             return;
         }
 
-        const convoCol = collection(db, "web-projects", activeProjectId, "conversations");
+        const convoCol = collection(db, "users", currentUser.uid, "entities", activeEntity, "web-projects", activeProjectId, "conversations");
         const q = query(convoCol, orderBy("updatedAt", "desc"));
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -73,16 +75,16 @@ export const useChatAI = (
         });
 
         return () => unsubscribe();
-    }, [activeProjectId]);
+    }, [activeProjectId, currentUser, activeEntity]);
 
     // Fetch Messages for active conversation
     useEffect(() => {
-        if (!activeProjectId || !activeConversationId) {
+        if (!activeProjectId || !activeConversationId || !currentUser || !activeEntity) {
             setMessages([]);
             return;
         }
 
-        const msgCol = collection(db, "web-projects", activeProjectId, "conversations", activeConversationId, "messages");
+        const msgCol = collection(db, "users", currentUser.uid, "entities", activeEntity, "web-projects", activeProjectId, "conversations", activeConversationId, "messages");
         const q = query(msgCol, orderBy("timestamp", "asc"));
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -93,10 +95,10 @@ export const useChatAI = (
         });
 
         return () => unsubscribe();
-    }, [activeProjectId, activeConversationId]);
+    }, [activeProjectId, activeConversationId, currentUser, activeEntity]);
 
     const handleCloudProvision = useCallback(async (msgId: string, region: string) => {
-        if (!activeProjectId) return;
+        if (!activeProjectId || !currentUser || !activeEntity) return;
 
         const controller = new AbortController();
         setAbortController(controller);
@@ -107,7 +109,7 @@ export const useChatAI = (
             const res = await fetch('/api/web-builder/cloud/provision', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ projectId: activeProjectId, region }),
+                body: JSON.stringify({ projectId: activeProjectId, region, userId: currentUser.uid, entityId: activeEntity }),
                 signal: controller.signal
             });
 
@@ -122,7 +124,7 @@ export const useChatAI = (
 
                 // Persist the change in Firestore (Messages)
                 if (activeConversationId) {
-                    const msgRef = doc(db, "web-projects", activeProjectId, "conversations", activeConversationId, "messages", msgId);
+                    const msgRef = doc(db, "users", currentUser.uid, "entities", activeEntity, "web-projects", activeProjectId, "conversations", activeConversationId, "messages", msgId);
                     await setDoc(msgRef, { showCloudSetup: false, approved: true }, { merge: true });
                 }
 
@@ -150,7 +152,7 @@ export const useChatAI = (
             setStatusMessage("");
             setAbortController(null);
         }
-    }, [activeProjectId, activeConversationId, showToast]);
+    }, [activeProjectId, activeConversationId, showToast, currentUser, activeEntity]);
 
     useEffect(() => {
         const onApprove = (e: any) => {
@@ -173,6 +175,7 @@ export const useChatAI = (
     }, [handleCloudProvision]);
 
     const saveChatMessage = async (projectId: string, convoId: string, message: ChatMessage) => {
+        if (!currentUser || !activeEntity) return;
         try {
             // Firestore doesn't like undefined fields
             const cleanMessage = JSON.parse(JSON.stringify({
@@ -180,11 +183,11 @@ export const useChatAI = (
                 timestamp: message.timestamp || Date.now()
             }, (_, v) => v === undefined ? null : v));
 
-            const msgCol = collection(db, "web-projects", projectId, "conversations", convoId, "messages");
+            const msgCol = collection(db, "users", currentUser.uid, "entities", activeEntity, "web-projects", projectId, "conversations", convoId, "messages");
             await addDoc(msgCol, cleanMessage);
 
             // Update conversation snippet
-            const convoRef = doc(db, "web-projects", projectId, "conversations", convoId);
+            const convoRef = doc(db, "users", currentUser.uid, "entities", activeEntity, "web-projects", projectId, "conversations", convoId);
             await setDoc(convoRef, {
                 lastMessage: message.content.substring(0, 100) || (message.images?.length ? "Imagen enviada" : ""),
                 updatedAt: Date.now()
@@ -196,9 +199,9 @@ export const useChatAI = (
     };
 
     const handleNewConversation = useCallback(async () => {
-        if (!activeProjectId) return;
+        if (!activeProjectId || !currentUser || !activeEntity) return;
         try {
-            const convoCol = collection(db, "web-projects", activeProjectId, "conversations");
+            const convoCol = collection(db, "users", currentUser.uid, "entities", activeEntity, "web-projects", activeProjectId, "conversations");
             const newConvo = await addDoc(convoCol, {
                 title: "Nuevo Chat",
                 updatedAt: Date.now()
@@ -208,20 +211,20 @@ export const useChatAI = (
         } catch (e) {
             console.error("Failed to create conversation", e);
         }
-    }, [activeProjectId]);
+    }, [activeProjectId, currentUser, activeEntity]);
 
 
     const deleteConversation = useCallback(async (convoId: string) => {
-        if (!activeProjectId) return;
+        if (!activeProjectId || !currentUser || !activeEntity) return;
         try {
-            await deleteDoc(doc(db, "web-projects", activeProjectId, "conversations", convoId));
+            await deleteDoc(doc(db, "users", currentUser.uid, "entities", activeEntity, "web-projects", activeProjectId, "conversations", convoId));
             if (activeConversationId === convoId) {
                 setActiveConversationId(null);
             }
         } catch (e) {
             console.error("Failed to delete conversation", e);
         }
-    }, [activeProjectId, activeConversationId]);
+    }, [activeProjectId, activeConversationId, currentUser, activeEntity]);
 
     const cancelGeneration = useCallback(() => {
         if (abortController) {
@@ -238,12 +241,12 @@ export const useChatAI = (
     }, [abortController, showToast]);
 
     const handleGenerate = useCallback(async (userMsg: string, images?: { id: string, url: string, file?: File }[]) => {
-        if (!activeProjectId) return;
+        if (!activeProjectId || !currentUser || !activeEntity) return;
 
         // Ensure we have a conversation
         let convoId = activeConversationId;
         if (!convoId) {
-            const convoCol = collection(db, "web-projects", activeProjectId, "conversations");
+            const convoCol = collection(db, "users", currentUser.uid, "entities", activeEntity, "web-projects", activeProjectId, "conversations");
             const newConvo = await addDoc(convoCol, {
                 title: userMsg.substring(0, 40).trim() || "Nueva conversación",
                 updatedAt: Date.now()
@@ -255,7 +258,7 @@ export const useChatAI = (
             const activeConvo = conversations.find(c => c.id === convoId);
             const placeholderTitles = ["Nuevo Chat", "Nueva conversación", ""];
             if (activeConvo && placeholderTitles.includes(activeConvo.title?.trim() || "")) {
-                const convoRef = doc(db, "web-projects", activeProjectId, "conversations", convoId);
+                const convoRef = doc(db, "users", currentUser.uid, "entities", activeEntity, "web-projects", activeProjectId, "conversations", convoId);
                 const autoTitle = userMsg.substring(0, 40).trim() || "Chat sin título";
                 await setDoc(convoRef, { title: autoTitle }, { merge: true });
             }
@@ -393,7 +396,9 @@ export const useChatAI = (
                             currentFiles: apiFiles,
                             model: attempts === 1 ? modelToUse : "Gemini 2.0 Flash",
                             projectId: activeProjectId,
-                            supabaseConfig
+                            supabaseConfig,
+                            userId: currentUser.uid,
+                            entityId: activeEntity
                         }),
                         signal: controller.signal
                     });
@@ -534,7 +539,7 @@ export const useChatAI = (
                 // Set first user message as title if it was "Nuevo Chat"
                 const currentConvo = conversations.find(c => c.id === convoId);
                 if (currentConvo && currentConvo.title === "Nuevo Chat") {
-                    const convoRef = doc(db, "web-projects", activeProjectId, "conversations", convoId);
+                    const convoRef = doc(db, "users", currentUser.uid, "entities", activeEntity, "web-projects", activeProjectId, "conversations", convoId);
                     await setDoc(convoRef, { title: userMsg.substring(0, 30) }, { merge: true });
                 }
             }
@@ -565,12 +570,12 @@ export const useChatAI = (
             }
             setAbortController(null);
         }
-    }, [activeProjectId, activeConversationId, messages, files, selectedModel, updateFiles, setActiveFile, showToast, conversations]);
+    }, [activeProjectId, activeConversationId, messages, files, selectedModel, updateFiles, setActiveFile, showToast, conversations, currentUser, activeEntity]);
 
     const approvePlan = useCallback(async (msgId: string) => {
-        if (!activeProjectId || !activeConversationId || !msgId) return;
+        if (!activeProjectId || !activeConversationId || !msgId || !currentUser || !activeEntity) return;
         try {
-            const msgRef = doc(db, "web-projects", activeProjectId, "conversations", activeConversationId, "messages", msgId);
+            const msgRef = doc(db, "users", currentUser.uid, "entities", activeEntity, "web-projects", activeProjectId, "conversations", activeConversationId, "messages", msgId);
             await setDoc(msgRef, { approved: true }, { merge: true });
 
             // Trigger the AI to proceed
@@ -578,7 +583,7 @@ export const useChatAI = (
         } catch (e) {
             console.error("Failed to approve plan in Firestore", e);
         }
-    }, [activeProjectId, activeConversationId, handleGenerate]);
+    }, [activeProjectId, activeConversationId, handleGenerate, currentUser, activeEntity]);
 
     return {
         isGenerating,

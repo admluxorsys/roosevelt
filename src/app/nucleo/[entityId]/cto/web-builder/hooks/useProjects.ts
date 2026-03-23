@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { WebProject } from "../types";
 import { db, auth } from "@/lib/firebase";
+import { useAuth } from "@/contexts/AuthContext";
 import {
     collection,
     addDoc,
@@ -16,6 +17,7 @@ import {
 } from "firebase/firestore";
 
 export const useProjects = (initialFiles: Record<string, string>) => {
+    const { currentUser, activeEntity } = useAuth();
     const [projects, setProjects] = useState<WebProject[]>([]);
     const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
 
@@ -29,7 +31,9 @@ export const useProjects = (initialFiles: Record<string, string>) => {
 
     // Initial Load & Real-time Sync
     useEffect(() => {
-        const q = collection(db, "web-projects");
+        if (!currentUser || !activeEntity) return;
+
+        const q = collection(db, "users", currentUser.uid, "entities", activeEntity, "web-projects");
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const projectsData = snapshot.docs
                 .map(d => ({
@@ -51,7 +55,7 @@ export const useProjects = (initialFiles: Record<string, string>) => {
         });
 
         return () => unsubscribe();
-    }, []);
+    }, [currentUser, activeEntity]);
 
     // Persist active project ID
     useEffect(() => {
@@ -63,7 +67,7 @@ export const useProjects = (initialFiles: Record<string, string>) => {
     }, [activeProjectId]);
 
     const handleNewProject = useCallback(async (name: string) => {
-        if (!name) return;
+        if (!name || !currentUser || !activeEntity) return;
 
         try {
             const newProject = {
@@ -75,13 +79,14 @@ export const useProjects = (initialFiles: Record<string, string>) => {
                 previewUrl: ''
             };
 
-            const docRef = await addDoc(collection(db, "web-projects"), newProject);
+            const baseCollection = collection(db, "users", currentUser.uid, "entities", activeEntity, "web-projects");
+            const docRef = await addDoc(baseCollection, newProject);
             const projectId = docRef.id;
 
             // Initialize files in Firestore
             const batch = writeBatch(db);
             Object.entries(initialFiles).forEach(([path, content]) => {
-                const fileRef = doc(db, "web-projects", projectId, "files", encodeURIComponent(path).replace(/\./g, '%2E'));
+                const fileRef = doc(db, "users", currentUser.uid, "entities", activeEntity, "web-projects", projectId, "files", encodeURIComponent(path).replace(/\./g, '%2E'));
                 batch.set(fileRef, {
                     path,
                     content,
@@ -95,26 +100,27 @@ export const useProjects = (initialFiles: Record<string, string>) => {
         } catch (e) {
             console.error("Failed to create project with files", e);
         }
-    }, [initialFiles]);
+    }, [initialFiles, currentUser, activeEntity]);
 
     const handleSwitchProject = useCallback((id: string) => {
         setActiveProjectId(id);
     }, []);
 
     const deleteProject = useCallback(async (id: string) => {
+        if (!currentUser || !activeEntity) return;
         try {
             const batch = writeBatch(db);
 
             // 1. Delete all files
-            const filesSnap = await getDocs(collection(db, "web-projects", id, "files"));
+            const filesSnap = await getDocs(collection(db, "users", currentUser.uid, "entities", activeEntity, "web-projects", id, "files"));
             filesSnap.docs.forEach(d => batch.delete(d.ref));
 
             // 2. Delete all conversations AND their nested messages
-            const convsSnap = await getDocs(collection(db, "web-projects", id, "conversations"));
+            const convsSnap = await getDocs(collection(db, "users", currentUser.uid, "entities", activeEntity, "web-projects", id, "conversations"));
             for (const convoDoc of convsSnap.docs) {
                 // Delete every message inside this conversation
                 const msgsSnap = await getDocs(
-                    collection(db, "web-projects", id, "conversations", convoDoc.id, "messages")
+                    collection(db, "users", currentUser.uid, "entities", activeEntity, "web-projects", id, "conversations", convoDoc.id, "messages")
                 );
                 msgsSnap.docs.forEach(m => batch.delete(m.ref));
                 // Delete the conversation document itself
@@ -122,7 +128,7 @@ export const useProjects = (initialFiles: Record<string, string>) => {
             }
 
             // 3. Delete the project document
-            batch.delete(doc(db, "web-projects", id));
+            batch.delete(doc(db, "users", currentUser.uid, "entities", activeEntity, "web-projects", id));
 
             await batch.commit();
 
@@ -136,44 +142,47 @@ export const useProjects = (initialFiles: Record<string, string>) => {
             console.error("Failed to delete project:", e);
             // Fallback to API
             try {
-                await fetch(`/api/web-builder/projects?projectId=${id}`, { method: 'DELETE' });
+                await fetch(`/api/web-builder/projects?projectId=${id}&userId=${currentUser.uid}&entityId=${activeEntity}`, { method: 'DELETE' });
             } catch (apiErr) {
                 console.error("API fallback delete also failed:", apiErr);
             }
         }
-    }, [activeProjectId]);
+    }, [activeProjectId, currentUser, activeEntity]);
 
     const updateProjectLastModified = useCallback(async (id: string) => {
+        if (!currentUser || !activeEntity) return;
         try {
-            await updateDoc(doc(db, "web-projects", id), {
+            await updateDoc(doc(db, "users", currentUser.uid, "entities", activeEntity, "web-projects", id), {
                 lastModified: Date.now()
             });
         } catch (e) {
             console.error("Failed to update lastModified", e);
         }
-    }, []);
+    }, [currentUser, activeEntity]);
 
     const updateProjectRepo = useCallback(async (id: string, repoUrl: string) => {
+        if (!currentUser || !activeEntity) return;
         try {
-            await updateDoc(doc(db, "web-projects", id), {
+            await updateDoc(doc(db, "users", currentUser.uid, "entities", activeEntity, "web-projects", id), {
                 repoUrl,
                 lastModified: Date.now()
             });
         } catch (e) {
             console.error("Failed to update repoUrl", e);
         }
-    }, []);
+    }, [currentUser, activeEntity]);
 
     const updateProject = useCallback(async (id: string, updates: Partial<WebProject>) => {
+        if (!currentUser || !activeEntity) return;
         try {
-            await updateDoc(doc(db, "web-projects", id), {
+            await updateDoc(doc(db, "users", currentUser.uid, "entities", activeEntity, "web-projects", id), {
                 ...updates,
                 lastModified: Date.now()
             });
         } catch (e) {
             console.error("Failed to update project metadata", e);
         }
-    }, []);
+    }, [currentUser, activeEntity]);
 
     const activeProject = projects.find(p => p.id === activeProjectId);
 

@@ -49,9 +49,14 @@ if (!admin.apps.length) {
             console.log(`[Firebase Admin] Initialized for ${projectId} with default credentials/ADC`);
         }
     } catch (error: any) {
-        console.error('CRITICAL: Failed to initialize Firebase Admin:', error.message);
-        if (error.code === 'permission-denied' || error.message?.includes('PERMISSION_DENIED')) {
-            console.error('HINT: This is usually because your local environment lacks GOOGLE_APPLICATION_CREDENTIALS or a Service Account Key.');
+        // Build-time graceful failure
+        if (process.env.NEXT_PHASE === 'phase-production-build') {
+            console.warn('[Firebase Admin] ⏳ Skipping initialization during build phase (No credentials found/provided).');
+        } else {
+            console.error('CRITICAL: Failed to initialize Firebase Admin:', error.message);
+            if (error.code === 'permission-denied' || error.message?.includes('PERMISSION_DENIED')) {
+                console.error('HINT: This is usually because your local environment lacks GOOGLE_APPLICATION_CREDENTIALS or a Service Account Key.');
+            }
         }
     }
 }
