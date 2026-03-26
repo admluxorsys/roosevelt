@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Lock, QrCode } from 'lucide-react';
 import { Integration } from '../../config';
 import { useAuth } from '@/contexts/AuthContext';
-import QRCode from 'react-qr-code';
+import { QRCodeSVG } from 'qrcode.react';
 
 interface Props {
     isOpen: boolean;
@@ -212,7 +212,7 @@ export function WhatsAppQRPersonalModal({ isOpen, onClose, activeIntegration, in
                                         <div className="w-[200px] h-[200px] bg-white rounded-2xl p-2 shrink-0 relative flex items-center justify-center group overflow-hidden shadow-[0_0_40px_rgba(255,255,255,0.1)]">
                                             {qrCode && (status as string) !== 'CONNECTED' && (status as string) !== 'SUCCESS' ? (
                                                 <div className="w-full h-full bg-white rounded-xl flex items-center justify-center p-2">
-                                                    <QRCode value={qrCode} size={160} level="L" />
+                                                    <QRCodeSVG value={qrCode} size={160} level="L" />
                                                 </div>
                                             ) : (
                                                 <>
