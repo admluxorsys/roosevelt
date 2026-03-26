@@ -1,0 +1,8 @@
+﻿
+> roosevelt-platform@1.0.0 build
+> next build
+
+   Γû▓ Next.js 16.0.7 (Turbopack)
+   - Environments: .env
+
+   Creating an optimized production build ...
