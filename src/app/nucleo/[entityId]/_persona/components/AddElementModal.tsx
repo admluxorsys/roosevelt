@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 import { ICON_MAP, AVAILABLE_COLORS } from '../constants';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface AddElementModalProps {
     isOpen: boolean;
@@ -12,16 +13,17 @@ interface AddElementModalProps {
 }
 
 export const AddElementModal = ({ isOpen, onClose, onAdd }: AddElementModalProps) => {
+    const { activeEntity } = useAuth();
     const [title, setTitle] = useState('');
     const [subtitle, setSubtitle] = useState('');
     const [selectedIcon, setSelectedIcon] = useState('Activity');
     const [selectedColor, setSelectedColor] = useState('rose');
 
     const handleAdd = () => {
-        if (!title.trim()) return;
+        if (!title.trim() || !activeEntity) return;
         onAdd({
             id: title.toLowerCase().replace(/\s+/g, '-'),
-            href: `/nucleo/life/${title.toLowerCase().replace(/\s+/g, '-')}`,
+            href: `/nucleo/${activeEntity}/${title.toLowerCase().replace(/\s+/g, '-')}`,
             iconName: selectedIcon,
             title,
             subtitle,
@@ -127,4 +129,3 @@ export const AddElementModal = ({ isOpen, onClose, onAdd }: AddElementModalProps
         </AnimatePresence>
     );
 };
-

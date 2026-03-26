@@ -1,6 +1,8 @@
 import * as functions from 'firebase-functions';
 import { normalizeWebChatMessage } from '../helpers/messageNormalizer';
 import { handleKanbanUpdateOmni } from '../helpers/kanbanOmni';
+import { tryTriggerBot } from '../helpers/botEngine';
+import { resolveTenant } from '../helpers/tenantResolver';
 
 /**
  * WEB CHAT WEBHOOK HANDLER
@@ -35,28 +37,19 @@ export const webchatWebhook = functions.https.onRequest(async (req: functions.ht
 
             functions.logger.info('Received WebChat message', body);
 
+            // For WebChat, we resolve tenant by sessionId OR a dedicated widgetId
+            // If body.entityId is provided by widget, we use it directly, but still resolve mapping for userId
+            const platformId = body.widgetId || body.entityId || 'default';
+            const tenant = await resolveTenant('webchat', platformId);
+            const userId = tenant?.userId || 'legacy';
+            const entityId = tenant?.entityId || 'roosevelt';
+
             const unifiedMsg = normalizeWebChatMessage(body);
-            const cardResult = await handleKanbanUpdateOmni(unifiedMsg);
+            const cardResult = await handleKanbanUpdateOmni(unifiedMsg, userId, entityId);
 
-            // Trigger Bot
+            // Trigger Bot (Unified Logic)
             if (cardResult && cardResult.success) {
-                if (unifiedMsg.message_type === 'text') { // Only trigger for text for now
-                    const { getActiveBot, executeBotFlow } = await import('../helpers/botEngine');
-                    const activeBot = await getActiveBot();
-                    if (activeBot) {
-                        const admin = await import('firebase-admin');
-                        const db = admin.firestore();
-                        const cardSnap = await db.collectionGroup('cards').where(admin.firestore.FieldPath.documentId(), '==', cardResult.cardId).get();
-
-                        // For WebChat, external_id is sessionId.
-                        // executeBotFlow needs to know this to continue thread.
-
-                        if (!cardSnap.empty) {
-                            const fullCardData = { id: cardSnap.docs[0].id, ...cardSnap.docs[0].data() };
-                            await executeBotFlow(activeBot, unifiedMsg.external_id, fullCardData, unifiedMsg.message_text);
-                        }
-                    }
-                }
+                await tryTriggerBot(userId, entityId, 'webchat', unifiedMsg.external_id, unifiedMsg.message_text);
             }
 
             res.status(200).json({ success: true });

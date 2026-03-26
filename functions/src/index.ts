@@ -10,5 +10,6 @@ export { xWebhook } from './webhooks/x';
 export { webchatWebhook } from './webhooks/webchat';
 export { tiktokWebhook } from './webhooks/tiktok';
 export { googleFormsWebhook } from './webhooks/googleForms';
+export { baileysWebhook } from "./webhooks/baileys";
 export { moveCard } from './helpers/kanbanOperations';
 export { migrateCards } from './helpers/migrateCards';

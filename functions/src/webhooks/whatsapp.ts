@@ -1,26 +1,52 @@
 import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
 import { handleKanbanUpdateOmni, updateReadStatus } from '../helpers/kanbanOmni';
-import { getActiveBot, executeBotFlow, resolveCardRef } from '../helpers/botEngine';
+import { tryTriggerBot } from '../helpers/botEngine';
 import { UnifiedMessage } from '../types/message';
 
-const FORTY_EIGHT_HOURS_IN_MS = 48 * 60 * 60 * 1000;
 
-export const whatsappWebhook = functions.https.onRequest(async (req: functions.https.Request, res: functions.Response) => {
+
+export const whatsappWebhook = functions.runWith({ invoker: 'public' }).https.onRequest(async (req: functions.https.Request, res: functions.Response) => {
     // --- VERIFICACIÓN DE WEBHOOK (GET) ---
     if (req.method === 'GET') {
         const mode = req.query['hub.mode'];
         const token = req.query['hub.verify_token'];
         const challenge = req.query['hub.challenge'];
 
-        const VERIFY_TOKEN = functions.config().whatsapp?.verify_token || 'malamia';
+        const userId = req.query['u'] as string;
+        const entityId = req.query['e'] as string;
 
-        if (mode === 'subscribe' && token === VERIFY_TOKEN) {
-            functions.logger.info('WhatsApp Webhook Verified (GET)');
+        let expectedToken = functions.config().whatsapp?.verify_token || 'malamia';
+
+        // Caso 1: Se proveen IDs de inquilino (Requisito estricto por falta de índices)
+        if (userId && entityId) {
+            try {
+                const db = admin.firestore();
+                // Check both public and internal for the token
+                const [publicSnap, internalSnap] = await Promise.all([
+                    db.doc(`users/${userId}/entities/${entityId}/integrations/whatsapp`).get(),
+                    db.doc(`users/${userId}/entities/${entityId}/integrations/whatsapp_internal`).get()
+                ]);
+
+                if (publicSnap.exists && publicSnap.data()?.verifyToken === token) {
+                    expectedToken = token as string;
+                } else if (internalSnap.exists && internalSnap.data()?.verifyToken === token) {
+                    expectedToken = token as string;
+                }
+            } catch (error) {
+                functions.logger.error('[Webhook Verify] Error fetching tenant config', error);
+            }
+        } else {
+            functions.logger.error('[Webhook Verify] Missing u or e parameters. Universal webhook requires indexing.');
+        }
+
+        if (mode === 'subscribe' && token === expectedToken) {
+            functions.logger.info(`✅ [Verification Success] Hub Token: ${token}, Expected: ${expectedToken}, User: ${userId}`);
+
             res.status(200).send(challenge);
             return;
         } else {
-            functions.logger.warn('WhatsApp Verification Failed (GET)');
+            functions.logger.warn(`❌ [Verification Failed] Hub Token: ${token}, Expected: ${expectedToken}, User: ${userId}`);
             res.sendStatus(403);
             return;
         }
@@ -40,6 +66,26 @@ export const whatsappWebhook = functions.https.onRequest(async (req: functions.h
         const { entry } = requestBody;
         const change = entry?.[0]?.changes?.[0]?.value;
         if (!change) return;
+
+        const metadata = change.metadata;
+        const recipientPhoneNumberId = metadata?.phone_number_id;
+
+        if (!recipientPhoneNumberId) {
+            functions.logger.warn('[Webhook] No recipient phone_number_id found in metadata');
+            return;
+        }
+
+        // --- RESOLUCIÓN DE INQUILINO DIRECTA (Vía URL) ---
+        // Evitamos usar collectionGroup para eludir el error de "Index Required" de Firestore
+        const userId = req.query['u'] as string;
+        const entityId = req.query['e'] as string;
+
+        if (!userId || !entityId) {
+            functions.logger.error(`[WhatsApp Webhook] Missing u/e parameters in POST request.`);
+            return;
+        }
+
+        functions.logger.info(`[Webhook] Resolved Tenant directly from URL: User=${userId}, Entity=${entityId}`);
 
         // --- CASO 1: MANEJO DE ESTADOS (READ, DELIVERED, SENT) ---
         if (change.statuses && change.statuses.length > 0) {
@@ -126,7 +172,7 @@ export const whatsappWebhook = functions.https.onRequest(async (req: functions.h
             };
 
             // 2. Gestionar Tarjeta en Kanban (Omnichannel)
-            const result = await handleKanbanUpdateOmni(unifiedMessage);
+            const result = await handleKanbanUpdateOmni(unifiedMessage, userId, entityId);
 
             if (!result.success) {
                 functions.logger.warn(`[Kanban Sync] Validation failed or error for ${from}`);
@@ -138,59 +184,8 @@ export const whatsappWebhook = functions.https.onRequest(async (req: functions.h
 
             functions.logger.info(`[Kanban Sync] WhatsApp Card ${isNew ? 'CREATED' : 'UPDATED'} (ID: ${cardId})`);
 
-            // 3. Ejecutar Bot
-            // Fetch complete card data to check bot state
-            const cardRef = await resolveCardRef(from);
-
-            if (cardRef) {
-                const cardSnap = await cardRef.get();
-                const cardData = { id: cardRef.id, ...cardSnap.data() } as any;
-
-                const activeBot = await getActiveBot();
-                if (activeBot) {
-                    const now = new Date();
-                    
-                    const input = body.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-                    const isCommand = input === 'reinicia todo ahora' || input === 'reiniciar' || input === 'reset';
-                    
-                    const botStatus = cardData.botState?.status || 'none';
-                    let shouldTrigger = false;
-
-                    // --- LIFECYCLE TRIGGER CONDITIONS ---
-                    if (isCommand) {
-                        shouldTrigger = true;
-                    } else if (botStatus === 'completed') {
-                        functions.logger.info(`[Lifecycle] Session is completed for ${from}, skipping bot execution.`);
-                        shouldTrigger = false;
-                    } else if (isNew || botStatus === 'none') {
-                        shouldTrigger = true;
-                    } else if (botStatus === 'active') {
-                        shouldTrigger = true;
-                    } else if (cardData.botState?.lastInteraction) {
-                        const lastInt = cardData.botState.lastInteraction.toDate ? cardData.botState.lastInteraction.toDate() : new Date(0);
-                        if ((now.getTime() - lastInt.getTime()) > FORTY_EIGHT_HOURS_IN_MS) {
-                            shouldTrigger = true;
-                        }
-                    }
-
-                    if (shouldTrigger) {
-                        // Reset state if it's starting a fresh session from none
-                        const needsReset = isNew || botStatus === 'none';
-                        
-                        if (needsReset && cardData.botState) {
-                            functions.logger.info(`[Webhook] Resetting bot state for ${from} (Reason: New/None Session)`);
-                            await cardRef.update({ botState: admin.firestore.FieldValue.delete() });
-                            delete cardData.botState;
-                        }
-                        
-                        await executeBotFlow(activeBot, from, cardData, body, message.id, { mediaUrl, type: msgType });
-                    }
-                } else {
-                    functions.logger.warn(`[Webhook] No active chatbot found in DB for ${from}. Skipping bot execution.`);
-                }
-            } else {
-                functions.logger.error(`[Bot Error] Could not find card for ${from} after creation/update.`);
-            }
+            // 3. Ejecutar Bot (Unified Logic)
+            await tryTriggerBot(userId, entityId, 'whatsapp', from, body, message.id, { mediaUrl, type: msgType });
         } catch (error) {
             functions.logger.error('Error in whatsappWebhook processing:', error);
         }

@@ -1,5 +1,6 @@
 import * as admin from 'firebase-admin';
 import * as functions from 'firebase-functions';
+import axios from 'axios';
 import { getMessagingAdapter } from './platforms/factory';
 
 // Delay helper
@@ -39,48 +40,39 @@ async function releaseBotLock(cardRef: FirebaseFirestore.DocumentReference): Pro
     }
 }
 
-// Helper to resolve cardRef from known IDs or fallback search
-export async function resolveCardRef(contactNumber: string, cardId?: string, groupId?: string): Promise<FirebaseFirestore.DocumentReference | null> {
+// --- Search by platform_ids (New Unified Approach) ---
+// Try to find by whatsapp/external_id first
+export async function resolveCardRef(contactNumber: string, platform: string = 'whatsapp'): Promise<FirebaseFirestore.DocumentReference | null> {
     const db = admin.firestore();
 
-    if (cardId && groupId) {
-        return db.collection('kanban-groups').doc(groupId).collection('cards').doc(cardId);
-    }
-
-    if (cardId) {
-        const groups = await db.collection('kanban-groups').get();
-        for (const group of groups.docs) {
-            const ref = group.ref.collection('cards').doc(cardId);
-            const snap = await ref.get();
-            if (snap.exists) return ref;
-        }
-    }
-
-    // --- Search by platform_ids (New Unified Approach) ---
-    // Try to find by whatsapp/external_id first
+    // Strategy A: platform_ids.{platform}
     try {
         const platformSnap = await db.collectionGroup('cards')
-            .where(`platform_ids.whatsapp`, '==', contactNumber)
+            .where(`platform_ids.${platform}`, '==', contactNumber)
             .limit(1)
             .get();
         if (!platformSnap.empty) return platformSnap.docs[0].ref;
     } catch (e) {
-        functions.logger.warn(`[resolveCardRef] index for platform_ids.whatsapp not ready.`);
+        functions.logger.warn(`[resolveCardRef] index for platform_ids.${platform} not ready.`);
     }
 
-    // Fallback: search by contactNumber (Legacy)
-    const cardsRef = db.collectionGroup('cards').where('contactNumber', '==', contactNumber);
-    const snapshot = await cardsRef.get();
-    if (!snapshot.empty) return snapshot.docs[0].ref;
+    // Strategy B: Legacy contactNumber match (mostly for WhatsApp)
+    if (platform === 'whatsapp') {
+        try {
+            const cardsRef = db.collectionGroup('cards').where('contactNumber', '==', contactNumber);
+            const snapshot = await cardsRef.get();
+            if (!snapshot.empty) return snapshot.docs[0].ref;
+        } catch (e) {}
+    }
 
     return null;
 }
 
-export async function getActiveBot(): Promise<any | null> {
+export async function getActiveBot(userId: string, entityId: string): Promise<any | null> {
     const db = admin.firestore();
-    const botsSnapshot = await db.collection('chatbots')
+    const botsSnapshot = await db.collection(`users/${userId}/entities/${entityId}/chatbots`)
         .where('isActive', '==', true)
-        .orderBy('updatedAt', 'desc') // Tomar el más recientemente activado para consistencia
+        .orderBy('updatedAt', 'desc')
         .limit(1)
         .get();
 
@@ -119,6 +111,36 @@ function calculateTypingDelay(text: string): number {
     return baseDelay + typingTime;
 }
 
+function evaluateCondition(varValue: any, operator: string, targetValue: any, fuzzy: boolean = true): boolean {
+    let v = varValue === undefined || varValue === null ? '' : String(varValue);
+    let t = targetValue === undefined || targetValue === null ? '' : String(targetValue);
+
+    if (fuzzy) {
+        v = v.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        t = t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    }
+
+    switch (operator) {
+        case 'equals': return v === t;
+        case 'not_equals': return v !== t;
+        case 'contains': return v.includes(t);
+        case 'starts_with': return v.startsWith(t);
+        case 'ends_with': return v.endsWith(t);
+        case 'gt': return parseFloat(v) > parseFloat(t);
+        case 'lt': return parseFloat(v) < parseFloat(t);
+        case 'gte': return parseFloat(v) >= parseFloat(t);
+        case 'lte': return parseFloat(v) <= parseFloat(t);
+        case 'is_set': return varValue !== undefined && varValue !== null && String(varValue).trim() !== '';
+        case 'is_empty': return varValue === undefined || varValue === null || String(varValue).trim() === '';
+        case 'regex':
+            try {
+                const re = new RegExp(t, 'i');
+                return re.test(v);
+            } catch (e) { return false; }
+        default: return false;
+    }
+}
+
 function sanitizeListData(data: any): any[] {
     const cleanSections: any[] = [];
     if (Array.isArray(data.sections) && data.sections.length > 0) {
@@ -152,6 +174,67 @@ function sanitizeButtonsData(buttons: any[]): any[] {
     return buttons.filter(b => b && b.title && b.title !== 'undefined' && b.title.trim() !== '');
 }
 
+/**
+ * Unified Bot Trigger Logic
+ * Handles checking for active bots, session lifecycle, and command overrides.
+ */
+export async function tryTriggerBot(
+    userId: string, 
+    entityId: string, 
+    platform: string, 
+    externalId: string, 
+    messageText: string,
+    messageId?: string,
+    metadata?: any
+): Promise<void> {
+    const activeBot = await getActiveBot(userId, entityId);
+    if (!activeBot) {
+        functions.logger.debug(`[Bot Engine] No active bot for entity ${entityId}. Skipping.`);
+        return;
+    }
+
+    const cardRef = await resolveCardRef(externalId, platform);
+    if (!cardRef) {
+        functions.logger.error(`[Bot Engine] Could not resolve card for ${externalId} on ${platform}`);
+        return;
+    }
+
+    const cardSnap = await cardRef.get();
+    const cardData = { id: cardRef.id, ...cardSnap.data() } as any;
+
+    const now = new Date();
+    const FORTY_EIGHT_HOURS_IN_MS = 48 * 60 * 60 * 1000;
+    
+    const input = messageText.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const isCommand = input === 'reinicia todo ahora' || input === 'reiniciar' || input === 'reset';
+    
+    const botStatus = cardData.botState?.status || 'none';
+    let shouldTrigger = false;
+
+    if (isCommand) {
+        shouldTrigger = true;
+    } else if (botStatus === 'completed') {
+        shouldTrigger = false;
+    } else if (botStatus === 'none' || botStatus === 'active') {
+        shouldTrigger = true;
+    } else if (cardData.botState?.lastInteraction) {
+        const lastInt = cardData.botState.lastInteraction.toDate ? cardData.botState.lastInteraction.toDate() : new Date(0);
+        if ((now.getTime() - lastInt.getTime()) > FORTY_EIGHT_HOURS_IN_MS) {
+            shouldTrigger = true;
+        }
+    }
+
+    if (shouldTrigger) {
+        // Reset state if it's starting a fresh session
+        if (botStatus === 'none' && cardData.botState) {
+            await cardRef.update({ botState: admin.firestore.FieldValue.delete() });
+            delete cardData.botState;
+        }
+        
+        await executeBotFlow(activeBot, externalId, cardData, messageText, messageId, metadata);
+    }
+}
+
 // --- MAIN ENGINE ---
 
 // --- MAIN ENGINE ---
@@ -160,17 +243,19 @@ export async function executeBotFlow(
     bot: any, 
     to: string, 
     cardData: any, 
-    userMessage: string, 
+    rawUserMessage: string, 
     messageId?: string,
     metadata?: { mediaUrl?: string, type?: string }
 ): Promise<void> {
     functions.logger.info(`>>> EXECUTING FLOW: ${bot.name} for ${to} (Type: ${metadata?.type || 'text'}) <<<`);
 
+    let currentMsg = rawUserMessage || '';
+
     const platform = cardData.source || 'whatsapp'; // Default to whatsapp if not set
     const adapter = getMessagingAdapter(platform);
 
     // Resolve cardRef once and reuse it throughout the entire flow
-    const cardRef = await resolveCardRef(to, cardData.id, cardData.groupId);
+    const cardRef = await resolveCardRef(to, platform);
     if (!cardRef) {
         functions.logger.warn(`[executeBotFlow] Could not resolve cardRef for ${to}`);
         return;
@@ -188,7 +273,7 @@ export async function executeBotFlow(
         }
 
         // --- RESTART COMMAND (For testing purposes) ---
-        const isRestartCommand = userMessage.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") === 'reinicia todo ahora' || userMessage.trim().toLowerCase() === 'reiniciar' || userMessage.trim().toLowerCase() === 'reset';
+        const isRestartCommand = currentMsg.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") === 'reinicia todo ahora' || currentMsg.trim().toLowerCase() === 'reiniciar' || currentMsg.trim().toLowerCase() === 'reset';
 
         // --- ABSOLUTE RESTART COMMAND ---
         if (isRestartCommand) {
@@ -202,7 +287,7 @@ export async function executeBotFlow(
             });
             
             await adapter.sendMessage(to, "🔄 Reinicio completado, empezamos de nuevo.");
-            userMessage = ""; // Clear to avoid being used by the fresh flow
+            currentMsg = ""; // Clear to avoid being used by the fresh flow
             return; // STOP execution here to wait for next user message
         }
 
@@ -278,7 +363,7 @@ export async function executeBotFlow(
         await delay(500);
 
         if (currentNode.type === 'captureInputNode') {
-            const validation = validateInput(userMessage, currentNode.data || {}, metadata);
+            const validation = validateInput(currentMsg, currentNode.data || {}, metadata);
             const maxRetries = currentNode.data?.maxRetries || 3;
             const currentRetries = cardData.botState?.retryCount || 0;
 
@@ -306,13 +391,13 @@ export async function executeBotFlow(
                     return;
                 }
             } else {
-                let valueToSave = userMessage.trim();
+                let valueToSave = currentMsg.trim();
                 const varName = currentNode.data?.variableName || `captured_${currentNode.id}`;
 
                 // --- HEURÍSTICA DE EXTRACCIÓN DE NOMBRE ---
                 if (['nombre', 'name', 'firstname', 'user'].includes(varName.toLowerCase())) {
                     valueToSave = extractName(valueToSave);
-                    functions.logger.info(`[executeBotFlow] Name extracted: "${valueToSave}" from "${userMessage}"`);
+                    functions.logger.info(`[executeBotFlow] Name extracted: "${valueToSave}" from "${currentMsg}"`);
                 }
 
                 functions.logger.info(`[executeBotFlow] Saving variable ${varName} = ${valueToSave}`);
@@ -338,8 +423,8 @@ export async function executeBotFlow(
                 if (currentNode.type === 'quickReplyNode') {
                     const buttons = sanitizeButtonsData(currentNode.data.buttons || []);
                     const matchedBtn = buttons.find((btn: any) =>
-                        (btn.title || '').toLowerCase().trim() === userMessage.toLowerCase().trim() ||
-                        (btn.id || '') === userMessage
+                        (btn.title || '').toLowerCase().trim() === currentMsg.toLowerCase().trim() ||
+                        (btn.id || '') === currentMsg
                     );
                     if (matchedBtn) {
                         const handleId = matchedBtn.id || matchedBtn.title;
@@ -350,8 +435,8 @@ export async function executeBotFlow(
                     let matchedRowId = null;
                     for (const sec of sections) {
                         const row = sec.rows.find((r: any) =>
-                            (r.title || '').toLowerCase().trim() === userMessage.toLowerCase().trim() ||
-                            (r.id || '') === userMessage
+                            (r.title || '').toLowerCase().trim() === currentMsg.toLowerCase().trim() ||
+                            (r.id || '') === currentMsg
                         );
                         if (row) {
                             matchedRowId = row.id || row.title;
@@ -448,12 +533,12 @@ export async function executeBotFlow(
                 // --- MEJORA: CAPTURA INMEDIATA ---
                 // Si el mensaje actual no está vacío (y no fue un comando de reinicio/recuperación),
                 // intentamos validarlo inmediatamente antes de suspender el bot.
-                if (userMessage && userMessage.trim() !== '') {
-                    const validation = validateInput(userMessage, nextNode.data || {}, metadata);
+                if (currentMsg && currentMsg.trim() !== '') {
+                    const validation = validateInput(currentMsg, nextNode.data || {}, metadata);
                     if (validation.isValid) {
-                        functions.logger.info(`[Bot Engine] Immediate valid capture for ${to} at ${nextNodeId}: "${userMessage}"`);
+                        functions.logger.info(`[Bot Engine] Immediate valid capture for ${to} at ${nextNodeId}: "${currentMsg}"`);
                         
-                        let valueToSave = userMessage.trim();
+                        let valueToSave = currentMsg.trim();
                         const varName = nextNode.data?.variableName || `captured_${nextNodeId}`;
 
                         if (['nombre', 'name', 'firstname', 'user'].includes(varName.toLowerCase())) {
@@ -473,7 +558,7 @@ export async function executeBotFlow(
                         // Continuar al siguiente nodo sin detenerse
                         currentNodeId = nextNodeId;
                         nextNodeId = getNextNodeId(bot, nextNodeId);
-                        userMessage = ""; // Consumir el mensaje para que no se use de nuevo
+                        currentMsg = ""; // Consumir el mensaje para que no se use de nuevo
                         continue; 
                     }
                 }
@@ -565,10 +650,190 @@ export async function executeBotFlow(
                 break;
 
             case 'conditionNode':
-                const trueEdge = bot.flow.edges.find((e: any) => String(e.source) === String(nextNodeId) && e.sourceHandle === 'true');
-                if (trueEdge) nextNodeId = trueEdge.target;
-                else nextNodeId = getNextNodeId(bot, nextNodeId);
+                const conditionData = nextNode.data || {};
+                const routes = conditionData.routes || [];
+                let matchedRouteId: string | null = null;
+
+                for (const route of routes) {
+                    const matchType = route.matchType || 'AND';
+                    const routeConditions = route.conditions || [];
+                    
+                    if (routeConditions.length === 0) continue;
+
+                    let routeMatches = matchType === 'AND'; // Start true for AND, false for OR
+
+                    for (const cond of routeConditions) {
+                        // Resolve variable value from cardData
+                        const varName = (cond.variable || '').replace(/[\{\}]/g, '').trim();
+                        const varValue = cardData.customFields?.[varName] || cardData[varName];
+                        
+                        const isMatch = evaluateCondition(varValue, cond.operator, cond.value, conditionData.fuzzyMatch !== false);
+                        
+                        if (matchType === 'AND') {
+                            routeMatches = routeMatches && isMatch;
+                            if (!routeMatches) break; // Optimization: fail fast for AND
+                        } else {
+                            routeMatches = routeMatches || isMatch;
+                            if (routeMatches) break; // Optimization: succeed fast for OR
+                        }
+                    }
+
+                    if (routeMatches) {
+                        matchedRouteId = route.id;
+                        break;
+                    }
+                }
+
+                if (matchedRouteId) {
+                    const matchedEdge = bot.flow.edges.find((e: any) => String(e.source) === String(nextNodeId) && String(e.sourceHandle) === String(matchedRouteId));
+                    if (matchedEdge) nextNodeId = matchedEdge.target;
+                    else nextNodeId = getNextNodeId(bot, nextNodeId);
+                } else {
+                    // Fallback to "else" handle
+                    const elseEdge = bot.flow.edges.find((e: any) => String(e.source) === String(nextNodeId) && e.sourceHandle === 'else');
+                    if (elseEdge) nextNodeId = elseEdge.target;
+                    else nextNodeId = getNextNodeId(bot, nextNodeId);
+                }
                 break;
+
+            case 'setVariableNode': {
+                const setVarData = nextNode.data || {};
+                const varToSet = (setVarData.variableName || '').replace(/[\{\}]/g, '').trim();
+                const opCat = setVarData.operationCategory || 'set';
+                const op = setVarData.operation || 'set';
+                let valueToUse = replaceVariables(setVarData.value || '', cardData);
+
+                if (varToSet) {
+                    let currentVal = cardData.customFields?.[varToSet] ?? cardData[varToSet] ?? '';
+                    let newVal: any = valueToUse;
+
+                    if (opCat === 'math') {
+                        const numCurrent = parseFloat(currentVal) || 0;
+                        const numInput = parseFloat(valueToUse) || 0;
+                        if (op === 'add') newVal = numCurrent + numInput;
+                        else if (op === 'subtract') newVal = numCurrent - numInput;
+                        else if (op === 'multiply') newVal = numCurrent * numInput;
+                    } else if (opCat === 'list') {
+                        let list = Array.isArray(currentVal) ? currentVal : [];
+                        if (op === 'push') {
+                            list.push(valueToUse);
+                            newVal = list;
+                        }
+                    }
+
+                    // Save to Firestore
+                    await cardRef.update({
+                        [`customFields.${varToSet}`]: newVal,
+                        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                    });
+                    
+                    // Update local cardData for immediate reuse in same flow
+                    if (!cardData.customFields) cardData.customFields = {};
+                    cardData.customFields[varToSet] = newVal;
+                }
+                nextNodeId = getNextNodeId(bot, nextNodeId);
+                break;
+            }
+
+            case 'webhookNode': {
+                const webhookData = nextNode.data || {};
+                const url = replaceVariables(webhookData.url || '', cardData);
+                const method = (webhookData.method || 'POST').toUpperCase();
+                const saveTo = (webhookData.saveResponseTo || '').replace(/[\{\}]/g, '').trim();
+
+                if (url) {
+                    try {
+                        functions.logger.info(`[Bot] Executing Webhook: ${method} ${url}`);
+                        const response = await axios({
+                            method,
+                            url,
+                            timeout: 10000,
+                        });
+
+                        if (saveTo) {
+                            await cardRef.update({
+                                [`customFields.${saveTo}`]: response.data,
+                                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                            });
+                            if (!cardData.customFields) cardData.customFields = {};
+                            cardData.customFields[saveTo] = response.data;
+                        }
+
+                        const successEdge = bot.flow.edges.find((e: any) => String(e.source) === String(nextNodeId) && e.sourceHandle === 'success');
+                        if (successEdge) nextNodeId = successEdge.target;
+                        else nextNodeId = getNextNodeId(bot, nextNodeId);
+
+                    } catch (error: any) {
+                        functions.logger.error(`[Bot] Webhook Error:`, error.message);
+                        const failureEdge = bot.flow.edges.find((e: any) => String(e.source) === String(nextNodeId) && e.sourceHandle === 'failure');
+                        if (failureEdge) nextNodeId = failureEdge.target;
+                        else nextNodeId = getNextNodeId(bot, nextNodeId);
+                    }
+                } else {
+                    nextNodeId = getNextNodeId(bot, nextNodeId);
+                }
+                break;
+            }
+
+            case 'generativeAINode': {
+                const aiData = nextNode.data || {};
+                const systemPrompt = replaceVariables(aiData.systemPrompt || 'Eres un asistente útil.', cardData);
+                const userMsg = cardData.lastMessage || '';
+                const model = aiData.model || 'gpt-4o';
+                const temperature = aiData.temperature ?? 0.7;
+                const outputVar = (aiData.outputVariable || '').replace(/[\{\}]/g, '').trim();
+                const apiKey = functions.config().openai?.key;
+
+                if (apiKey) {
+                    try {
+                        functions.logger.info(`[Bot] Calling AI Model: ${model}`);
+                        const aiResponse = await axios.post('https://api.openai.com/v1/chat/completions', {
+                            model: model.startsWith('gpt') ? model : 'gpt-4o',
+                            messages: [
+                                { role: 'system', content: systemPrompt },
+                                { role: 'user', content: userMsg }
+                            ],
+                            temperature: temperature
+                        }, {
+                            headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+                            timeout: 30000
+                        });
+
+                        const aiText = aiResponse.data.choices[0].message.content;
+
+                        if (outputVar) {
+                            await cardRef.update({
+                                [`customFields.${outputVar}`]: aiText,
+                                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                            });
+                            if (!cardData.customFields) cardData.customFields = {};
+                            cardData.customFields[outputVar] = aiText;
+                        } else {
+                            await adapter.sendMessage(to, aiText);
+                            await logBotMessage(to, aiText, cardData.id, cardData.groupId, cardRef);
+                        }
+                    } catch (error: any) {
+                        functions.logger.error(`[Bot] AI Error:`, error.response?.data || error.message);
+                        await adapter.sendMessage(to, "Lo siento, tuve un problema procesando tu solicitud con IA.");
+                    }
+                } else {
+                    functions.logger.warn("[Bot] Missing OpenAI API Key in functions.config().openai.key");
+                    await adapter.sendMessage(to, "El nodo de IA no está configurado (falta API Key).");
+                }
+                nextNodeId = getNextNodeId(bot, nextNodeId);
+                break;
+            }
+
+            case 'humanHandoffNode': {
+                functions.logger.info(`[Bot] Human Handoff initiated for ${to}`);
+                await cardRef.update({
+                    isHandledByHuman: true,
+                    botActive: false,
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                });
+                await adapter.sendMessage(to, "Te estoy transfiriendo con un agente humano. Por favor, espera un momento.");
+                return;
+            }
 
             default:
                 nextNodeId = getNextNodeId(bot, nextNodeId);
@@ -693,7 +958,7 @@ async function saveVariable(contactNumber: string, variable: string, value: stri
     if (!variable) return;
 
     // Use pre-resolved ref if available, otherwise fall back to lookup
-    const docRef = existingRef || await resolveCardRef(contactNumber, cardId, groupId);
+    const docRef = existingRef || await resolveCardRef(contactNumber);
 
     if (docRef) {
         const updateData: any = {};
@@ -721,7 +986,7 @@ async function saveVariable(contactNumber: string, variable: string, value: stri
 
 async function updateBotState(contactNumber: string, state: any, cardId?: string, groupId?: string, existingRef?: FirebaseFirestore.DocumentReference | null) {
     // Use pre-resolved ref if available, otherwise fall back to lookup
-    const docRef = existingRef || await resolveCardRef(contactNumber, cardId, groupId);
+    const docRef = existingRef || await resolveCardRef(contactNumber);
 
     if (docRef) {
         await docRef.update({ botState: state, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
@@ -730,7 +995,9 @@ async function updateBotState(contactNumber: string, state: any, cardId?: string
 
 async function logBotMessage(contactNumber: string, message: string, cardId?: string, groupId?: string, existingRef?: FirebaseFirestore.DocumentReference | null, type: string = 'text', metadata?: any) {
     // Use pre-resolved ref if available, otherwise fall back to lookup
-    const docRef = existingRef || await resolveCardRef(contactNumber, cardId, groupId);
+    // Use pre-resolved ref if available, otherwise fall back to lookup
+    const docRef = existingRef || await resolveCardRef(contactNumber);
+
 
     if (docRef) {
         await docRef.update({ 

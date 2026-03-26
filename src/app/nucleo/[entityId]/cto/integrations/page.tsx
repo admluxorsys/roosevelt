@@ -21,7 +21,7 @@ export default function IntegrationsPage() {
 
     const [selectedCategory, setSelectedCategory] = useState<Category>('All');
     const [searchQuery, setSearchQuery] = useState('');
-    const [connectedIds, setConnectedIds] = useState<string[]>([]);
+    const [connectedIntegrations, setConnectedIntegrations] = useState<Record<string, any>>({});
     const [loading, setLoading] = useState(true);
 
     // Modal Control
@@ -35,8 +35,14 @@ export default function IntegrationsPage() {
         const q = query(integrationsRef);
         
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            const ids = snapshot.docs.map(d => d.id).filter(id => id !== '_init');
-            setConnectedIds(ids);
+            const data: Record<string, any> = {};
+            snapshot.docs.forEach(d => {
+                const docData = d.data();
+                if (d.id !== '_init' && docData.status === 'Connected') {
+                    data[d.id] = docData;
+                }
+            });
+            setConnectedIntegrations(data);
             setLoading(false);
         });
         
@@ -114,7 +120,8 @@ export default function IntegrationsPage() {
                             <IntegrationCard 
                                 key={integration.id}
                                 integration={integration}
-                                isConnected={connectedIds.includes(integration.id)}
+                                isConnected={!!connectedIntegrations[integration.id]}
+                                integrationData={connectedIntegrations[integration.id]}
                                 onConnect={() => handleConnect(integration)}
                             />
                         ))}
@@ -123,26 +130,44 @@ export default function IntegrationsPage() {
             </main>
 
             {/* Modals Dispatcher */}
-            <WhatsAppCloudAPIModal 
-                isOpen={isModalOpen} 
-                onClose={() => setIsModalOpen(false)} 
-                activeIntegration={activeIntegration} 
-            />
-            <WhatsAppQRBusinessModal 
-                isOpen={isModalOpen} 
-                onClose={() => setIsModalOpen(false)} 
-                activeIntegration={activeIntegration} 
-            />
-            <WhatsAppQRPersonalModal 
-                isOpen={isModalOpen} 
-                onClose={() => setIsModalOpen(false)} 
-                activeIntegration={activeIntegration} 
-            />
+            {activeIntegration?.id === 'whatsapp' && (
+                <WhatsAppCloudAPIModal 
+                    isOpen={isModalOpen} 
+                    onClose={() => setIsModalOpen(false)} 
+                    activeIntegration={activeIntegration} 
+                />
+            )}
+            {activeIntegration?.id === 'whatsapp_qr_business' && (
+                <WhatsAppQRBusinessModal 
+                    isOpen={isModalOpen} 
+                    onClose={() => setIsModalOpen(false)} 
+                    activeIntegration={activeIntegration} 
+                />
+            )}
+            {activeIntegration?.id === 'whatsapp_qr_personal' && (
+                <WhatsAppQRPersonalModal 
+                    isOpen={isModalOpen} 
+                    onClose={() => setIsModalOpen(false)} 
+                    activeIntegration={activeIntegration} 
+                    // @ts-ignore
+                    integrationData={activeIntegration ? connectedIntegrations[activeIntegration.id] : null}
+                />
+            )}
         </div>
     );
 }
 
-function IntegrationCard({ integration, isConnected, onConnect }: { integration: Integration, isConnected: boolean, onConnect: () => void }) {
+function IntegrationCard({ 
+    integration, 
+    isConnected, 
+    integrationData,
+    onConnect 
+}: { 
+    integration: Integration, 
+    isConnected: boolean, 
+    integrationData?: any,
+    onConnect: () => void 
+}) {
     return (
         <motion.div
             layout
@@ -178,6 +203,14 @@ function IntegrationCard({ integration, isConnected, onConnect }: { integration:
 
             {/* Content */}
             <h3 className="text-xl font-medium text-white mb-2">{integration.name}</h3>
+            {isConnected && integrationData?.phoneNumber && (
+                <div className="flex items-center gap-2 mb-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                    <span className="text-[10px] text-green-400 font-mono tracking-wider">
+                        +{integrationData.phoneNumber}
+                    </span>
+                </div>
+            )}
             <p className="text-neutral-500 text-xs leading-relaxed mb-8 flex-grow">
                 {integration.description}
             </p>

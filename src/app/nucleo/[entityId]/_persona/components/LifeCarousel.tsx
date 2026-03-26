@@ -1,9 +1,10 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, PanInfo, useAnimationFrame, useMotionValue, useTransform } from 'framer-motion';
-import { OrbNode } from '../../[entityId]/components/OrbNode';
-import { INITIAL_LIFE_NODES, ICON_MAP } from '../constants';
+import { OrbNode } from '../../components/OrbNode';
+import { getInitialPersonaNodes, ICON_MAP } from '../constants';
 import { AddElementModal } from './AddElementModal';
-import { CentralVideo } from '../../[entityId]/components/CentralVideo';
+import { CentralVideo } from '../../components/CentralVideo';
+import { useAuth } from '@/contexts/AuthContext';
 
 const RADIUS_X = 1100;
 const RADIUS_Z = 700;
@@ -15,14 +16,17 @@ const DRAG_SENSITIVITY = 0.15;
 const MOMENTUM_FRICTION = 0.95;
 
 export const LifeCarousel = () => {
+    const { activeEntity } = useAuth();
     const rotation = useMotionValue(0);
     const [mounted, setMounted] = useState(false);
     const [radius, setRadius] = useState({ x: RADIUS_X, z: RADIUS_Z });
     const [customNodes, setCustomNodes] = useState<any[]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
 
+    const initialNodes = activeEntity ? getInitialPersonaNodes(activeEntity) : [];
+
     const allNodes = [
-        ...INITIAL_LIFE_NODES,
+        ...initialNodes,
         ...customNodes,
         {
             id: 'add-element',
@@ -161,5 +165,3 @@ function LifeCarouselItem({ node, index, total, rotation, radius, setIsModalOpen
         </motion.div>
     );
 }
-
-

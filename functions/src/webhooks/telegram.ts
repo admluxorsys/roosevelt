@@ -1,7 +1,8 @@
 import * as functions from 'firebase-functions';
 import { normalizeTelegramMessage } from '../helpers/messageNormalizer';
 import { handleKanbanUpdateOmni } from '../helpers/kanbanOmni';
-import * as admin from 'firebase-admin';
+import { tryTriggerBot } from '../helpers/botEngine';
+import { resolveTenant } from '../helpers/tenantResolver';
 
 /**
  * TELEGRAM WEBHOOK HANDLER
@@ -11,37 +12,29 @@ import * as admin from 'firebase-admin';
 
 export const telegramWebhook = functions.https.onRequest(async (req: functions.https.Request, res: functions.Response) => {
     if (req.method === 'POST') {
-        const secretToken = req.headers['x-telegram-bot-api-secret-token'];
-        if (secretToken !== 'malamia') {
-            functions.logger.warn('Telegram Secret Token Mismatch');
-            res.sendStatus(403);
-            return;
+        const secretToken = (req.headers['x-telegram-bot-api-secret-token'] as string) || 'malamia';
+        
+        // --- RESOLUCIÓN DE INQUILINO (TENANT RESOLUTION) ---
+        const tenant = await resolveTenant('telegram', secretToken);
+        
+        if (!tenant) {
+            functions.logger.error(`[Telegram Webhook] No mapping found for secret token: ${secretToken}`);
         }
+
+        const userId = tenant?.userId || 'legacy';
+        const entityId = tenant?.entityId || 'roosevelt';
+
         const update = req.body;
 
         if (update.message) {
             functions.logger.info('Received Telegram message', update.message);
             try {
                 const unifiedMsg = normalizeTelegramMessage(update.message);
-                const cardResult = await handleKanbanUpdateOmni(unifiedMsg);
+                const cardResult = await handleKanbanUpdateOmni(unifiedMsg, userId, entityId);
 
                 if (cardResult && cardResult.success) {
-                    // Optimización: Solo invocar bot si es mensaje de texto entrante del usuario (o comando)
-                    if (unifiedMsg.message_type === 'text') {
-                        const { getActiveBot, executeBotFlow } = await import('../helpers/botEngine');
-                        const activeBot = await getActiveBot();
-                        if (activeBot) {
-                            const db = (await import('firebase-admin')).firestore();
-                            // Fetch full card data to pass to bot
-                            const cardSnap = await db.collectionGroup('cards').where(admin.firestore.FieldPath.documentId(), '==', cardResult.cardId).get();
-                            if (!cardSnap.empty) {
-                                const fullCardData = { id: cardSnap.docs[0].id, ...cardSnap.docs[0].data() };
-                                await executeBotFlow(activeBot, unifiedMsg.external_id, fullCardData, unifiedMsg.message_text);
-                            }
-                        }
-                    }
+                    await tryTriggerBot(userId, entityId, 'telegram', unifiedMsg.external_id, unifiedMsg.message_text);
                 }
-
                 res.sendStatus(200);
             } catch (error) {
                 functions.logger.error('Error processing Telegram webhook', error);

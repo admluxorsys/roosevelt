@@ -43,9 +43,8 @@ export default function NucleoPage() {
         const ents = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Entity));
         setEntities(ents);
       }, (error) => {
-        console.error("Error cargando entidades (Asegúrate de tener las reglas de Firestore correctas):", error);
-        // Fallback robusto para no dejar la pantalla vacía en dev
-        setEntities([{id: 'life', name: 'Personal', type: 'persona'}]);
+        console.error("Error cargando entidades:", error);
+        setEntities([]);
       });
       return () => unsubscribe();
     }
@@ -133,19 +132,19 @@ export default function NucleoPage() {
                 <div className="w-32 h-32 rounded-full border-4 border-transparent group-hover:border-white/20 transition-all p-1">
                   <Avatar className="w-full h-full">
                     {entity.type === 'persona' && <AvatarImage src={currentUser.photoURL || undefined} alt="Personal" />}
-                    <AvatarFallback className={`text-white text-4xl font-light ${entity.type === 'persona' || entity.id === 'life' ? 'bg-emerald-600' : 'bg-blue-600'}`}>
-                      {entity.name ? entity.name[0].toUpperCase() : (entity.id === 'life' ? 'P' : entity.id[0].toUpperCase())}
-                    </AvatarFallback>
-                  </Avatar>
-                </div>
-                <div className="flex flex-col items-center gap-1">
-                  <span className="text-lg font-light text-white/70 group-hover:text-white transition-colors">
-                    {entity.name || (entity.id === 'life' ? 'Personal' : entity.id.toUpperCase())}
-                  </span>
-                  <span className="text-[10px] text-white/30 uppercase tracking-widest">
-                    {entity.type || (entity.id === 'life' ? 'Persona' : 'Workspace')}
-                  </span>
-                </div>
+                  <AvatarFallback className={`text-white text-4xl font-light ${entity.type === 'persona' ? 'bg-emerald-600' : 'bg-blue-600'}`}>
+                    {entity.name ? entity.name[0].toUpperCase() : 'E'}
+                  </AvatarFallback>
+                </Avatar>
+              </div>
+              <div className="flex flex-col items-center gap-1">
+                <span className="text-lg font-light text-white/70 group-hover:text-white transition-colors">
+                  {entity.name || 'Entidad'}
+                </span>
+                <span className="text-[10px] text-white/30 uppercase tracking-widest">
+                  {entity.type || 'Workspace'}
+                </span>
+              </div>
               </motion.div>
             ))}
           </AnimatePresence>

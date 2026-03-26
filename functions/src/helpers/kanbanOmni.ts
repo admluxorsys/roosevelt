@@ -31,7 +31,7 @@ function sanitizeForFirestore(obj: any): any {
     );
 }
 
-export async function handleKanbanUpdateOmni(message: UnifiedMessage): Promise<any> {
+export async function handleKanbanUpdateOmni(message: UnifiedMessage, userId?: string, entityId?: string): Promise<any> {
 
     const db = admin.firestore();
     const {
@@ -86,12 +86,17 @@ export async function handleKanbanUpdateOmni(message: UnifiedMessage): Promise<a
     }
 
     // --- 2. Pre-query ALL groups OUTSIDE the transaction (no orderBy = no index needed) ---
-    const groupsRef = db.collection('kanban-groups');
+    const groupsPath = (userId && entityId) 
+        ? `users/${userId}/entities/${entityId}/kanban-groups` 
+        : 'kanban-groups';
+
+    const groupsRef = db.collection(groupsPath);
     const allGroupsSnap = await groupsRef.get();
 
     if (allGroupsSnap.empty) {
-        functions.logger.error('[Omni] CRITICAL: No kanban-groups found in DB!');
-        throw new Error('No Kanban groups found. Please create at least one group in the app.');
+        functions.logger.error(`[Omni] CRITICAL: No kanban-groups found in path: ${groupsPath}`);
+        // If it's a tenant vault and it's empty, we might need to create a default group or throw
+        throw new Error('No Kanban groups found for this entity. Please create at least one group.');
     }
 
     // Find "Bandeja de Entrada" case-insensitively. Fall back to first group.
@@ -101,7 +106,7 @@ export async function handleKanbanUpdateOmni(message: UnifiedMessage): Promise<a
 
     const inboxGroupId = inboxGroupDoc.id;
     functions.logger.info(
-        `[Omni] Inbox group resolved: id=${inboxGroupId} name="${inboxGroupDoc.data().name}"`
+        `[Omni] Inbox group resolved for ${groupsPath}: id=${inboxGroupId} name="${inboxGroupDoc.data().name}"`
     );
 
     // --- 3. EXECUTE TRANSACTION (Update or Create) ---

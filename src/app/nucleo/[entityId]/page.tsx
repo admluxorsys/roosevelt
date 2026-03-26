@@ -1,13 +1,16 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Carousel } from './components/Carousel';
-import { User, Pencil, Briefcase, Plus, Wallet, Fingerprint, FileCheck, Gem } from 'lucide-react';
-import Link from 'next/link';
+import { Wallet, Fingerprint, FileCheck, Gem } from 'lucide-react';
 import { FloatingOrbitNav } from '@/components/FloatingOrbitNav';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { IdentitySwitcher } from '@/components/IdentitySwitcher';
+import { useAuth } from '@/contexts/AuthContext';
+import { db } from '@/lib/firebase';
+import { doc, getDoc } from 'firebase/firestore';
+import { PersonaDashboard } from './_persona/PersonaDashboard';
 
 const informationItems = [
     { href: '#wallets', icon: Wallet, label: 'Wallets' },
@@ -17,6 +20,36 @@ const informationItems = [
 ];
 
 export default function SuiteDashboard() {
+    const { activeEntity, currentUser } = useAuth();
+    const [entityType, setEntityType] = useState<string | null>(null);
+    const [loadingEntity, setLoadingEntity] = useState(true);
+
+    useEffect(() => {
+        async function fetchEntityType() {
+            if (!currentUser || !activeEntity) return;
+            try {
+                const docRef = doc(db, `users/${currentUser.uid}/entities/${activeEntity}`);
+                const snap = await getDoc(docRef);
+                if (snap.exists()) {
+                    setEntityType(snap.data().type);
+                }
+            } catch (error) {
+                console.error("Error fetching entity type:", error);
+            } finally {
+                setLoadingEntity(false);
+            }
+        }
+        fetchEntityType();
+    }, [activeEntity, currentUser]);
+
+    if (loadingEntity) {
+        return <div className="min-h-screen bg-black flex items-center justify-center text-white/50 tracking-widest text-xs uppercase">Connecting...</div>;
+    }
+
+    if (entityType === 'persona') {
+        return <PersonaDashboard />;
+    }
+
     return (
         <ProtectedRoute>
             <div className="min-h-screen bg-black text-white overflow-hidden relative selection:bg-blue-500/30 select-none">
@@ -39,7 +72,7 @@ export default function SuiteDashboard() {
                         transition={{ delay: 0.4, duration: 1 }}
                         className="mt-4 mb-0 text-center relative z-[2000] px-6"
                     >
-                        <span className="text-2xl md:text-3xl font-light text-white/50 tracking-tight block mb-2">Hi Udreamms</span>
+                        <span className="text-2xl md:text-3xl font-light text-white/50 tracking-tight block mb-2">Welcome Back</span>
                         <h2 className="text-2xl md:text-4xl font-extralight tracking-tighter text-white leading-tight">
                             Where should we start?
                         </h2>

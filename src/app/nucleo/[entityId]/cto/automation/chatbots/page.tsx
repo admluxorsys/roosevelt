@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Plus, Loader2, MessageCircle, Power, ArrowLeft, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { collection, onSnapshot, doc, updateDoc, deleteDoc, runTransaction } from 'firebase/firestore';
+import { collection, onSnapshot, doc, updateDoc, deleteDoc, runTransaction, getDoc, writeBatch } from 'firebase/firestore';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   Dialog,
@@ -32,6 +32,26 @@ const ChatbotsPage = () => {
   const [updatingBots, setUpdatingBots] = useState<string[]>([]);
   const [botToDelete, setBotToDelete] = useState<Bot | null>(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState('');
+  const [whatsappStatus, setWhatsappStatus] = useState<'connected' | 'offline' | 'loading'>('loading');
+
+  useEffect(() => {
+    const checkWhatsApp = async () => {
+      if (!currentUser || !activeEntity) return;
+      try {
+        const waRef = doc(db, 'users', currentUser.uid, 'entities', activeEntity, 'integrations', 'whatsapp');
+        const snap = await getDoc(waRef);
+        if (snap.exists() && snap.data().status === 'Connected') {
+          setWhatsappStatus('connected');
+        } else {
+          setWhatsappStatus('offline');
+        }
+      } catch (error) {
+        console.error("Error checking WhatsApp status:", error);
+        setWhatsappStatus('offline');
+      }
+    };
+    checkWhatsApp();
+  }, [currentUser, activeEntity]);
 
   useEffect(() => {
     if (!currentUser || !activeEntity) return;
@@ -117,18 +137,21 @@ const ChatbotsPage = () => {
     setUpdatingBots((prev) => [...prev, bot.id]);
     try {
       const newStatus = !bot.isActive;
+      const batch = writeBatch(db);
 
-      // Si vamos a ACTIVAR este bot, primero desactivamos todos los demás
+      // Si vamos a ACTIVAR este bot, primero desactivamos todos los demás de forma atómica
       if (newStatus) {
         const otherActiveBots = bots.filter(b => b.isActive && b.id !== bot.id);
         for (const otherBot of otherActiveBots) {
           const otherBotRef = doc(db, 'users', currentUser!.uid, 'entities', activeEntity!, 'chatbots', otherBot.id);
-          await updateDoc(otherBotRef, { isActive: false });
+          batch.update(otherBotRef, { isActive: false });
         }
       }
 
       const botRef = doc(db, 'users', currentUser!.uid, 'entities', activeEntity!, 'chatbots', bot.id);
-      await updateDoc(botRef, { isActive: newStatus });
+      batch.update(botRef, { isActive: newStatus });
+      
+      await batch.commit();
 
       toast.success(
         `Bot "${bot.name}" ${newStatus ? 'activado' : 'desactivado'}.`
@@ -168,6 +191,20 @@ const ChatbotsPage = () => {
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <h1 className="text-xl font-medium tracking-tight">Mis Chatbots</h1>
+          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border ${
+            whatsappStatus === 'connected' 
+              ? 'bg-green-500/10 border-green-500/20 text-green-400' 
+              : whatsappStatus === 'loading'
+                ? 'bg-neutral-800 border-neutral-700 text-neutral-500'
+                : 'bg-red-500/10 border-red-500/20 text-red-400'
+          }`}>
+            <div className={`w-1.5 h-1.5 rounded-full ${
+              whatsappStatus === 'connected' ? 'bg-green-500 animate-pulse' : 'bg-red-500'
+            }`} />
+            <span className="text-[10px] uppercase tracking-wider font-bold">
+              WhatsApp: {whatsappStatus === 'connected' ? 'Conectado' : whatsappStatus === 'loading' ? 'Verificando...' : 'Sin Conexión'}
+            </span>
+          </div>
         </div>
         <Button
           onClick={handleCreateNewBot}

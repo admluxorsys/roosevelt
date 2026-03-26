@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Lock, ShieldCheck, Copy, AlertCircle } from 'lucide-react';
+import { X, AlertCircle, CheckCircle2, Circle, ChevronLeft, Info, Settings, Copy, ShieldCheck, QrCode } from 'lucide-react';
 import { toast } from 'sonner';
 import { Integration } from '../../config';
 import { useAuth } from '@/contexts/AuthContext';
 import { db } from '@/lib/firebase';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
 
 interface Props {
     isOpen: boolean;
@@ -15,38 +15,116 @@ interface Props {
 
 export function WhatsAppCloudAPIModal({ isOpen, onClose, activeIntegration }: Props) {
     const { currentUser, activeEntity } = useAuth();
-    const [mode, setMode] = useState<'auto' | 'manual'>('auto');
+    const [step, setStep] = useState<number>(1);
+    const [devMode, setDevMode] = useState(false);
+    const [clickCount, setClickCount] = useState(0);
+    const [isEditing, setIsEditing] = useState(false);
+    
+    // Step 1 State
+    const [accountAction, setAccountAction] = useState<'new' | 'existing'>('new');
+    
+    // Step 2 State (Eligibility)
+    const [phoneStatus, setPhoneStatus] = useState<'new' | 'personal' | 'none'>('new');
+
     const [waConfig, setWaConfig] = useState({
         phoneNumberId: '',
         wabaId: '',
         accessToken: '',
+        displayPhoneNumber: '',
         verifyToken: Math.random().toString(36).substring(7),
+        appId: process.env.NEXT_PUBLIC_META_APP_ID || '',
     });
+
+    // Real-time listener for Config
+    useEffect(() => {
+        if (!isOpen || !currentUser || !activeEntity) return;
+
+        const publicRef = doc(db, `users/${currentUser.uid}/entities/${activeEntity}/integrations/whatsapp`);
+        const internalRef = doc(db, `users/${currentUser.uid}/entities/${activeEntity}/integrations/whatsapp_internal`);
+
+        // Listener para la pública (OAuth Real)
+        const unsubPublic = onSnapshot(publicRef, (snap) => {
+            if (snap.exists()) {
+                const data = snap.data();
+                if (data.status === 'Connected') {
+                    setStep(4);
+                    setWaConfig(prev => ({
+                        ...prev,
+                        displayPhoneNumber: data.displayPhoneNumber || '',
+                        phoneNumberId: data.phoneNumberId || prev.phoneNumberId,
+                        wabaId: data.wabaId || prev.wabaId,
+                        accessToken: data.accessToken || prev.accessToken,
+                    }));
+                }
+            }
+        });
+
+        // Listener para la interna (Modo Dev)
+        const unsubInternal = onSnapshot(internalRef, (snap) => {
+            if (snap.exists()) {
+                const data = snap.data();
+                // Actualizar waConfig pero solo cambiar step si no hay pública conectada
+                setWaConfig(prev => ({
+                    ...prev,
+                    phoneNumberId: data.phoneNumberId || prev.phoneNumberId,
+                    wabaId: data.wabaId || prev.wabaId,
+                    accessToken: data.accessToken || prev.accessToken,
+                    displayPhoneNumber: data.displayPhoneNumber || prev.displayPhoneNumber,
+                    verifyToken: data.verifyToken || prev.verifyToken,
+                    appId: data.appId || prev.appId,
+                }));
+
+                // Si es modo dev y se guardó, mostrar éxito
+                if (data.status === 'Internal') {
+                    setStep(4);
+                }
+            }
+        });
+
+        return () => {
+            unsubPublic();
+            unsubInternal();
+        };
+    }, [isOpen, currentUser, activeEntity]);
+
+    // Listener de emergencia para postMessage (Fallback)
+    useEffect(() => {
+        const handleMessage = (event: MessageEvent) => {
+            if (event.data?.type === 'META_CONNECTED') {
+                toast.success("¡Meta vinculado correctamente!");
+            }
+        };
+        window.addEventListener('message', handleMessage);
+        return () => window.removeEventListener('message', handleMessage);
+    }, []);
 
     if (!activeIntegration || activeIntegration.id !== 'whatsapp') return null;
 
-    const saveWhatsAppConfig = async () => {
+    const handleLogoClick = () => {
+        const newCount = clickCount + 1;
+        setClickCount(newCount);
+        if (newCount === 5) {
+            setDevMode(true);
+            toast.success("Modo Desarrollador Activado");
+        }
+    };
+
+    const saveWhatsAppConfig = async (manualData?: typeof waConfig) => {
         if (!currentUser || !activeEntity) return;
         toast.loading("Guardando configuración...");
         
+        const dataToSave = manualData || waConfig;
+        
         try {
+            // Rule 4: Isolated Data Vault
             const configRef = doc(db, `users/${currentUser.uid}/entities/${activeEntity}/integrations/whatsapp`);
             await setDoc(configRef, {
-                ...waConfig,
+                ...dataToSave,
+                phoneNumber: dataToSave.displayPhoneNumber?.replace(/\+/g, '') || '', // For consistent display in Dashboard
                 status: 'Connected',
                 provider: 'whatsapp',
                 updatedAt: new Date(),
             }, { merge: true });
-
-            // Global Mapping for Webhook Routing
-            if (waConfig.phoneNumberId) {
-                const mappingRef = doc(db, `system_mappings/whatsapp_numbers/numbers/${waConfig.phoneNumberId}`);
-                await setDoc(mappingRef, {
-                    userId: currentUser.uid,
-                    entityId: activeEntity,
-                    updatedAt: new Date()
-                }, { merge: true });
-            }
 
             toast.dismiss();
             toast.success("WhatsApp conectado correctamente.");
@@ -56,6 +134,73 @@ export function WhatsAppCloudAPIModal({ isOpen, onClose, activeIntegration }: Pr
             toast.dismiss();
             toast.error("Error al guardar la configuración.");
         }
+    };
+
+    const handleSaveManual = async () => {
+        if (!currentUser || !activeEntity) return;
+        
+        toast.loading("Guardando configuración interna...");
+        try {
+            const configRef = doc(db, `users/${currentUser.uid}/entities/${activeEntity}/integrations/whatsapp_internal`);
+            
+            await setDoc(configRef, {
+                ...waConfig,
+                status: 'Internal', 
+                provider: 'whatsapp',
+                isInternal: true,
+                updatedAt: new Date(),
+            }, { merge: true });
+
+            toast.dismiss();
+            toast.success("WhatsApp conectado correctamente.");
+            onClose();
+        } catch (error) {
+            console.error(error);
+            toast.error("Error al guardar.");
+        }
+    };
+
+    const handleDeleteConfig = async (isPublic: boolean = false) => {
+        if (!currentUser || !activeEntity) return;
+        if (!confirm("¿Seguro que quieres eliminar esta conexión? Esto desconectará WhatsApp.")) return;
+
+        toast.loading(isPublic ? "Desconectando WhatsApp..." : "Eliminando datos internos...");
+        try {
+            const path = isPublic ? 'whatsapp' : 'whatsapp_internal';
+            const configRef = doc(db, `users/${currentUser.uid}/entities/${activeEntity}/integrations/${path}`);
+            await deleteDoc(configRef);
+            
+            // Reset local state
+            setWaConfig({
+                phoneNumberId: '',
+                wabaId: '',
+                accessToken: '',
+                displayPhoneNumber: '',
+                verifyToken: Math.random().toString(36).substring(7),
+                appId: '',
+            });
+            setStep(1);
+            if (!isPublic) {
+                setDevMode(false);
+            }
+
+            toast.dismiss();
+            toast.success("Desconectado correctamente.");
+            onClose();
+        } catch (error) {
+            console.error(error);
+            toast.error("Error al eliminar.");
+        }
+    };
+
+    const handleConnectFacebook = () => {
+        const appId = waConfig.appId || process.env.NEXT_PUBLIC_META_APP_ID || '';
+        toast.info("Iniciando conexión segura con Meta...");
+        
+        // URL limpia para evitar bucles de "Cambio de cuenta"
+        const url = `https://www.facebook.com/v22.0/dialog/oauth?client_id=${appId}&display=popup&extras={"setup":{"mobile":false,"whatsapp_business_account":null}}&response_type=token&scope=whatsapp_business_management,whatsapp_business_messaging,business_management&redirect_uri=${encodeURIComponent(window.location.origin + '/meta-callback')}`;
+        
+        window.open(url, "_blank", "width=600,height=800");
     };
 
     return (
@@ -76,51 +221,29 @@ export function WhatsAppCloudAPIModal({ isOpen, onClose, activeIntegration }: Pr
                         className="relative w-full max-w-4xl bg-[#0a0a0a] border border-white/10 rounded-[32px] shadow-2xl overflow-hidden flex flex-col md:flex-row h-[600px]"
                     >
                         {/* Left Side: Branding */}
-                        <div className="w-full md:w-[40%] bg-neutral-900/50 p-8 flex flex-col border-r border-white/5 relative overflow-hidden">
+                        <div className="hidden md:flex w-[35%] bg-neutral-900/50 p-8 flex-col border-r border-white/5 relative overflow-hidden shrink-0">
                             <div className="absolute top-0 right-0 w-full h-full bg-blue-500 opacity-20 blur-[100px] pointer-events-none" />
 
                             <div className="relative z-10 h-full flex flex-col">
-                                <div className="p-4 bg-white/[0.02] border border-white/5 rounded-2xl w-fit mb-6">
+                                <div 
+                                    onClick={handleLogoClick}
+                                    className="p-4 bg-white/[0.02] border border-white/5 rounded-2xl w-fit mb-6 cursor-pointer hover:bg-white/5 transition-all"
+                                >
                                     {activeIntegration.icon}
                                 </div>
                                 <h2 className="text-2xl font-light mb-2">{activeIntegration.name}</h2>
-                                <p className="text-sm text-neutral-400 font-light leading-relaxed mb-8 flex-grow">
-                                    {activeIntegration.description}
+                                <p className="text-sm text-neutral-400 font-light leading-relaxed mb-8">
+                                    Conecta WhatsApp Business API a través de Meta para facilitar la interacción y la atención al cliente masiva.
                                 </p>
                                 
-                                {mode === 'manual' && (
-                                    <div className="mt-auto mb-4">
-                                        <div className="bg-blue-500/10 rounded-xl p-4 border border-blue-500/20">
-                                            <p className="text-[10px] text-blue-400 font-bold uppercase tracking-widest mb-2 flex items-center gap-2">
-                                                <AlertCircle className="w-3 h-3" />
-                                                Webhook Endpoint
-                                            </p>
-                                            <div className="flex items-center justify-between gap-2 overflow-hidden">
-                                                <code className="text-[9px] text-white/60 truncate italic">https://www.byroosevelt.com/api/whatsapp/webhook</code>
-                                                <button 
-                                                    onClick={() => {
-                                                        navigator.clipboard.writeText("https://www.byroosevelt.com/api/whatsapp/webhook");
-                                                        toast.success("Endpoint copiado");
-                                                    }}
-                                                    className="p-1 hover:bg-white/10 rounded transition-colors"
-                                                >
-                                                    <Copy className="w-3 h-3" />
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-
-                                <div className={mode === 'auto' ? "mt-auto" : ""}>
+                                <div className="mt-auto">
                                     <div className="bg-blue-500/10 rounded-xl p-4 border border-blue-500/20">
                                         <p className="text-[10px] text-blue-400 font-bold uppercase tracking-widest mb-1 flex items-center gap-2">
-                                            <ShieldCheck className="w-3 h-3" />
+                                            <AlertCircle className="w-3 h-3" />
                                             Conexión Segura
                                         </p>
                                         <p className="text-xs text-neutral-400 leading-snug">
-                                            {mode === 'auto' 
-                                                ? "Estás usando el flujo oficial de Meta. Tus llaves privadas se generarán y enlazarán automáticamente al finalizar." 
-                                                : "Introduce las llaves de acceso obtenidas manualmente de Meta for Developers para inyectarlas directamente en el núcleo."}
+                                            El proceso de vinculación se realiza directamente en los servidores de Meta.
                                         </p>
                                     </div>
                                 </div>
@@ -128,127 +251,435 @@ export function WhatsAppCloudAPIModal({ isOpen, onClose, activeIntegration }: Pr
                         </div>
 
                         {/* Right Side: Flow */}
-                        <div className="flex-1 p-8 overflow-y-auto no-scrollbar relative flex flex-col">
-                            {/* Tabs & Close Header */}
-                            <div className="flex justify-between items-center mb-8">
-                                <div className="flex bg-neutral-900/50 p-1 rounded-full border border-white/5">
+                        <div className="flex-1 p-8 overflow-y-auto no-scrollbar relative flex flex-col h-full bg-[#0a0a0a]">
+                            
+                            {/* Header: Back & Close */}
+                            <div className="flex justify-between items-center mb-8 h-8">
+                                {step > 1 && step < 4 && !devMode ? (
                                     <button 
-                                        onClick={() => setMode('auto')} 
-                                        className={`px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all ${mode === 'auto' ? 'bg-[#1877F2] text-white shadow-lg' : 'text-neutral-500 hover:text-white'}`}
+                                        onClick={() => setStep(step - 1)}
+                                        className="flex items-center gap-2 text-neutral-400 hover:text-white transition-colors text-xs font-bold uppercase tracking-widest"
                                     >
-                                        Automático
+                                        <ChevronLeft className="w-4 h-4" /> Atrás
                                     </button>
+                                ) : <div />}
+
+                                {devMode && (
                                     <button 
-                                        onClick={() => setMode('manual')} 
-                                        className={`px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all ${mode === 'manual' ? 'bg-white text-black shadow-lg' : 'text-neutral-500 hover:text-white'}`}
+                                        onClick={() => setDevMode(false)}
+                                        className="flex items-center gap-2 text-blue-400 hover:text-blue-300 transition-colors text-[10px] font-bold uppercase tracking-widest"
                                     >
-                                        Manual
+                                        <Settings className="w-3 h-3" /> Salir Modo Dev
                                     </button>
-                                </div>
-                                <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-full transition-colors">
+                                )}
+                                
+                                <button 
+                                    onClick={onClose} 
+                                    className="p-2 hover:bg-white/5 rounded-full transition-colors ml-auto"
+                                >
                                     <X className="w-5 h-5 text-neutral-500" />
                                 </button>
                             </div>
 
-                            {/* Mode: Auto (Embedded Signup) */}
-                            {mode === 'auto' && (
-                                <motion.div 
-                                    initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}
-                                    className="flex-1 flex flex-col items-center justify-center text-center"
-                                >
-                                    <div className="w-20 h-20 bg-[#1877F2]/10 border border-[#1877F2]/20 rounded-2xl flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(24,119,242,0.15)]">
-                                        <svg viewBox="0 0 24 24" className="w-10 h-10 fill-[#1877F2]" xmlns="http://www.w3.org/2000/svg"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.469h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.469h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
-                                    </div>
-                                    <h3 className="text-xl font-medium text-white mb-2">Continuar con Facebook</h3>
-                                    <p className="text-neutral-500 text-sm max-w-sm mb-8">
-                                        Si ya configuraste una aplicación de desarrollador en Meta para Roosevelt, utiliza este método para vincular tu negocio de manera instantánea.
-                                    </p>
-                                    
-                                    <button 
-                                        onClick={() => {
-                                            toast.success("Abriendo Meta for Developers...");
-                                            window.open("https://developers.facebook.com/apps", "_blank", "noopener,noreferrer");
-                                        }}
-                                        className="w-full max-w-xs h-12 bg-[#1877F2] hover:bg-[#166FE5] text-white font-bold tracking-wide text-sm rounded-xl transition-all shadow-[0_4px_14px_0_rgba(24,119,242,0.39)] hover:shadow-[0_6px_20px_rgba(24,119,242,0.23)] flex items-center justify-center gap-2"
+                            <AnimatePresence mode="wait">
+                                {devMode ? (
+                                    <motion.div 
+                                        key="dev"
+                                        initial={{ opacity: 0, scale: 0.98 }} 
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        exit={{ opacity: 0, scale: 0.98 }}
+                                        className="flex-1 flex flex-col"
                                     >
-                                        Conectar ahora
-                                    </button>
-                                    <p className="text-[10px] text-neutral-600 mt-4 uppercase tracking-widest font-black">
-                                        Requiere SDK de Meta
-                                    </p>
-                                </motion.div>
-                            )}
-
-                            {/* Mode: Manual */}
-                            {mode === 'manual' && (
-                                <motion.div 
-                                    initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}
-                                    className="flex-1 space-y-6"
-                                >
-                                    <div className="space-y-2">
-                                        <label className="text-xs font-bold text-white/50 tracking-widest uppercase">Phone Number ID</label>
-                                        <input 
-                                            placeholder="Ej: 10455829948271"
-                                            value={waConfig.phoneNumberId}
-                                            onChange={e => setWaConfig(prev => ({ ...prev, phoneNumberId: e.target.value }))}
-                                            className="w-full bg-white/[0.03] border border-white/5 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500/50 transition-all"
-                                        />
-                                        <p className="text-[10px] text-neutral-600">ID del número de teléfono en Meta Developer Portal.</p>
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <label className="text-xs font-bold text-white/50 tracking-widest uppercase">WABA ID</label>
-                                        <input 
-                                            placeholder="Ej: 1022938847582"
-                                            value={waConfig.wabaId}
-                                            onChange={e => setWaConfig(prev => ({ ...prev, wabaId: e.target.value }))}
-                                            className="w-full bg-white/[0.03] border border-white/5 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500/50 transition-all"
-                                        />
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <label className="text-xs font-bold text-white/50 tracking-widest uppercase">Verify Token <span className="text-neutral-500 font-normal lowercase">(Autogenerado)</span></label>
-                                        <div className="flex gap-2">
-                                            <input 
-                                                readOnly
-                                                value={waConfig.verifyToken}
-                                                className="flex-1 bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3 text-sm text-neutral-500 font-mono"
-                                            />
+                                        <div className="flex items-center justify-between mb-8">
                                             <button 
-                                                onClick={() => {
-                                                    navigator.clipboard.writeText(waConfig.verifyToken);
-                                                    toast.success("Token copiado");
-                                                }}
-                                                className="bg-white/5 hover:bg-white/10 border border-white/10 px-4 rounded-xl transition-all"
+                                                onClick={() => setDevMode(false)}
+                                                className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-neutral-500 hover:text-white transition-colors"
                                             >
-                                                <Copy className="w-4 h-4" />
+                                                <ChevronLeft className="w-3 h-3" />
+                                                REGRESAR AL ASISTENTE
                                             </button>
+                                            <div className="flex items-center gap-2 text-blue-500">
+                                                <Settings className="w-3 h-3" />
+                                                <span className="text-[10px] font-black uppercase tracking-widest italic">Dev Mode</span>
+                                            </div>
                                         </div>
-                                        <p className="text-[10px] text-neutral-600">Pega este token en tu configuración del Webhook en Meta.</p>
-                                    </div>
 
-                                    <div className="space-y-2">
-                                        <label className="text-xs font-bold text-white/50 tracking-widest uppercase">Access Token (Permanent)</label>
-                                        <textarea 
-                                            placeholder="EAA..."
-                                            rows={2}
-                                            value={waConfig.accessToken}
-                                            onChange={e => setWaConfig(prev => ({ ...prev, accessToken: e.target.value }))}
-                                            className="w-full bg-white/[0.03] border border-white/5 rounded-xl px-4 py-3 text-xs font-mono focus:outline-none focus:border-blue-500/50 transition-all resize-none"
-                                        />
-                                    </div>
+                                        <div className="bg-amber-500/10 border border-amber-500/20 p-5 rounded-3xl mb-8">
+                                            <div className="flex items-center gap-3 mb-2">
+                                                <Settings className="w-4 h-4 text-amber-500" />
+                                                <h3 className="text-xs font-black uppercase tracking-wider text-amber-500">CONFIGURACIÓN INTERNA</h3>
+                                            </div>
+                                            <p className="text-[10px] text-amber-500/70 leading-relaxed font-medium">
+                                                Usa esto para configurar la App de Meta para procesos internos. Esta configuración no activará el estado público de la cuenta.
+                                            </p>
+                                        </div>
 
-                                    <div className="pt-4 pb-4">
+                                        <div className="grid grid-cols-2 gap-4 mb-4">
+                                            <div className="space-y-2">
+                                                <label className="text-[9px] font-black uppercase tracking-widest text-neutral-500 ml-2">Phone Number ID</label>
+                                                <input 
+                                                    type="text"
+                                                    placeholder="Ej: 1530283084729"
+                                                    value={waConfig.phoneNumberId}
+                                                    onChange={(e) => setWaConfig({...waConfig, phoneNumberId: e.target.value})}
+                                                    className="w-full h-12 bg-white/5 border border-white/10 rounded-2xl px-5 text-sm focus:border-white/20 transition-all outline-none font-light"
+                                                />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <label className="text-[9px] font-black uppercase tracking-widest text-neutral-500 ml-2">Número / Nombre Cuenta</label>
+                                                <input 
+                                                    type="text"
+                                                    placeholder="Ej: +52 222 333 4444"
+                                                    value={waConfig.displayPhoneNumber}
+                                                    onChange={(e) => setWaConfig({...waConfig, displayPhoneNumber: e.target.value})}
+                                                    className="w-full h-12 bg-white/5 border border-white/10 rounded-2xl px-5 text-sm focus:border-white/20 transition-all outline-none font-light"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-2 mb-6">
+                                            <label className="text-[9px] font-black uppercase tracking-widest text-neutral-500 ml-2">WABA ID</label>
+                                            <input 
+                                                type="text"
+                                                placeholder="Ej: 25304791939521"
+                                                value={waConfig.wabaId}
+                                                onChange={(e) => setWaConfig({...waConfig, wabaId: e.target.value})}
+                                                className="w-full h-12 bg-white/5 border border-white/10 rounded-2xl px-5 text-sm focus:border-white/20 transition-all outline-none font-light"
+                                            />
+                                        </div>
+
+                                        <div className="space-y-2 mb-8">
+                                            <label className="text-[9px] font-black uppercase tracking-widest text-neutral-500 ml-2">System User Token</label>
+                                            <textarea 
+                                                placeholder="EAA..."
+                                                value={waConfig.accessToken}
+                                                onChange={(e) => setWaConfig({...waConfig, accessToken: e.target.value})}
+                                                className="w-full h-24 bg-white/5 border border-white/10 rounded-3xl p-5 text-sm focus:border-white/20 transition-all outline-none resize-none"
+                                            />
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-4 mb-4">
+                                            <div className="space-y-2">
+                                                <div className="flex items-center justify-between px-2">
+                                                    <label className="text-[9px] font-black uppercase tracking-widest text-neutral-500">Meta App ID</label>
+                                                </div>
+                                                <input 
+                                                    type="text"
+                                                    placeholder="Ej: 1239485381164246"
+                                                    value={waConfig.appId}
+                                                    onChange={(e) => setWaConfig({...waConfig, appId: e.target.value})}
+                                                    className="w-full h-11 bg-white/5 border border-white/10 rounded-2xl px-4 text-[10px] text-blue-400 font-mono focus:border-white/20 transition-all outline-none"
+                                                />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <div className="flex items-center justify-between px-2">
+                                                    <label className="text-[9px] font-black uppercase tracking-widest text-neutral-500">Endpoint Webhook</label>
+                                                    <button 
+                                                        onClick={() => {
+                                                            const url = `https://us-central1-${process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID}.cloudfunctions.net/metaWebhook?u=${currentUser?.uid}&e=${activeEntity}`;
+                                                            navigator.clipboard.writeText(url);
+                                                            toast.success("URL copiada");
+                                                        }}
+                                                        className="text-[8px] text-blue-500 hover:text-blue-400 font-bold uppercase tracking-tighter transition-colors"
+                                                    >
+                                                        COPIAR URL
+                                                    </button>
+                                                </div>
+                                                <div className="w-full h-11 bg-white/5 border border-white/10 rounded-2xl flex items-center px-4 overflow-hidden">
+                                                    <p className="text-[9px] font-mono text-neutral-500 truncate select-all">
+                                                        {`.../metaWebhook?u=${currentUser?.uid}&e=${activeEntity}`}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <div className="flex items-center justify-between px-2">
+                                                    <label className="text-[9px] font-black uppercase tracking-widest text-neutral-500">Verify Token</label>
+                                                    <button 
+                                                        onClick={() => {
+                                                            navigator.clipboard.writeText(waConfig.verifyToken);
+                                                            toast.success("Token copiado");
+                                                        }}
+                                                        className="text-[8px] text-blue-500 hover:text-blue-400 font-bold uppercase tracking-tighter transition-colors"
+                                                    >
+                                                        COPIAR TOKEN
+                                                    </button>
+                                                </div>
+                                                <div className="w-full h-11 bg-white/5 border border-white/10 rounded-2xl flex items-center px-4 overflow-hidden">
+                                                    <p className="text-[9px] font-mono text-neutral-500 truncate select-all">
+                                                        {waConfig.verifyToken}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+
                                         <button 
-                                            onClick={saveWhatsAppConfig}
-                                            disabled={!waConfig.accessToken || !waConfig.phoneNumberId}
-                                            className="w-full h-12 bg-white hover:bg-neutral-200 disabled:opacity-30 disabled:hover:bg-white text-black font-black uppercase tracking-[0.2em] text-[10px] rounded-xl transition-all shadow-xl"
+                                            onClick={handleSaveManual}
+                                            className="w-full h-12 bg-blue-600 text-white font-black uppercase text-[10px] tracking-widest rounded-2xl hover:bg-blue-500 transition-all shadow-lg shadow-blue-500/20 mb-4"
                                         >
-                                            Inyectar Configuración
+                                            GUARDAR CONFIGURACIÓN INTERNA
                                         </button>
-                                    </div>
-                                </motion.div>
-                            )}
+
+                                        {waConfig.phoneNumberId && (
+                                            <div className="pt-6 mt-6 border-t border-white/5 space-y-4">
+                                                <div className="flex items-center gap-2 text-red-500/30">
+                                                    <AlertCircle className="w-3 h-3" />
+                                                    <span className="text-[9px] font-black uppercase tracking-wider italic">Zona de Peligro</span>
+                                                </div>
+                                                <button 
+                                                    onClick={() => handleDeleteConfig(false)}
+                                                    className="w-full h-10 bg-red-500/5 text-red-500/30 border border-red-500/10 font-black uppercase text-[9px] tracking-widest rounded-xl hover:bg-red-500 hover:text-white transition-all hover:border-transparent"
+                                                >
+                                                    ELIMINAR DATOS INTERNOS
+                                                </button>
+                                            </div>
+                                        )}
+                                    </motion.div>
+                                ) : (
+                                    <motion.div 
+                                        key="wizard"
+                                        initial={{ opacity: 0 }} 
+                                        animate={{ opacity: 1 }} 
+                                        exit={{ opacity: 0 }}
+                                        className="flex-1 flex flex-col"
+                                    >
+                                        <AnimatePresence mode="wait">
+                                            {step === 1 && (
+                                                <motion.div 
+                                                    key="step1"
+                                                    initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
+                                                    className="flex-1 flex flex-col"
+                                                >
+                                                    <h3 
+                                                        onClick={handleLogoClick}
+                                                        className="text-xl font-medium text-white mb-6 cursor-default select-none"
+                                                    >
+                                                        Conectar la plataforma WhatsApp Business (API)
+                                                    </h3>
+                                                    <div className="space-y-4 flex-1">
+                                                        <button 
+                                                            onClick={() => setAccountAction('new')}
+                                                            className={`w-full text-left p-4 rounded-2xl border transition-all flex items-start gap-4 ${accountAction === 'new' ? 'border-blue-500 bg-blue-500/5' : 'border-white/10 hover:border-white/20 bg-white/[0.02]'}`}
+                                                        >
+                                                            <div className="mt-1">
+                                                                {accountAction === 'new' ? <CheckCircle2 className="w-5 h-5 text-blue-500" /> : <Circle className="w-5 h-5 text-neutral-600" />}
+                                                            </div>
+                                                            <div>
+                                                                <p className="font-medium text-white text-sm mb-1">Crear y conectar una nueva cuenta de WhatsApp Business Platform (API)</p>
+                                                                <p className="text-xs text-neutral-500">Selecciona esta opción si deseas crear una nueva cuenta y conectarte con un nuevo número de teléfono.</p>
+                                                            </div>
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => setAccountAction('existing')}
+                                                            className={`w-full text-left p-4 rounded-2xl border transition-all flex items-start gap-4 ${accountAction === 'existing' ? 'border-blue-500 bg-blue-500/5' : 'border-white/10 hover:border-white/20 bg-white/[0.02]'}`}
+                                                        >
+                                                            <div className="mt-1">
+                                                                {accountAction === 'existing' ? <CheckCircle2 className="w-5 h-5 text-blue-500" /> : <Circle className="w-5 h-5 text-neutral-600" />}
+                                                            </div>
+                                                            <div>
+                                                                <p className="font-medium text-white text-sm mb-1">Conectar una cuenta conectada de WhatsApp Business Platform (API) existente</p>
+                                                                <p className="text-xs text-neutral-500">Selecciona esta opción si ya has creado una cuenta en la plataforma anteriormente.</p>
+                                                            </div>
+                                                        </button>
+                                                    </div>
+                                                    <div className="flex items-center gap-6 mt-8">
+                                                        <button onClick={() => setStep(2)} className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3 rounded-xl text-sm font-medium transition-colors">Comenzar</button>
+                                                        <button onClick={handleConnectFacebook} className="text-neutral-400 hover:text-white text-sm font-medium transition-colors">Omitir y conectar a través de Facebook</button>
+                                                    </div>
+                                                </motion.div>
+                                            )}
+                                            {step === 2 && (
+                                                <motion.div 
+                                                    key="step2"
+                                                    initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
+                                                    className="flex-1 flex flex-col"
+                                                >
+                                                    <h3 className="text-xl font-medium text-white mb-6">Comencemos Con Una Simple Comprobación De Elegibilidad</h3>
+                                                    <div className="flex gap-2 mb-8">
+                                                        <div className="flex items-center gap-2 bg-blue-500/10 border border-blue-500/20 text-blue-400 px-4 py-2 rounded-full text-xs font-medium">
+                                                            <span className="w-5 h-5 rounded-full bg-blue-500/20 flex items-center justify-center text-[10px]">1</span> Número de teléfono válido
+                                                        </div>
+                                                        <div className="flex items-center gap-2 bg-white/5 border border-white/5 text-neutral-500 px-4 py-2 rounded-full text-xs font-medium">
+                                                            <span className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center text-[10px]">2</span> Acceso a Meta Business Manager
+                                                        </div>
+                                                    </div>
+                                                    <p className="text-sm text-neutral-300 mb-6">¿Tienes un número de teléfono válido que puede enviar y recibir SMS? Necesitarás un número para conectar la plataforma.</p>
+                                                    <div className="space-y-4 flex-1">
+                                                        <button onClick={() => setPhoneStatus('new')} className={`w-full text-left p-4 rounded-xl transition-all flex items-center gap-4 ${phoneStatus === 'new' ? 'bg-white/10' : 'hover:bg-white/5'}`}>{phoneStatus === 'new' ? <CheckCircle2 className="w-5 h-5 text-blue-500" /> : <Circle className="w-5 h-5 text-neutral-600" />} <span className="text-sm text-white">Tengo un nuevo número de teléfono</span></button>
+                                                        <button onClick={() => setPhoneStatus('personal')} className={`w-full text-left p-4 rounded-xl transition-all flex items-center gap-4 ${phoneStatus === 'personal' ? 'bg-white/10' : 'hover:bg-white/5'}`}>{phoneStatus === 'personal' ? <CheckCircle2 className="w-5 h-5 text-blue-500" /> : <Circle className="w-5 h-5 text-neutral-600" />} <span className="text-sm text-neutral-300">Tengo un número vinculado a cuenta personal</span></button>
+                                                        <button onClick={() => setPhoneStatus('none')} className={`w-full text-left p-4 rounded-xl transition-all flex items-center gap-4 ${phoneStatus === 'none' ? 'bg-white/10' : 'hover:bg-white/5'}`}>{phoneStatus === 'none' ? <CheckCircle2 className="w-5 h-5 text-blue-500" /> : <Circle className="w-5 h-5 text-neutral-600" />} <span className="text-sm text-neutral-300">No tengo un número</span></button>
+                                                    </div>
+                                                    <div className="flex items-center justify-between mt-8">
+                                                        <button onClick={() => setStep(3)} className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3 rounded-xl text-sm font-medium transition-colors">Siguiente</button>
+                                                        <button onClick={() => setStep(3)} className="text-neutral-400 hover:text-white text-sm font-medium transition-colors">Saltar</button>
+                                                    </div>
+                                                </motion.div>
+                                            )}
+                                            {step === 3 && (
+                                                <motion.div 
+                                                    key="step3"
+                                                    initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
+                                                    className="flex-1 flex flex-col"
+                                                >
+                                                    <h3 className="text-xl font-medium text-white mb-6">Comprobación de Elegibilidad de Meta Business</h3>
+                                                    <div className="flex gap-2 mb-8">
+                                                        <div className="flex items-center gap-2 bg-green-500/10 border border-green-500/20 text-green-500 px-4 py-2 rounded-full text-xs font-medium"><CheckCircle2 className="w-4 h-4" /> Número válido</div>
+                                                        <div className="flex items-center gap-2 bg-blue-500/10 border border-blue-500/20 text-blue-400 px-4 py-2 rounded-full text-xs font-medium"><span className="w-5 h-5 rounded-full bg-blue-500/20 flex items-center justify-center text-[10px]">2</span> Acceso a MBM</div>
+                                                    </div>
+                                                    <p className="text-sm text-neutral-300 mb-6">¿Tienes acceso a la cuenta de Meta Business Manager asociada a tu compañía?</p>
+                                                    <div className="bg-blue-500/5 border border-blue-500/20 rounded-2xl p-5 flex gap-4 mb-8">
+                                                        <Info className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
+                                                        <div className="text-xs text-blue-200/60 font-light">Necesitarás: Nombre legal, dirección oficial y nombre de marca.</div>
+                                                    </div>
+                                                    <div className="flex items-center gap-6 mt-auto pt-8 border-t border-white/5">
+                                                        <button onClick={handleConnectFacebook} className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3 rounded-xl text-sm font-medium transition-colors flex items-center gap-2">
+                                                            <ShieldCheck className="w-4 h-4" /> Sí, conectar con Meta
+                                                        </button>
+                                                        <button onClick={onClose} className="text-neutral-400 hover:text-white text-sm font-medium transition-colors">Lo haré más tarde</button>
+                                                    </div>
+                                                </motion.div>
+                                            )}
+                                            {step === 4 && (
+                                                <motion.div 
+                                                    key="step4"
+                                                    initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+                                                    className="flex-1 flex flex-col items-center text-center pt-2 pb-10"
+                                                >
+                                                    <div className="w-20 h-20 bg-green-500/10 rounded-full flex items-center justify-center mb-6">
+                                                        <CheckCircle2 className="w-10 h-10 text-green-500" />
+                                                    </div>
+                                                    <h3 className="text-2xl font-medium text-white mb-2">¡WhatsApp Conectado!</h3>
+                                                    <p className="text-sm text-neutral-400 mb-8 max-w-sm">
+                                                        Tu cuenta de WhatsApp Business (Cloud API) está activa y lista para recibir mensajes.
+                                                    </p>
+                                                    
+                                                    <div className="bg-white/[0.02] border border-white/5 rounded-3xl p-6 w-full mb-8">
+                                                        <div className="flex justify-between items-center px-2 mb-4">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-[10px] font-black uppercase tracking-widest text-neutral-500 italic">Identidad de la Cuenta</span>
+                                                                <button 
+                                                                    onClick={() => setIsEditing(!isEditing)}
+                                                                    className="p-1.5 hover:bg-white/5 rounded-lg transition-colors text-neutral-500 hover:text-white"
+                                                                >
+                                                                    <Settings className="w-3.5 h-3.5" />
+                                                                </button>
+                                                            </div>
+                                                            <span className="text-[10px] text-green-500 font-bold uppercase tracking-widest">Online</span>
+                                                        </div>
+
+                                                        {isEditing ? (
+                                                            <div className="space-y-4 text-left">
+                                                                <div>
+                                                                    <label className="text-[9px] uppercase tracking-tighter text-neutral-500 mb-1 block">Phone Number ID</label>
+                                                                    <input 
+                                                                        type="text" value={waConfig.phoneNumberId} 
+                                                                        onChange={(e) => setWaConfig({...waConfig, phoneNumberId: e.target.value})}
+                                                                        className="w-full bg-white/5 border border-white/10 rounded-xl h-10 px-4 text-xs text-white focus:outline-none focus:border-blue-500/50"
+                                                                        placeholder="Ej: 1234567890..."
+                                                                    />
+                                                                </div>
+                                                                <div>
+                                                                    <label className="text-[9px] uppercase tracking-tighter text-neutral-500 mb-1 block">WABA ID</label>
+                                                                    <input 
+                                                                        type="text" value={waConfig.wabaId} 
+                                                                        onChange={(e) => setWaConfig({...waConfig, wabaId: e.target.value})}
+                                                                        className="w-full bg-white/5 border border-white/10 rounded-xl h-10 px-4 text-xs text-white focus:outline-none focus:border-blue-500/50"
+                                                                        placeholder="Ej: 0987654321..."
+                                                                    />
+                                                                </div>
+                                                                <button 
+                                                                    onClick={() => {
+                                                                        saveWhatsAppConfig();
+                                                                        setIsEditing(false);
+                                                                    }}
+                                                                    className="w-full bg-blue-600 hover:bg-blue-500 text-white h-10 rounded-xl text-xs font-bold transition-all"
+                                                                >
+                                                                    Guardar Cambios
+                                                                </button>
+
+                                                                <div className="mt-4 p-4 bg-blue-500/5 border border-blue-500/10 rounded-2xl flex gap-3">
+                                                                    <Info className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
+                                                                    <div className="text-[10px] text-blue-200/60 leading-relaxed">
+                                                                        <p className="font-bold mb-1 text-blue-300">¿Dónde encuentro estos IDs?</p>
+                                                                        Ve a tu <span className="text-blue-400">Meta Developer Portal</span> → pestaña <span className="text-blue-400">WhatsApp</span> → <span className="text-blue-400">Configuración de la API</span>. Copia los IDs que aparecen allí para tu número de uDreams.
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="space-y-3">
+                                                                <div className="h-14 bg-white/5 rounded-2xl flex items-center px-6 justify-between group">
+                                                                    <div className="text-left">
+                                                                        <span className="text-[8px] uppercase tracking-widest text-neutral-500 block mb-0.5">Número Activo</span>
+                                                                        <p className="text-sm font-medium text-white">
+                                                                            {waConfig.displayPhoneNumber ? `+${waConfig.displayPhoneNumber.replace(/\+/g, '')}` : (waConfig.phoneNumberId ? `ID: ${waConfig.phoneNumberId.substring(0, 10)}...` : "Esperando configuración...")}
+                                                                        </p>
+                                                                    </div>
+                                                                    <div className={`p-2 rounded-xl ${waConfig.displayPhoneNumber ? 'bg-green-500/20' : 'bg-yellow-500/20'}`}>
+                                                                        <ShieldCheck className={`w-4 h-4 ${waConfig.displayPhoneNumber ? 'text-green-500' : 'text-yellow-500'}`} />
+                                                                    </div>
+                                                                </div>
+                                                                {!waConfig.displayPhoneNumber && waConfig.phoneNumberId && (
+                                                                    <p className="text-[9px] text-amber-500/70 text-left px-2 italic">
+                                                                        ⚠️ Se muestra el <b>Phone ID</b> de Meta. Para ver tu número real, edita la configuración y escribe tu número manualmente.
+                                                                    </p>
+                                                                )}
+                                                                 <div className="flex gap-2">
+                                                                    <div className="flex-1 h-10 bg-white/[0.01] border border-white/5 rounded-xl flex flex-col justify-center px-4 text-left">
+                                                                        <span className="text-[7px] uppercase text-neutral-600 font-bold">Phone ID</span>
+                                                                        <span className="text-[9px] text-neutral-400 font-mono truncate select-all cursor-pointer">{waConfig.phoneNumberId || 'Sin asignar'}</span>
+                                                                    </div>
+                                                                    <div className="flex-1 h-10 bg-white/[0.01] border border-white/5 rounded-xl flex flex-col justify-center px-4 text-left">
+                                                                        <span className="text-[7px] uppercase text-neutral-600 font-bold">WABA ID</span>
+                                                                        <span className="text-[9px] text-neutral-400 font-mono truncate select-all cursor-pointer">{waConfig.wabaId || 'Sin asignar'}</span>
+                                                                    </div>
+                                                                </div>
+
+                                                                <div className="mt-4 pt-4 border-t border-white/5 space-y-3">
+                                                                    <div className="flex items-center gap-2 mb-1">
+                                                                        <QrCode className="w-3.5 h-3.5 text-blue-500" />
+                                                                        <span className="text-[9px] font-black uppercase tracking-widest text-neutral-500">Configuración del Webhook</span>
+                                                                    </div>
+                                                                    
+                                                                    <div className="bg-blue-500/5 rounded-xl p-3 text-left space-y-2 border border-blue-500/10">
+                                                                        <div>
+                                                                            <span className="text-[7px] uppercase text-blue-400/60 block mb-0.5 font-bold">URL de Callback</span>
+                                                                            <span className="text-[8px] text-blue-200/80 font-mono break-all select-all">
+                                                                                {`https://us-central1-roosevelt-491004.cloudfunctions.net/metaWebhook?u=${currentUser?.uid}&e=${activeEntity}`}
+                                                                            </span>
+                                                                        </div>
+                                                                        <div>
+                                                                            <span className="text-[7px] uppercase text-blue-400/60 block mb-0.5 font-bold">Token de Verificación (Verify Token)</span>
+                                                                            <span className="text-[9px] text-blue-100 font-mono font-bold select-all">{waConfig.verifyToken}</span>
+                                                                        </div>
+                                                                    </div>
+                                                                    
+                                                                    <p className="text-[8px] text-neutral-500 leading-tight italic">
+                                                                        Pega estos datos en el "Paso 3" del portal de Meta para recibir mensajes en el Omnicanal.
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    <div className="flex items-center gap-4 w-full">
+                                                        <button 
+                                                            onClick={onClose}
+                                                            className="flex-1 h-12 bg-white/5 hover:bg-white/10 text-white text-sm font-medium rounded-2xl transition-all"
+                                                        >
+                                                            Cerrar Panel
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => handleDeleteConfig(true)}
+                                                            className="h-12 px-6 bg-red-500/10 hover:bg-red-500/20 text-red-500 text-sm font-medium rounded-2xl transition-all border border-red-500/20"
+                                                        >
+                                                            Desconectar
+                                                        </button>
+                                                    </div>
+                                                </motion.div>
+                                            )}
+                                        </AnimatePresence>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
                         </div>
                     </motion.div>
                 </div>

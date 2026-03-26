@@ -1,6 +1,11 @@
+'use client';
+
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Lock, QrCode } from 'lucide-react';
 import { Integration } from '../../config';
+import { useAuth } from '@/contexts/AuthContext';
+import QRCode from 'react-qr-code';
 
 interface Props {
     isOpen: boolean;
@@ -9,6 +14,58 @@ interface Props {
 }
 
 export function WhatsAppQRBusinessModal({ isOpen, onClose, activeIntegration }: Props) {
+    const { currentUser, activeEntity } = useAuth();
+    const [qrCode, setQrCode] = useState<string | null>(null);
+    const [status, setStatus] = useState<'IDLE' | 'GENERATING' | 'READY' | 'CONNECTED'>('IDLE');
+
+    useEffect(() => {
+        if (!isOpen || !currentUser || !activeEntity) return;
+
+        let intervalId: NodeJS.Timeout;
+
+        const startSession = async () => {
+            try {
+                console.log('[QR Modal Business] Iniciando sesión REST...');
+                await fetch('/api/internal/start-session', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId: currentUser.uid, entityId: activeEntity, type: 'business' })
+                });
+
+                intervalId = setInterval(async () => {
+                    try {
+                        const res = await fetch(`/api/internal/qr/${activeEntity}`);
+                        const data = await res.json();
+                        
+                        if (data.status === 'CONNECTED') {
+                            setStatus('CONNECTED');
+                            clearInterval(intervalId);
+                            setTimeout(() => {
+                                onClose();
+                            }, 2000);
+                        } else if (data.qr) {
+                            setQrCode(data.qr);
+                            setStatus('READY');
+                        }
+                    } catch (e) {
+                        console.error('[QR Modal Polling] Error leyendo QR', e);
+                    }
+                }, 2000);
+
+            } catch (err) {
+                console.error('[QR Modal Business] Error de conexión', err);
+            }
+        };
+
+        startSession();
+
+        return () => {
+            if (intervalId) clearInterval(intervalId);
+            setQrCode(null);
+            setStatus('IDLE');
+        };
+    }, [isOpen, currentUser, activeEntity]);
+
     if (!activeIntegration || activeIntegration.id !== 'whatsapp_qr_business') return null;
 
     return (
@@ -30,7 +87,6 @@ export function WhatsAppQRBusinessModal({ isOpen, onClose, activeIntegration }: 
                     >
                         {/* Left Side: General Info or Branding */}
                         <div className="w-full md:w-[40%] bg-neutral-900/50 p-8 flex flex-col border-r border-white/5 relative overflow-hidden">
-                            {/* Decorative Blur */}
                             <div className="absolute top-0 right-0 w-full h-full bg-green-500 opacity-20 blur-[100px] pointer-events-none" />
 
                             <div className="relative z-10 h-full flex flex-col">
@@ -72,25 +128,35 @@ export function WhatsAppQRBusinessModal({ isOpen, onClose, activeIntegration }: 
                                             <p className="text-sm text-neutral-300 pt-0.5">Toca <span className="text-white font-medium">Vincular un dispositivo</span>.</p>
                                         </div>
                                         <div className="flex items-start gap-4">
-                                            <div className="w-6 h-6 rounded-full bg-blue-500/20 text-blue-400 text-xs flex items-center justify-center font-bold font-mono shrink-0 border border-blue-500/30">4</div>
-                                            <p className="text-sm text-neutral-300 pt-0.5">Apunta con la cámara de tu teléfono a esta pantalla para <span className="text-blue-400 font-medium tracking-wide">escanear el código QR</span>.</p>
+                                            <div className="w-6 h-6 rounded-full bg-green-500/20 text-green-400 text-xs flex items-center justify-center font-bold font-mono shrink-0 border border-green-500/30">4</div>
+                                            <p className="text-sm text-neutral-300 pt-0.5">Apunta con la cámara de tu teléfono a esta pantalla para <span className="text-green-400 font-medium tracking-wide">escanear el código QR</span>.</p>
                                         </div>
                                     </div>
                                 </div>
                                 
                                 <div className="w-[200px] h-[200px] bg-white rounded-2xl p-2 shrink-0 relative flex items-center justify-center group overflow-hidden shadow-[0_0_40px_rgba(255,255,255,0.1)]">
-                                    <div className="absolute inset-0 border-4 border-green-500/50 rounded-2xl m-2 opacity-0 group-hover:opacity-100 transition-opacity blur-[1px]" />
-                                    <QrCode className="w-32 h-32 text-neutral-200" strokeWidth={1} />
-                                    <motion.div 
-                                        animate={{ top: ['0%', '100%', '0%'] }}
-                                        transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
-                                        className="absolute left-0 w-full h-0.5 bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)] z-10"
-                                    />
-                                    <div className="absolute inset-0 bg-black/5 flex items-center justify-center backdrop-blur-[1px]">
-                                        <div className="bg-black/80 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest text-white border border-white/10">
-                                            Generando QR...
+                                    {qrCode && status !== 'CONNECTED' ? (
+                                        <div className="w-full h-full bg-white rounded-xl flex items-center justify-center p-2">
+                                            <QRCode value={qrCode} size={160} level="L" />
                                         </div>
-                                    </div>
+                                    ) : (
+                                        <>
+                                            <div className="absolute inset-0 border-4 border-green-500/50 rounded-2xl m-2 opacity-0 group-hover:opacity-100 transition-opacity blur-[1px]" />
+                                            <QrCode className="w-32 h-32 text-neutral-200" strokeWidth={1} />
+                                            {status !== 'CONNECTED' && (
+                                                <motion.div 
+                                                    animate={{ top: ['0%', '100%', '0%'] }}
+                                                    transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+                                                    className="absolute left-0 w-full h-0.5 bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)] z-10"
+                                                />
+                                            )}
+                                            <div className="absolute inset-0 bg-black/5 flex items-center justify-center backdrop-blur-[1px]">
+                                                <div className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest text-white border text-center ${status === 'CONNECTED' ? 'bg-green-500/80 border-green-500/50' : 'bg-black/80 border-white/10'}`}>
+                                                    {status === 'CONNECTED' ? '✅ CONECTADO' : 'Generando QR...'}
+                                                </div>
+                                            </div>
+                                        </>
+                                    )}
                                 </div>
                             </div>
                         </div>

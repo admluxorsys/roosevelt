@@ -1,8 +1,8 @@
-
 import * as functions from 'firebase-functions';
 import { normalizeTikTokMessage } from '../helpers/messageNormalizer';
 import { handleKanbanUpdateOmni } from '../helpers/kanbanOmni';
-import * as admin from 'firebase-admin';
+import { tryTriggerBot } from '../helpers/botEngine';
+import { resolveTenant } from '../helpers/tenantResolver';
 
 /**
  * TIKTOK WEBHOOK HANDLER
@@ -36,23 +36,19 @@ export const tiktokWebhook = functions.https.onRequest(async (req: functions.htt
         functions.logger.info('Received TikTok event', req.body);
 
         try {
-            // TikTok payload structure varies. using generic normalization.
+            // TikTok payload structure varies. 
+            const accountId = req.body.recipient_id || req.body.advertiser_id || 'default';
+            
+            // --- RESOLUCIÓN DE INQUILINO (TENANT RESOLUTION) ---
+            const tenant = await resolveTenant('tiktok', accountId);
+            const userId = tenant?.userId || 'legacy';
+            const entityId = tenant?.entityId || 'roosevelt';
+
             const unifiedMsg = normalizeTikTokMessage(req.body);
-            const cardResult = await handleKanbanUpdateOmni(unifiedMsg);
+            const cardResult = await handleKanbanUpdateOmni(unifiedMsg, userId, entityId);
 
             if (cardResult && cardResult.success) {
-                if (unifiedMsg.message_type === 'text') {
-                    const { getActiveBot, executeBotFlow } = await import('../helpers/botEngine');
-                    const activeBot = await getActiveBot();
-                    if (activeBot) {
-                        const db = admin.firestore();
-                        const cardSnap = await db.collectionGroup('cards').where(admin.firestore.FieldPath.documentId(), '==', cardResult.cardId).get();
-                        if (!cardSnap.empty) {
-                            const fullCardData = { id: cardSnap.docs[0].id, ...cardSnap.docs[0].data() };
-                            await executeBotFlow(activeBot, unifiedMsg.external_id, fullCardData, unifiedMsg.message_text);
-                        }
-                    }
-                }
+                await tryTriggerBot(userId, entityId, 'tiktok', unifiedMsg.external_id, unifiedMsg.message_text);
             }
             res.sendStatus(200);
         } catch (error) {
