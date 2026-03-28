@@ -462,7 +462,7 @@ export function WhatsAppCloudAPIModal({ isOpen, onClose, activeIntegration }: Pr
                                                     <span className="text-[9px] font-black uppercase tracking-wider italic">Zona de Peligro</span>
                                                 </div>
                                                 <button 
-                                                    onClick={() => handleDeleteConfig(false)}
+                                                    onClick={() => handleDeleteConfig()}
                                                     className="w-full h-10 bg-red-500/5 text-red-500/30 border border-red-500/10 font-black uppercase text-[9px] tracking-widest rounded-xl hover:bg-red-500 hover:text-white transition-all hover:border-transparent"
                                                 >
                                                     ELIMINAR DATOS INTERNOS
