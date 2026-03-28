@@ -38,9 +38,22 @@ const ChatbotsPage = () => {
     const checkWhatsApp = async () => {
       if (!currentUser || !activeEntity) return;
       try {
-        const waRef = doc(db, 'users', currentUser.uid, 'entities', activeEntity, 'integrations', 'whatsapp');
-        const snap = await getDoc(waRef);
-        if (snap.exists() && snap.data().status === 'Connected') {
+        const tenantPath = `users/${currentUser.uid}/entities/${activeEntity}`;
+        const integrationTypes = ['whatsapp', 'whatsapp_internal', 'whatsapp_qr_business', 'whatsapp_qr_personal'];
+        
+        // Check all possible integration paths
+        const snapshots = await Promise.all(
+          integrationTypes.map(type => getDoc(doc(db, tenantPath, 'integrations', type)))
+        );
+        
+        const isConnected = snapshots.some(snap => {
+          if (!snap.exists()) return false;
+          const status = snap.data().status;
+          const validStatuses = ['Connected', 'connected', 'Internal', 'active', 'Active', 'Online', 'online'];
+          return validStatuses.includes(status);
+        });
+        
+        if (isConnected) {
           setWhatsappStatus('connected');
         } else {
           setWhatsappStatus('offline');
@@ -50,7 +63,11 @@ const ChatbotsPage = () => {
         setWhatsappStatus('offline');
       }
     };
+    
+    // Check initially and then every 30 seconds to keep it fresh
     checkWhatsApp();
+    const interval = setInterval(checkWhatsApp, 30000);
+    return () => clearInterval(interval);
   }, [currentUser, activeEntity]);
 
   useEffect(() => {
@@ -134,6 +151,15 @@ const ChatbotsPage = () => {
   };
 
   const handleToggleBotStatus = async (bot: Bot) => {
+    // GUARD: Block activation if WhatsApp is not connected
+    if (!bot.isActive && whatsappStatus !== 'connected') {
+        toast.error('No puedes activar un chatbot sin una conexión de WhatsApp activa.', {
+            description: 'Por favor, conecta WhatsApp en la sección de Integraciones primero.',
+            duration: 5000,
+        });
+        return;
+    }
+
     setUpdatingBots((prev) => [...prev, bot.id]);
     try {
       const newStatus = !bot.isActive;
@@ -149,7 +175,10 @@ const ChatbotsPage = () => {
       }
 
       const botRef = doc(db, 'users', currentUser!.uid, 'entities', activeEntity!, 'chatbots', bot.id);
-      batch.update(botRef, { isActive: newStatus });
+      batch.update(botRef, { 
+        isActive: newStatus,
+        updatedAt: new Date()
+      });
       
       await batch.commit();
 

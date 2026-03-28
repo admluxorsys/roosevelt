@@ -41,30 +41,42 @@ async function releaseBotLock(cardRef: FirebaseFirestore.DocumentReference): Pro
 }
 
 // --- Search by platform_ids (New Unified Approach) ---
-// Try to find by whatsapp/external_id first
-export async function resolveCardRef(contactNumber: string, platform: string = 'whatsapp'): Promise<FirebaseFirestore.DocumentReference | null> {
+// Try to find by whatsapp/external_id first, scoped locally to the tenant
+export async function resolveCardRef(
+    userId: string, 
+    entityId: string, 
+    contactNumber: string, 
+    platform: string = 'whatsapp'
+): Promise<FirebaseFirestore.DocumentReference | null> {
     const db = admin.firestore();
-
-    // Strategy A: platform_ids.{platform}
+    const groupsPath = `users/${userId}/entities/${entityId}/kanban-groups`;
+    
     try {
-        const platformSnap = await db.collectionGroup('cards')
-            .where(`platform_ids.${platform}`, '==', contactNumber)
-            .limit(1)
-            .get();
-        if (!platformSnap.empty) return platformSnap.docs[0].ref;
+        const groupsSnap = await db.collection(groupsPath).get();
+        if (groupsSnap.empty) return null;
+
+        for (const groupDoc of groupsSnap.docs) {
+            // Strategy A: platform_ids.{platform}
+            const platformSnap = await groupDoc.ref.collection('cards')
+                .where(`platform_ids.${platform}`, '==', contactNumber)
+                .limit(1)
+                .get();
+            
+            if (!platformSnap.empty) return platformSnap.docs[0].ref;
+
+            // Strategy B: Legacy contactNumber match (mostly for WhatsApp)
+            if (platform === 'whatsapp') {
+                const legacySnap = await groupDoc.ref.collection('cards')
+                    .where('contactNumber', '==', contactNumber)
+                    .limit(1)
+                    .get();
+                
+                if (!legacySnap.empty) return legacySnap.docs[0].ref;
+            }
+        }
     } catch (e) {
-        functions.logger.warn(`[resolveCardRef] index for platform_ids.${platform} not ready.`);
+        functions.logger.error(`[resolveCardRef] Error scanning cards for tenant ${userId}/${entityId}`, e);
     }
-
-    // Strategy B: Legacy contactNumber match (mostly for WhatsApp)
-    if (platform === 'whatsapp') {
-        try {
-            const cardsRef = db.collectionGroup('cards').where('contactNumber', '==', contactNumber);
-            const snapshot = await cardsRef.get();
-            if (!snapshot.empty) return snapshot.docs[0].ref;
-        } catch (e) {}
-    }
-
     return null;
 }
 
@@ -72,14 +84,21 @@ export async function getActiveBot(userId: string, entityId: string): Promise<an
     const db = admin.firestore();
     const botsSnapshot = await db.collection(`users/${userId}/entities/${entityId}/chatbots`)
         .where('isActive', '==', true)
-        .orderBy('updatedAt', 'desc')
-        .limit(1)
         .get();
 
     if (botsSnapshot.empty) return null;
-    const botData = botsSnapshot.docs[0].data();
+
+    // Sort in memory to avoid mandatory composite index
+    const bots = botsSnapshot.docs.map(d => ({ id: d.id, ...d.data() as any }));
+    bots.sort((a, b) => {
+        const timeA = a.updatedAt?.toDate?.()?.getTime() || a.createdAt?.toDate?.()?.getTime() || 0;
+        const timeB = b.updatedAt?.toDate?.()?.getTime() || b.createdAt?.toDate?.()?.getTime() || 0;
+        return timeB - timeA;
+    });
+
+    const botData = bots[0];
     if (!botData.flow || !botData.flow.nodes || !botData.flow.edges) return null;
-    return { id: botsSnapshot.docs[0].id, ...botData };
+    return botData;
 }
 
 function replaceVariables(text: string, cardData: any): string {
@@ -193,9 +212,9 @@ export async function tryTriggerBot(
         return;
     }
 
-    const cardRef = await resolveCardRef(externalId, platform);
+    const cardRef = await resolveCardRef(userId, entityId, externalId, platform);
     if (!cardRef) {
-        functions.logger.error(`[Bot Engine] Could not resolve card for ${externalId} on ${platform}`);
+        functions.logger.error(`[Bot Engine] Could not resolve card for ${externalId} on ${platform} for tenant ${userId}/${entityId}`);
         return;
     }
 
@@ -231,7 +250,7 @@ export async function tryTriggerBot(
             delete cardData.botState;
         }
         
-        await executeBotFlow(activeBot, externalId, cardData, messageText, messageId, metadata);
+        await executeBotFlow(activeBot, userId, entityId, externalId, cardData, messageText, messageId, metadata);
     }
 }
 
@@ -241,21 +260,23 @@ export async function tryTriggerBot(
 
 export async function executeBotFlow(
     bot: any, 
+    userId: string,
+    entityId: string,
     to: string, 
     cardData: any, 
     rawUserMessage: string, 
     messageId?: string,
     metadata?: { mediaUrl?: string, type?: string }
 ): Promise<void> {
-    functions.logger.info(`>>> EXECUTING FLOW: ${bot.name} for ${to} (Type: ${metadata?.type || 'text'}) <<<`);
+    functions.logger.info(`>>> EXECUTING FLOW: ${bot.name} for ${to} (Tenant: ${userId}/${entityId}) <<<`);
 
     let currentMsg = rawUserMessage || '';
 
     const platform = cardData.source || 'whatsapp'; // Default to whatsapp if not set
-    const adapter = getMessagingAdapter(platform);
+    const adapter = getMessagingAdapter(platform, userId, entityId);
 
     // Resolve cardRef once and reuse it throughout the entire flow
-    const cardRef = await resolveCardRef(to, platform);
+    const cardRef = await resolveCardRef(userId, entityId, to, platform);
     if (!cardRef) {
         functions.logger.warn(`[executeBotFlow] Could not resolve cardRef for ${to}`);
         return;
@@ -954,11 +975,11 @@ function validateInput(input: string, config: any, metadata?: { mediaUrl?: strin
     return { isValid: true };
 }
 
-async function saveVariable(contactNumber: string, variable: string, value: string, cardId?: string, groupId?: string, existingRef?: FirebaseFirestore.DocumentReference | null) {
+async function saveVariable(contactNumber: string, variable: string, value: string, cardId?: string, groupId?: string, existingRef?: FirebaseFirestore.DocumentReference | null, userId?: string, entityId?: string, platform?: string) {
     if (!variable) return;
 
     // Use pre-resolved ref if available, otherwise fall back to lookup
-    const docRef = existingRef || await resolveCardRef(contactNumber);
+    const docRef = existingRef || (userId && entityId ? await resolveCardRef(userId, entityId, contactNumber, platform || 'whatsapp') : null);
 
     if (docRef) {
         const updateData: any = {};
@@ -973,7 +994,10 @@ async function saveVariable(contactNumber: string, variable: string, value: stri
             functions.logger.info(`[saveVariable] Auto-updating contactName for ${contactNumber} to ${value}`);
         }
         
-        await docRef.update(updateData);
+        await docRef.update({
+            ...updateData,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
         
         // SYNC WITH MASTER CONTACTS COLLECTION (Disabled by user request)
         /*
@@ -984,30 +1008,29 @@ async function saveVariable(contactNumber: string, variable: string, value: stri
     }
 }
 
-async function updateBotState(contactNumber: string, state: any, cardId?: string, groupId?: string, existingRef?: FirebaseFirestore.DocumentReference | null) {
+async function updateBotState(contactNumber: string, state: any, cardId?: string, groupId?: string, existingRef?: FirebaseFirestore.DocumentReference | null, userId?: string, entityId?: string, platform?: string) {
     // Use pre-resolved ref if available, otherwise fall back to lookup
-    const docRef = existingRef || await resolveCardRef(contactNumber);
+    const docRef = existingRef || (userId && entityId ? await resolveCardRef(userId, entityId, contactNumber, platform || 'whatsapp') : null);
 
     if (docRef) {
         await docRef.update({ botState: state, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
     }
 }
 
-async function logBotMessage(contactNumber: string, message: string, cardId?: string, groupId?: string, existingRef?: FirebaseFirestore.DocumentReference | null, type: string = 'text', metadata?: any) {
+async function logBotMessage(contactNumber: string, message: string, cardId?: string, groupId?: string, existingRef?: FirebaseFirestore.DocumentReference | null, type: string = 'text', metadata?: any, userId?: string, entityId?: string, platform?: string) {
     // Use pre-resolved ref if available, otherwise fall back to lookup
-    // Use pre-resolved ref if available, otherwise fall back to lookup
-    const docRef = existingRef || await resolveCardRef(contactNumber);
-
+    const docRef = existingRef || (userId && entityId ? await resolveCardRef(userId, entityId, contactNumber, platform || 'whatsapp') : null);
 
     if (docRef) {
         await docRef.update({ 
             lastMessage: message, 
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
             messages: admin.firestore.FieldValue.arrayUnion({ 
                 sender: 'agent', 
                 text: message, 
                 type: type,
                 metadata: metadata || null,
-                timestamp: new Date() 
+                timestamp: admin.firestore.FieldValue.serverTimestamp()
             }),
             unreadCount: 0
         });

@@ -36,11 +36,15 @@ export const useKanbanBoard = (filterTerm: string = '') => {
 
     // Load Cards
     useEffect(() => {
-        if (groups.length === 0) return;
         const tenantPath = getTenantPath();
         if (!tenantPath) return;
 
         const unsubscribes: (() => void)[] = [];
+
+        if (groups.length === 0) {
+            setLoading(false);
+            return;
+        }
 
         groups.forEach(group => {
             const q = query(collection(db, `${tenantPath}/kanban-groups/${group.id}/cards`));
@@ -52,7 +56,6 @@ export const useKanbanBoard = (filterTerm: string = '') => {
                 }));
 
                 setCards(prev => {
-                    // Robust update: remove old cards for this group, add new ones
                     const otherCards = prev.filter(c => c.groupId !== group.id);
                     return [...otherCards, ...groupCards];
                 });

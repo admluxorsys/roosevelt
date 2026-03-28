@@ -52,14 +52,15 @@ exports.moveCard = functions.https.onCall(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "User must be authenticated to move cards.");
     }
-    const { sourceGroupId, destGroupId, cardId } = data;
+    const { sourceGroupId, destGroupId, cardId, userId, entityId } = data;
     // 2. **Validation:** Ensure all required data is present.
-    if (!sourceGroupId || !destGroupId || !cardId) {
-        throw new functions.https.HttpsError("invalid-argument", "Missing required data: sourceGroupId, destGroupId, or cardId.");
+    if (!sourceGroupId || !destGroupId || !cardId || !userId || !entityId) {
+        throw new functions.https.HttpsError("invalid-argument", "Missing required data: sourceGroupId, destGroupId, cardId, userId, or entityId.");
     }
     functions.logger.info(`Request to move card ${cardId} from group ${sourceGroupId} to ${destGroupId} by user ${context.auth.uid}.`);
-    const sourceCardRef = db.collection("kanban-groups").doc(sourceGroupId).collection("cards").doc(cardId);
-    const destCardRef = db.collection("kanban-groups").doc(destGroupId).collection("cards").doc(cardId);
+    const tenantPath = `users/${userId}/entities/${entityId}`;
+    const sourceCardRef = db.collection(tenantPath + "/kanban-groups").doc(sourceGroupId).collection("cards").doc(cardId);
+    const destCardRef = db.collection(tenantPath + "/kanban-groups").doc(destGroupId).collection("cards").doc(cardId);
     try {
         const batch = db.batch();
         // 3. **Execution:** Copy, then delete, within a single atomic batch.

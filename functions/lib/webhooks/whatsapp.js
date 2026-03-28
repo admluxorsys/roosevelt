@@ -5,22 +5,46 @@ const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const kanbanOmni_1 = require("../helpers/kanbanOmni");
 const botEngine_1 = require("../helpers/botEngine");
-const FORTY_EIGHT_HOURS_IN_MS = 48 * 60 * 60 * 1000;
-exports.whatsappWebhook = functions.https.onRequest(async (req, res) => {
+exports.whatsappWebhook = functions.runWith({ invoker: 'public' }).https.onRequest(async (req, res) => {
     var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o;
     // --- VERIFICACIÓN DE WEBHOOK (GET) ---
     if (req.method === 'GET') {
         const mode = req.query['hub.mode'];
         const token = req.query['hub.verify_token'];
         const challenge = req.query['hub.challenge'];
-        const VERIFY_TOKEN = ((_a = functions.config().whatsapp) === null || _a === void 0 ? void 0 : _a.verify_token) || 'malamia';
-        if (mode === 'subscribe' && token === VERIFY_TOKEN) {
-            functions.logger.info('WhatsApp Webhook Verified (GET)');
+        const userId = req.query['u'];
+        const entityId = req.query['e'];
+        let expectedToken = ((_a = functions.config().whatsapp) === null || _a === void 0 ? void 0 : _a.verify_token) || 'malamia';
+        // Caso 1: Se proveen IDs de inquilino (Requisito estricto por falta de índices)
+        if (userId && entityId) {
+            try {
+                const db = admin.firestore();
+                // Check both public and internal for the token
+                const [publicSnap, internalSnap] = await Promise.all([
+                    db.doc(`users/${userId}/entities/${entityId}/integrations/whatsapp`).get(),
+                    db.doc(`users/${userId}/entities/${entityId}/integrations/whatsapp_internal`).get()
+                ]);
+                if (publicSnap.exists && ((_b = publicSnap.data()) === null || _b === void 0 ? void 0 : _b.verifyToken) === token) {
+                    expectedToken = token;
+                }
+                else if (internalSnap.exists && ((_c = internalSnap.data()) === null || _c === void 0 ? void 0 : _c.verifyToken) === token) {
+                    expectedToken = token;
+                }
+            }
+            catch (error) {
+                functions.logger.error('[Webhook Verify] Error fetching tenant config', error);
+            }
+        }
+        else {
+            functions.logger.error('[Webhook Verify] Missing u or e parameters. Universal webhook requires indexing.');
+        }
+        if (mode === 'subscribe' && token === expectedToken) {
+            functions.logger.info(`✅ [Verification Success] Hub Token: ${token}, Expected: ${expectedToken}, User: ${userId}`);
             res.status(200).send(challenge);
             return;
         }
         else {
-            functions.logger.warn('WhatsApp Verification Failed (GET)');
+            functions.logger.warn(`❌ [Verification Failed] Hub Token: ${token}, Expected: ${expectedToken}, User: ${userId}`);
             res.sendStatus(403);
             return;
         }
@@ -35,9 +59,24 @@ exports.whatsappWebhook = functions.https.onRequest(async (req, res) => {
             return;
         }
         const { entry } = requestBody;
-        const change = (_d = (_c = (_b = entry === null || entry === void 0 ? void 0 : entry[0]) === null || _b === void 0 ? void 0 : _b.changes) === null || _c === void 0 ? void 0 : _c[0]) === null || _d === void 0 ? void 0 : _d.value;
+        const change = (_f = (_e = (_d = entry === null || entry === void 0 ? void 0 : entry[0]) === null || _d === void 0 ? void 0 : _d.changes) === null || _e === void 0 ? void 0 : _e[0]) === null || _f === void 0 ? void 0 : _f.value;
         if (!change)
             return;
+        const metadata = change.metadata;
+        const recipientPhoneNumberId = metadata === null || metadata === void 0 ? void 0 : metadata.phone_number_id;
+        if (!recipientPhoneNumberId) {
+            functions.logger.warn('[Webhook] No recipient phone_number_id found in metadata');
+            return;
+        }
+        // --- RESOLUCIÓN DE INQUILINO DIRECTA (Vía URL) ---
+        // Evitamos usar collectionGroup para eludir el error de "Index Required" de Firestore
+        const userId = req.query['u'];
+        const entityId = req.query['e'];
+        if (!userId || !entityId) {
+            functions.logger.error(`[WhatsApp Webhook] Missing u/e parameters in POST request.`);
+            return;
+        }
+        functions.logger.info(`[Webhook] Resolved Tenant directly from URL: User=${userId}, Entity=${entityId}`);
         // --- CASO 1: MANEJO DE ESTADOS (READ, DELIVERED, SENT) ---
         if (change.statuses && change.statuses.length > 0) {
             const statusUpdate = change.statuses[0];
@@ -69,12 +108,12 @@ exports.whatsappWebhook = functions.https.onRequest(async (req, res) => {
             return;
         }
         // --- CASO 2: MANEJO DE MENSAJES ENTRANTES ---
-        const message = (_e = change.messages) === null || _e === void 0 ? void 0 : _e[0];
+        const message = (_g = change.messages) === null || _g === void 0 ? void 0 : _g[0];
         if (!message)
             return;
-        const contact = (_f = change.contacts) === null || _f === void 0 ? void 0 : _f[0];
+        const contact = (_h = change.contacts) === null || _h === void 0 ? void 0 : _h[0];
         const from = message.from; // Formato: 593963142795
-        const contactName = ((_g = contact === null || contact === void 0 ? void 0 : contact.profile) === null || _g === void 0 ? void 0 : _g.name) || 'Usuario WhatsApp';
+        const contactName = ((_j = contact === null || contact === void 0 ? void 0 : contact.profile) === null || _j === void 0 ? void 0 : _j.name) || 'Usuario WhatsApp';
         // EXTRACCIÓN DEL MENSAJE Y NORMALIZACIÓN
         let body = '';
         let mediaUrl = undefined;
@@ -85,16 +124,16 @@ exports.whatsappWebhook = functions.https.onRequest(async (req, res) => {
         }
         else if (message.type === 'interactive') {
             const interactive = message.interactive;
-            body = ((_h = interactive.button_reply) === null || _h === void 0 ? void 0 : _h.title) || ((_j = interactive.list_reply) === null || _j === void 0 ? void 0 : _j.title) || '[Interacción]';
+            body = ((_k = interactive.button_reply) === null || _k === void 0 ? void 0 : _k.title) || ((_l = interactive.list_reply) === null || _l === void 0 ? void 0 : _l.title) || '[Interacción]';
             msgType = 'interactive';
         }
         else if (['image', 'video', 'audio', 'voice', 'document', 'sticker'].includes(message.type)) {
             msgType = message.type === 'voice' ? 'audio' : message.type;
-            body = ((_k = message[message.type]) === null || _k === void 0 ? void 0 : _k.caption) || `[${message.type.toUpperCase()}]`;
+            body = ((_m = message[message.type]) === null || _m === void 0 ? void 0 : _m.caption) || `[${message.type.toUpperCase()}]`;
             // Note: Media URL retrieval often requires an extra API call to Meta to get the DL URL
             // For now we just store the ID or caption. 
             // In a full implementation, we fetch the media URL here. 
-            mediaUrl = (_l = message[message.type]) === null || _l === void 0 ? void 0 : _l.id;
+            mediaUrl = (_o = message[message.type]) === null || _o === void 0 ? void 0 : _o.id;
         }
         else {
             body = `[Mensaje tipo: ${message.type}]`;
@@ -114,7 +153,7 @@ exports.whatsappWebhook = functions.https.onRequest(async (req, res) => {
                 platform_metadata: message
             };
             // 2. Gestionar Tarjeta en Kanban (Omnichannel)
-            const result = await (0, kanbanOmni_1.handleKanbanUpdateOmni)(unifiedMessage);
+            const result = await (0, kanbanOmni_1.handleKanbanUpdateOmni)(unifiedMessage, userId, entityId);
             if (!result.success) {
                 functions.logger.warn(`[Kanban Sync] Validation failed or error for ${from}`);
                 return;
@@ -122,57 +161,8 @@ exports.whatsappWebhook = functions.https.onRequest(async (req, res) => {
             const isNew = result.isNew;
             const cardId = result.cardId;
             functions.logger.info(`[Kanban Sync] WhatsApp Card ${isNew ? 'CREATED' : 'UPDATED'} (ID: ${cardId})`);
-            // 3. Ejecutar Bot
-            // Fetch complete card data to check bot state
-            const cardRef = await (0, botEngine_1.resolveCardRef)(from);
-            if (cardRef) {
-                const cardSnap = await cardRef.get();
-                const cardData = Object.assign({ id: cardRef.id }, cardSnap.data());
-                const activeBot = await (0, botEngine_1.getActiveBot)();
-                if (activeBot) {
-                    const now = new Date();
-                    const input = body.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-                    const isCommand = input === 'reinicia todo ahora' || input === 'reiniciar' || input === 'reset';
-                    const botStatus = ((_m = cardData.botState) === null || _m === void 0 ? void 0 : _m.status) || 'none';
-                    let shouldTrigger = false;
-                    // --- LIFECYCLE TRIGGER CONDITIONS ---
-                    if (isCommand) {
-                        shouldTrigger = true;
-                    }
-                    else if (botStatus === 'completed') {
-                        functions.logger.info(`[Lifecycle] Session is completed for ${from}, skipping bot execution.`);
-                        shouldTrigger = false;
-                    }
-                    else if (isNew || botStatus === 'none') {
-                        shouldTrigger = true;
-                    }
-                    else if (botStatus === 'active') {
-                        shouldTrigger = true;
-                    }
-                    else if ((_o = cardData.botState) === null || _o === void 0 ? void 0 : _o.lastInteraction) {
-                        const lastInt = cardData.botState.lastInteraction.toDate ? cardData.botState.lastInteraction.toDate() : new Date(0);
-                        if ((now.getTime() - lastInt.getTime()) > FORTY_EIGHT_HOURS_IN_MS) {
-                            shouldTrigger = true;
-                        }
-                    }
-                    if (shouldTrigger) {
-                        // Reset state if it's starting a fresh session from none
-                        const needsReset = isNew || botStatus === 'none';
-                        if (needsReset && cardData.botState) {
-                            functions.logger.info(`[Webhook] Resetting bot state for ${from} (Reason: New/None Session)`);
-                            await cardRef.update({ botState: admin.firestore.FieldValue.delete() });
-                            delete cardData.botState;
-                        }
-                        await (0, botEngine_1.executeBotFlow)(activeBot, from, cardData, body, message.id, { mediaUrl, type: msgType });
-                    }
-                }
-                else {
-                    functions.logger.warn(`[Webhook] No active chatbot found in DB for ${from}. Skipping bot execution.`);
-                }
-            }
-            else {
-                functions.logger.error(`[Bot Error] Could not find card for ${from} after creation/update.`);
-            }
+            // 3. Ejecutar Bot (Unified Logic)
+            await (0, botEngine_1.tryTriggerBot)(userId, entityId, 'whatsapp', from, body, message.id, { mediaUrl, type: msgType });
         }
         catch (error) {
             functions.logger.error('Error in whatsappWebhook processing:', error);

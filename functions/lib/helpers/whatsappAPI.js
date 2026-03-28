@@ -9,6 +9,7 @@ exports.sendLocationMessage = sendLocationMessage;
 // src/helpers/whatsappAPI.ts
 const functions = require("firebase-functions");
 const axios_1 = require("axios");
+const admin = require("firebase-admin");
 const whatsappConfig = functions.config().whatsapp;
 // Updated with user provided keys as primary or fallback
 const accessToken = (whatsappConfig === null || whatsappConfig === void 0 ? void 0 : whatsappConfig.access_token) || '';
@@ -17,11 +18,28 @@ function cleanNumber(phone) {
     return phone.replace(/\D/g, ''); // Solo números, quita el '+'
 }
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-async function makeWhatsAppRequest(data, type) {
+async function makeWhatsAppRequest(data, type, ctx) {
     var _a, _b, _c, _d;
     // Priority: Cloud Config > Environment Variables
-    const apiToken = ((_a = functions.config().whatsapp) === null || _a === void 0 ? void 0 : _a.access_token) || process.env.WHATSAPP_ACCESS_TOKEN || accessToken;
-    const phoneId = ((_b = functions.config().whatsapp) === null || _b === void 0 ? void 0 : _b.phone_number_id) || process.env.WHATSAPP_PHONE_NUMBER_ID || phoneNumberId;
+    let apiToken = ((_a = functions.config().whatsapp) === null || _a === void 0 ? void 0 : _a.access_token) || process.env.WHATSAPP_ACCESS_TOKEN || accessToken;
+    let phoneId = ((_b = functions.config().whatsapp) === null || _b === void 0 ? void 0 : _b.phone_number_id) || process.env.WHATSAPP_PHONE_NUMBER_ID || phoneNumberId;
+    if ((ctx === null || ctx === void 0 ? void 0 : ctx.userId) && (ctx === null || ctx === void 0 ? void 0 : ctx.entityId)) {
+        try {
+            const configPath = `users/${ctx.userId}/entities/${ctx.entityId}/integrations/whatsapp`;
+            const docRef = admin.firestore().doc(configPath);
+            const snapshot = await docRef.get();
+            if (snapshot.exists) {
+                const configData = snapshot.data();
+                if ((configData === null || configData === void 0 ? void 0 : configData.accessToken) && (configData === null || configData === void 0 ? void 0 : configData.phoneNumberId)) {
+                    apiToken = configData.accessToken;
+                    phoneId = configData.phoneNumberId;
+                }
+            }
+        }
+        catch (e) {
+            functions.logger.error("Failed to fetch custom credentials", e);
+        }
+    }
     if (!apiToken || !phoneId) {
         functions.logger.error('❌ [WhatsApp API] Missing credentials!', { hasToken: !!apiToken, hasPhoneId: !!phoneId });
         throw new Error('WhatsApp API credentials are not configured.');
@@ -58,14 +76,14 @@ async function makeWhatsAppRequest(data, type) {
     }
     throw new Error(`WhatsApp API Error after ${MAX_ATTEMPTS} attempts: ${JSON.stringify(lastError)}`);
 }
-async function markAsRead(messageId) {
+async function markAsRead(messageId, ctx) {
     if (!messageId)
         return;
     return await makeWhatsAppRequest({
         messaging_product: 'whatsapp',
         status: 'read',
         message_id: messageId
-    }, 'MarkAsRead');
+    }, 'MarkAsRead', ctx);
 }
 async function sendMessage(to, message, options) {
     if (!message)
@@ -79,9 +97,9 @@ async function sendMessage(to, message, options) {
     if (options === null || options === void 0 ? void 0 : options.preview_url) {
         payload.text.preview_url = true;
     }
-    return await makeWhatsAppRequest(payload, 'Text');
+    return await makeWhatsAppRequest(payload, 'Text', options);
 }
-async function sendMediaMessage(to, fileUrl, caption = '', fileName = 'file') {
+async function sendMediaMessage(to, fileUrl, caption = '', fileName = 'file', ctx) {
     const mediaType = getMediaType(fileUrl, fileName);
     if (mediaType === 'unsupported') {
         functions.logger.warn(`Unsupported media: ${fileName}`);
@@ -91,9 +109,9 @@ async function sendMediaMessage(to, fileUrl, caption = '', fileName = 'file') {
     return await makeWhatsAppRequest({
         messaging_product: 'whatsapp', to: cleanTo, type: mediaType,
         [mediaType]: { link: fileUrl, caption: caption }
-    }, 'Media');
+    }, 'Media', ctx);
 }
-async function sendButtonMessage(to, bodyText, buttons, header) {
+async function sendButtonMessage(to, bodyText, buttons, header, ctx) {
     const validButtons = buttons.slice(0, 3).map((btn, i) => {
         const id = (btn.id || `btn_${i}`).substring(0, 256);
         const title = (btn.title || "Opción").substring(0, 20);
@@ -127,9 +145,9 @@ async function sendButtonMessage(to, bodyText, buttons, header) {
         type: 'interactive',
         interactive
     };
-    await makeWhatsAppRequest(payload, 'Buttons');
+    await makeWhatsAppRequest(payload, 'Buttons', ctx);
 }
-async function sendListMessage(to, bodyText, buttonText, sections) {
+async function sendListMessage(to, bodyText, buttonText, sections, ctx) {
     if (!sections || sections.length === 0)
         return;
     const formattedSections = [];
@@ -164,9 +182,9 @@ async function sendListMessage(to, bodyText, buttonText, sections) {
             action: { button: validBtnText, sections: formattedSections }
         }
     };
-    await makeWhatsAppRequest(payload, 'List');
+    await makeWhatsAppRequest(payload, 'List', ctx);
 }
-async function sendLocationMessage(to, lat, long, name, address) {
+async function sendLocationMessage(to, lat, long, name, address, ctx) {
     await makeWhatsAppRequest({
         messaging_product: 'whatsapp', to: cleanNumber(to), type: 'location',
         location: { latitude: lat, longitude: long, name: name, address: address }

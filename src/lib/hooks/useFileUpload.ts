@@ -84,7 +84,7 @@ export const useFileUpload = () => {
                             uploadedAt: Timestamp.now()
                         };
 
-                        await updateDoc(doc(db, 'users', user.uid, 'entities', activeEntity, 'kamban-groups', groupId, 'cards', cardId), {
+                        await updateDoc(doc(db, 'users', user.uid, 'entities', activeEntity, 'kanban-groups', groupId, 'cards', cardId), {
                             documents: arrayUnion(fileData),
                             history: arrayUnion({
                                 id: `hist_${Date.now()}`,

@@ -4,7 +4,8 @@ import { useConversationLogic } from '../../whatsapp/components/ConversationModa
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { db } from '@/lib/firebase';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc, Timestamp } from 'firebase/firestore';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface ChatAreaProps {
     card: any;
@@ -91,6 +92,8 @@ export default function ChatArea({ card, groups, groupName, allConversations, to
         }
     };
 
+    const { currentUser, activeEntity } = useAuth();
+
     // Close menus when clicking outside
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
@@ -105,19 +108,30 @@ export default function ChatArea({ card, groups, groupName, allConversations, to
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    // Clear unread count when conversation is opened
+    // Clear unread count when conversation is opened/focused
     useEffect(() => {
-        const hasUnread = (card?.unreadCount || 0) > 0;
-        const hasFocus = document.hasFocus();
+        const resetUnread = async () => {
+            if (card?.id && (card?.unreadCount || 0) > 0 && currentUser?.uid && activeEntity) {
+                console.log(`[ChatArea] Resetting unreadCount for ${card.id}`);
+                const tenantPath = `users/${currentUser.uid}/entities/${activeEntity}`;
+                try {
+                    const cardRef = doc(db, tenantPath, 'kanban-groups', card.groupId, 'cards', card.id);
+                    await updateDoc(cardRef, { 
+                        unreadCount: 0,
+                        lastReadAt: Timestamp.now()
+                    });
+                } catch (err) {
+                    console.error("[ChatArea] Error clearing unread count:", err);
+                }
+            }
+        };
+
+        resetUnread();
         
-        if (card?.id && hasUnread && hasFocus) {
-            console.log(`[ChatArea] Resetting unreadCount for ${card.id} (Current: ${card.unreadCount})`);
-            const cardRef = doc(db, 'kanban-groups', card.groupId, 'cards', card.id);
-            updateDoc(cardRef, { unreadCount: 0 }).catch(err => {
-                console.error("[ChatArea] Error clearing unread count:", err);
-            });
-        }
-    }, [card?.id, card?.unreadCount, card?.groupId]);
+        // Also reset when window gains focus
+        window.addEventListener('focus', resetUnread);
+        return () => window.removeEventListener('focus', resetUnread);
+    }, [card?.id, card?.unreadCount, card?.groupId, currentUser?.uid, activeEntity]);
 
     const logic = useConversationLogic({
         isOpen: true,
@@ -143,9 +157,24 @@ export default function ChatArea({ card, groups, groupName, allConversations, to
         setShowQuickReplies(false);
     };
 
-    const handleCloseConversation = () => {
-        toast.info('Cerrando conversación...');
-        setShowMoreMenu(false);
+    const handleCloseConversation = async () => {
+        if (!card?.id || !card?.groupId || !currentUser?.uid || !activeEntity) return;
+        
+        const isConfirmed = window.confirm("¿Estás seguro de que deseas eliminar permanentemente esta conversación? Esta acción no se puede deshacer.");
+        if (!isConfirmed) return;
+
+        try {
+            const tenantPath = `users/${currentUser.uid}/entities/${activeEntity}`;
+            const cardRef = doc(db, tenantPath, 'kanban-groups', card.groupId, 'cards', card.id);
+            await import('firebase/firestore').then(mod => mod.deleteDoc(cardRef));
+            toast.success('Conversación eliminada correctamente.');
+            setShowMoreMenu(false);
+            // Optionally, unselect active conversation 
+            // logic.onClose() might do something, but since the parent handles activeConversationId, resetting it is handled by the cards array updating.
+        } catch (error) {
+            console.error("Error deleting conversation: ", error);
+            toast.error('Hubo un error al intentar eliminar la conversación.');
+        }
     };
 
     const handleBlockContact = () => {
@@ -351,9 +380,16 @@ export default function ChatArea({ card, groups, groupName, allConversations, to
                                                     msg.status === 'sending' ? (
                                                         <Loader2 size={10} className="ml-1 animate-spin text-neutral-500" />
                                                     ) : msg.status === 'failed' ? (
-                                                        <div className="ml-2 flex items-center gap-1 bg-red-500/10 text-red-500 px-1.5 py-0.5 rounded cursor-pointer hover:bg-red-500/20 transition-colors" onClick={() => logic.retryMessage?.(msg)}>
+                                                        <div 
+                                                            className="ml-2 flex items-center gap-1 bg-red-500/10 text-red-500 px-1.5 py-0.5 rounded cursor-pointer hover:bg-red-500/20 transition-colors border border-red-500/20" 
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                logic.retryMessage?.(msg);
+                                                            }}
+                                                            title={msg.error || 'Error desconocido'}
+                                                        >
                                                             <AlertCircle size={10} />
-                                                            <span>Error - Reintentar</span>
+                                                            <span className="text-[8px] font-black uppercase tracking-tighter">Error</span>
                                                             <RefreshCw size={10} className="ml-0.5" />
                                                         </div>
                                                     ) : (

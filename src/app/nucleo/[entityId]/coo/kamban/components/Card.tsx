@@ -79,7 +79,8 @@ const Card = ({ card, groupId, onClick, cardColor = 'bg-neutral-800', contacts =
   const handleDeleteCard = async () => {
     if (deleteConfirmation === 'delete') {
       try {
-        await deleteDoc(doc(db, `${getTenantPath()}/kamban-groups/${groupId}/cards`, card.id));
+        const cardRef = doc(db, `${getTenantPath()}/kanban-groups`, groupId, 'cards', card.id);
+        await deleteDoc(cardRef);
         handleCloseDeleteDialog();
       } catch (error) {
         console.error("Error deleting card: ", error);

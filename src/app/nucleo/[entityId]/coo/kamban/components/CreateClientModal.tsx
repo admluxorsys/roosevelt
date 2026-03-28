@@ -104,7 +104,7 @@ export function CreateClientModal({ isOpen, onClose, groups, initialGroupId }: C
             });
 
             // 2. Create kamban Card linked by ID
-            await addDoc(collection(db, `${getTenantPath()}/kamban-groups`, groupIdToUse, 'cards'), {
+            await addDoc(collection(db, `${getTenantPath()}/kanban-groups`, groupIdToUse, 'cards'), {
                 contactName: name,
                 contactNumber: fullPhone,
                 contactId: contactId, // LINK BY FIRESTORE ID

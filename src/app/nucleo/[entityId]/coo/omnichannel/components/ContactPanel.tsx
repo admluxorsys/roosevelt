@@ -1,7 +1,14 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { User, Phone, MapPin, Mail, Globe, Tag, Clock, Calendar, ChevronRight, FileText, CheckCircle, Link, Copy, Check, X } from 'lucide-react';
-import { useConversationLogic } from '../../whatsapp/components/ConversationModal/hooks/useConversationLogic';
-import { Button } from '@/components/ui/button';
+'use client';
+
+import React, { useState, useEffect, useRef } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { db, storage } from '@/lib/firebase';
+import { doc, onSnapshot, updateDoc, setDoc, runTransaction } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import {
+  List, Paperclip, Upload, FileText, Loader2, Check, ChevronDown, ExternalLink, Link, 
+  MessageCircle, Instagram, Facebook, Globe2
+} from 'lucide-react';
 import { toast } from 'sonner';
 
 interface ContactPanelProps {
@@ -9,424 +16,271 @@ interface ContactPanelProps {
     groups: any[];
 }
 
-export default function ContactPanel({ card, groups }: ContactPanelProps) {
-    const [activeTab, setActiveTab] = useState('details'); // details, past_chats, notes
-    const [copied, setCopied] = useState(false);
-    const [showLabelInput, setShowLabelInput] = useState(false);
-    const [showLabelDropdown, setShowLabelDropdown] = useState(false);
-    const [newLabelText, setNewLabelText] = useState('');
-    const labelContainerRef = useRef<HTMLDivElement>(null);
+// ─── Color options for badges ───────────────────────────────────────────────
+const BADGE_COLORS: Record<string, string> = {
+  green:  'bg-green-900/60 text-green-300 border border-green-700/40',
+  olive:  'bg-yellow-900/60 text-yellow-300 border border-yellow-700/40',
+  blue:   'bg-blue-900/60  text-blue-300  border border-blue-700/40',
+  purple: 'bg-purple-900/60 text-purple-300 border border-purple-700/40',
+  red:    'bg-red-900/60   text-red-300   border border-red-700/40',
+  gray:   'bg-neutral-800  text-neutral-300 border border-neutral-700',
+};
 
-    const PREDEFINED_LABELS = ['Sales', 'Support', 'Urgent'];
+const BADGE_OPTIONS = ['Nuevo Aplicante', 'En Proceso', 'Aprobado', 'Rechazado', 'Pendiente'];
 
-    useEffect(() => {
-        function handleClickOutside(event: MouseEvent) {
-            if (labelContainerRef.current && !labelContainerRef.current.contains(event.target as Node)) {
-                setShowLabelInput(false);
-                setShowLabelDropdown(false);
-                setNewLabelText('');
-            }
-        }
-        document.addEventListener("mousedown", handleClickOutside);
-        return () => {
-            document.removeEventListener("mousedown", handleClickOutside);
-        };
-    }, []);
-    
-    // Initialize logic just for operations like Notes
-    const logic = useConversationLogic({
-        isOpen: true,
-        onClose: () => {},
-        card,
-        groups
-    });
+// ─── Static document fields ──────────────────────────────────────────────────
+const DOC_FIELDS = [
+  { key: 'photo',            label: 'PHOTO' },
+  { key: 'excel',            label: 'EXCEL' },
+  { key: 'pasaporte',        label: 'PASAPORTE' },
+  { key: 'ds160Estudiar',    label: 'DS 160 – ESTUDIAR' },
+  { key: 'ds160',            label: 'DS 160' },
+  { key: 'bankStatement',    label: 'BANK STATEMENT' },
+  { key: 'tarifaSevis',      label: 'TARIFA SEVIS' },
+  { key: 'reciboCita',       label: 'RECIBO CITA' },
+  { key: 'instrucciones',    label: 'INSTRUCCIONES' },
+  { key: 'i20CartaAceptacion', label: 'I20 y Carta de Aceptación' },
+  { key: 'visaTurista',      label: 'VISA TURISTA' },
+  { key: 'edicionI20',       label: 'Edicion I20' },
+  { key: 'idPatrocinador',   label: 'ID del Patrocinador' },
+];
 
-    const contactName = card?.contactName || card?.contactNumber || 'Desconocido';
-    const groupName = groups.find(g => g.id === card?.groupId)?.name;
-    const assignee = logic.liveCardData?.assignedTo || card?.assignedTo || 'Unassigned';
-
-    // Simulated list of agents (could be fetched from a 'users' collection later)
-    const agents = ['Sistema', 'Unassigned'];
-
-    return (
-        <div className="w-[320px] bg-[#0d0d0d] border-l border-neutral-900 flex flex-col h-full flex-shrink-0 overflow-y-auto">
-
-            {/* Contact Header */}
-            <div className="p-4 flex flex-col items-center justify-center border-b border-neutral-900 bg-neutral-900/10">
-                <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center font-bold text-white text-lg shadow-lg ring-4 ring-neutral-900 mb-2">
-                    {contactName.charAt(0).toUpperCase()}
-                </div>
-                {logic.isEditing ? (
-                    <input
-                        name="contactName"
-                        value={logic.contactInfo.contactName || ''}
-                        onChange={logic.handleInfoChange}
-                        placeholder="Nombre"
-                        className="bg-neutral-800 border border-neutral-700 rounded px-2 py-1 text-xs text-white text-center focus:outline-none focus:border-blue-500 mt-1"
-                    />
-                ) : (
-                    <h2 className="font-semibold text-white tracking-wide text-sm text-center">{contactName}</h2>
-                )}
-                
-                {logic.isEditing ? (
-                    <input
-                        name="email"
-                        value={logic.contactInfo.email || ''}
-                        onChange={logic.handleInfoChange}
-                        placeholder="Email"
-                        className="bg-neutral-800 border border-neutral-700 rounded px-2 py-1 text-[11px] text-neutral-300 text-center focus:outline-none focus:border-blue-500 mt-1"
-                    />
-                ) : (
-                    card?.email && <p className="text-neutral-500 text-[11px] mt-0.5">{card.email}</p>
-                )}
-
-                <div className="flex gap-1.5 mt-3">
-                    {logic.isEditing ? (
-                        <>
-                            <button 
-                                onClick={logic.handleInfoSave}
-                                className="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded text-[10px] font-bold transition-colors uppercase tracking-tight"
-                            >
-                                Save
-                            </button>
-                            <button 
-                                onClick={() => logic.setIsEditing(false)}
-                                className="px-3 py-1 bg-neutral-800 hover:bg-neutral-700 text-white rounded text-[10px] font-bold transition-colors ring-1 ring-inset ring-neutral-700/50 uppercase tracking-tight"
-                            >
-                                Cancel
-                            </button>
-                        </>
-                    ) : (
-                        <>
-                            <button 
-                                onClick={() => {
-                                    logic.setContactInfo({
-                                        contactName: card?.contactName || '',
-                                        email: card?.email || '',
-                                        contactNumber: card?.contactNumber || '',
-                                        country: card?.country || '',
-                                        source: card?.source || 'WhatsApp'
-                                    });
-                                    logic.setIsEditing(true);
-                                }}
-                                className="px-3 py-1 bg-neutral-800 hover:bg-neutral-700 text-white rounded text-[10px] font-bold transition-colors ring-1 ring-inset ring-neutral-700/50 uppercase tracking-tight"
-                            >
-                                Edit
-                            </button>
-                            <button className="px-3 py-1 bg-neutral-800 hover:bg-neutral-700 text-white rounded text-[10px] font-bold transition-colors ring-1 ring-inset ring-neutral-700/50 uppercase tracking-tight">Merge</button>
-                        </>
-                    )}
-                </div>
-            </div>
-
-            {/* Tabs */}
-            <div className="flex border-b border-neutral-900 px-1 sticky top-0 bg-[#0d0d0d] z-10">
-                <button
-                    onClick={() => setActiveTab('details')}
-                    className={`flex-1 py-2 text-[11px] font-bold uppercase tracking-wider transition-colors border-b-2 ${activeTab === 'details' ? 'border-blue-500 text-blue-400' : 'border-transparent text-neutral-500 hover:text-neutral-400'}`}
-                >
-                    Details
-                </button>
-                <button
-                    onClick={() => setActiveTab('past_chats')}
-                    className={`flex-1 py-2 text-[11px] font-bold uppercase tracking-wider transition-colors border-b-2 ${activeTab === 'past_chats' ? 'border-blue-500 text-blue-400' : 'border-transparent text-neutral-500 hover:text-neutral-400'}`}
-                >
-                    History
-                </button>
-                <button
-                    onClick={() => setActiveTab('notes')}
-                    className={`flex-1 py-2 text-[11px] font-bold uppercase tracking-wider transition-colors border-b-2 ${activeTab === 'notes' ? 'border-blue-500 text-blue-400' : 'border-transparent text-neutral-500 hover:text-neutral-400'}`}
-                >
-                    Notes
-                </button>
-            </div>
-
-            {/* Content Area */}
-            <div className="flex-1 p-5">
-
-                {activeTab === 'details' && (
-                    <div className="space-y-4">
-
-                        {/* Application Link Block */}
-                        <div className="p-2.5 bg-neutral-900 border border-neutral-800 rounded-lg space-y-2">
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                    <div className="w-6 h-6 rounded bg-neutral-800 flex items-center justify-center text-neutral-400">
-                                        <Link size={13} />
-                                    </div>
-                                    <span className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest">Link de Aplicación</span>
-                                </div>
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-6 w-6 p-0 text-neutral-500 hover:text-white hover:bg-neutral-800 transition-colors"
-                                    onClick={async () => {
-                                        let finalId = logic.crmId;
-                                        if (!finalId || (typeof finalId === 'string' && finalId.startsWith('temp-'))) {
-                                            try {
-                                                const savedId = await logic.handleSaveNote() as unknown as string; // Reusing logic to ensure ID exists
-                                                if (savedId) finalId = savedId;
-                                            } catch (e) {
-                                                finalId = (card?.contactNumber || logic.liveCardData?.contactNumber || '').replace(/[^\d]/g, '');
-                                            }
-                                        }
-                                        if (finalId) {
-                                            const link = `${window.location.origin}/application/${finalId}`;
-                                            navigator.clipboard.writeText(link);
-                                            setCopied(true);
-                                            setTimeout(() => setCopied(false), 2000);
-                                            toast.success("Link copiado al portapapeles");
-                                        } else {
-                                            toast.error("No se pudo generar el link.");
-                                        }
-                                    }}
-                                >
-                                    {copied ? <Check size={12} className="text-green-500" /> : <Copy size={12} />}
-                                </Button>
-                            </div>
-                            <p className="text-[10px] text-neutral-600 leading-tight">
-                                Envía este link al cliente para sincronizar datos automáticamente.
-                            </p>
-                        </div>
-
-                        {/* Status */}
-                        <div>
-                            <h3 className="text-[10px] font-bold text-neutral-600 uppercase tracking-widest mb-2">Attributes</h3>
-                            <div className="space-y-2">
-                                <div className="flex justify-between items-center text-[12px]">
-                                    <span className="text-neutral-500 flex items-center font-medium"><CheckCircle size={12} className="mr-2 opacity-50" /> Status</span>
-                                    <span className="text-right bg-blue-500/10 text-blue-400 font-bold px-1.5 py-0 rounded text-[10px] uppercase ring-1 ring-inset ring-blue-500/20">{groupName || 'Abierto'}</span>
-                                </div>
-                                <div className="flex justify-between items-center text-[12px]">
-                                    <span className="text-neutral-500 flex items-center font-medium"><User size={12} className="mr-2 opacity-50" /> Assignee</span>
-                                    <select 
-                                        className="bg-neutral-800 text-neutral-300 font-bold px-1.5 py-0 text-[11px] rounded cursor-pointer focus:outline-none ring-1 ring-inset ring-neutral-700/50"
-                                        value={assignee}
-                                        onChange={(e) => logic.handleUpdateAssignee?.(e.target.value)}
-                                    >
-                                        {agents.map(a => <option key={a} value={a}>{a}</option>)}
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Custom Attributes */}
-                        <div className="pt-2">
-                            <h3 className="text-xs font-bold text-neutral-500 uppercase tracking-widest mb-3">Contact Details</h3>
-                            <div className="space-y-3">
-                                <div className="flex items-center text-sm">
-                                    <Phone size={14} className="text-neutral-500 mr-3" />
-                                    {logic.isEditing ? (
-                                        <input
-                                            name="contactNumber"
-                                            value={logic.contactInfo.contactNumber || ''}
-                                            onChange={logic.handleInfoChange}
-                                            className="bg-neutral-800 border border-neutral-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500 flex-1 ml-0"
-                                        />
-                                    ) : (
-                                        <span className="text-white font-medium">{card?.contactNumber || 'No especificado'}</span>
-                                    )}
-                                </div>
-                                <div className="flex items-center text-sm">
-                                    <Globe size={14} className="text-neutral-500 mr-3" />
-                                    {logic.isEditing ? (
-                                        <input
-                                            name="country"
-                                            value={logic.contactInfo.country || ''}
-                                            onChange={logic.handleInfoChange}
-                                            className="bg-neutral-800 border border-neutral-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500 flex-1 ml-0"
-                                        />
-                                    ) : (
-                                        <span className="text-white font-medium">{card?.country || 'Desconocido'}</span>
-                                    )}
-                                </div>
-                                <div className="flex items-center text-sm">
-                                    <Clock size={14} className="text-neutral-500 mr-3" />
-                                    {logic.isEditing ? (
-                                        <input
-                                            name="source"
-                                            value={logic.contactInfo.source || ''}
-                                            onChange={logic.handleInfoChange}
-                                            className="bg-neutral-800 border border-neutral-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500 flex-1 ml-0"
-                                        />
-                                    ) : (
-                                        <span className="text-white font-medium">Activo {card?.source || 'WhatsApp'}</span>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Labels */}
-                        <div className="pt-2 relative" ref={labelContainerRef}>
-                            <h3 className="text-xs font-bold text-neutral-500 uppercase tracking-widest mb-3 flex items-center justify-between">
-                                Labels
-                                <button 
-                                    onClick={() => {
-                                        setShowLabelDropdown(!showLabelDropdown);
-                                        setShowLabelInput(false);
-                                    }}
-                                    className="text-blue-500 hover:text-blue-400 text-2xl font-light leading-none mb-1 transition-colors"
-                                >
-                                    +
-                                </button>
-                            </h3>
-                            
-                            {showLabelDropdown && (
-                                <div className="absolute right-0 top-8 w-40 bg-[#111] border border-neutral-800 rounded-md shadow-2xl z-20 py-1 overflow-hidden">
-                                    {PREDEFINED_LABELS.filter(l => !logic.liveCardData?.labels?.includes(l)).map(label => {
-                                        const colors = ['bg-red-500', 'bg-blue-500', 'bg-green-500', 'bg-yellow-500', 'bg-purple-500', 'bg-pink-500', 'bg-indigo-500', 'bg-teal-500'];
-                                        const colorClass = colors[label.length % colors.length];
-                                        return (
-                                            <button
-                                                key={`dropdown-${label}`}
-                                                onClick={() => {
-                                                    logic.handleAddLabel?.(label);
-                                                    setShowLabelDropdown(false);
-                                                }}
-                                                className="w-full text-left px-3 py-1.5 text-xs text-neutral-300 hover:bg-neutral-800 transition-colors flex items-center gap-2"
-                                            >
-                                                <span className={`w-1.5 h-1.5 rounded-full ${colorClass}`}></span>
-                                                {label}
-                                            </button>
-                                        );
-                                    })}
-                                    {PREDEFINED_LABELS.filter(l => !logic.liveCardData?.labels?.includes(l)).length > 0 && (
-                                        <div className="h-px bg-neutral-800/50 my-1"></div>
-                                    )}
-                                    <button
-                                        onClick={() => {
-                                            setShowLabelDropdown(false);
-                                            setShowLabelInput(true);
-                                        }}
-                                        className="w-full text-left px-3 py-1.5 text-xs text-blue-400 hover:bg-neutral-800 transition-colors font-medium"
-                                    >
-                                        + Nueva etiqueta
-                                    </button>
-                                </div>
-                            )}
-
-                            {showLabelInput && (
-                                <div className="mb-3 flex gap-2">
-                                    <input 
-                                        autoFocus
-                                        type="text" 
-                                        value={newLabelText}
-                                        onChange={(e) => setNewLabelText(e.target.value)}
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter' && newLabelText.trim()) {
-                                                logic.handleAddLabel?.(newLabelText.trim());
-                                                setNewLabelText('');
-                                                setShowLabelInput(false);
-                                            } else if (e.key === 'Escape') {
-                                                setNewLabelText('');
-                                                setShowLabelInput(false);
-                                            }
-                                        }}
-                                        placeholder="Nueva etiqueta..."
-                                        className="flex-1 bg-neutral-900 border border-neutral-800 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500"
-                                    />
-                                    <button 
-                                        onClick={() => {
-                                            if (newLabelText.trim()) {
-                                                logic.handleAddLabel?.(newLabelText.trim());
-                                            }
-                                            setNewLabelText('');
-                                            setShowLabelInput(false);
-                                        }}
-                                        className="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded text-xs font-medium"
-                                    >
-                                        Add
-                                    </button>
-                                </div>
-                            )}
-
-                            <div className="flex flex-wrap gap-2">
-                                {(logic.liveCardData?.labels || []).map((label: string, idx: number) => {
-                                    // Deterministic color logic based on string length/char to make it look colorful but consistent
-                                    const colors = [
-                                        'bg-red-500', 'bg-blue-500', 'bg-green-500', 'bg-yellow-500', 
-                                        'bg-purple-500', 'bg-pink-500', 'bg-indigo-500', 'bg-teal-500'
-                                    ];
-                                    const colorClass = colors[label.length % colors.length];
-
-                                    return (
-                                        <span 
-                                            key={`${label}-${idx}`}
-                                            className={`group relative ${colorClass}/20 border ${colorClass.replace('bg-', 'border-')}/30 ${colorClass.replace('bg-', 'text-')} text-xs px-2 py-1 rounded-md font-medium flex items-center ring-1 ring-inset ${colorClass.replace('bg-', 'ring-')}/10 hover:${colorClass}/30 transition-colors`}
-                                        >
-                                            <span className={`w-1.5 h-1.5 rounded-full ${colorClass} mr-1.5`}></span>
-                                            {label}
-                                            <button 
-                                                onClick={() => logic.handleRemoveLabel?.(label)}
-                                                className={`ml-1.5 opacity-0 group-hover:opacity-100 p-0.5 rounded-full hover:${colorClass}/40 transition-opacity`}
-                                                title="Eliminar etiqueta"
-                                            >
-                                                <X size={10} className="stroke-[3]" />
-                                            </button>
-                                        </span>
-                                    );
-                                })}
-                                {(!logic.liveCardData?.labels || logic.liveCardData.labels.length === 0) && !showLabelInput && (
-                                    <span className="text-neutral-600 text-[10px] italic">Sin etiquetas</span>
-                                )}
-                            </div>
-                        </div>
-
-                    </div>
-                )}
-
-                {activeTab === 'past_chats' && (
-                    <div className="space-y-4">
-                        <div className="text-sm text-neutral-400 pb-2">Activity history for this conversation.</div>
-                        <div className="space-y-3">
-                            {(logic.liveCardData?.history || []).slice().reverse().map((event: any) => (
-                                <div key={event.id} className="p-3 border border-neutral-800 bg-neutral-900 rounded-lg">
-                                    <div className="flex justify-between text-[10px] mb-1">
-                                        <span className="font-bold text-blue-400 uppercase tracking-tighter">{event.type}</span>
-                                        <span className="text-neutral-500">{event.timestamp?.toDate ? event.timestamp.toDate().toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}</span>
-                                    </div>
-                                    <p className="text-[13px] text-neutral-300">{event.content}</p>
-                                    <div className="text-[10px] text-neutral-600 mt-1.5">Por: {event.author}</div>
-                                </div>
-                            ))}
-                            {(!logic.liveCardData?.history || logic.liveCardData.history.length === 0) && (
-                                <div className="text-center py-10 text-neutral-600 italic text-sm">No activity recorded yet.</div>
-                            )}
-                        </div>
-                    </div>
-                )}
-
-                {activeTab === 'notes' && (
-                    <div className="flex flex-col h-full">
-                        <div className="flex-1 overflow-y-auto mb-4 space-y-2">
-                            {(logic.liveCardData?.notes || []).map((note: any) => (
-                                <div key={note.id} className="p-3 bg-neutral-900 border border-neutral-800 rounded-md">
-                                    <p className="text-xs text-white mb-1.5 whitespace-pre-wrap">{note.text}</p>
-                                    <div className="flex justify-between items-center text-[10px] text-neutral-500">
-                                        <span>{note.timestamp?.toDate ? note.timestamp.toDate().toLocaleDateString() : ''}</span>
-                                        <span>{note.author}</span>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                        <textarea
-                            className="w-full h-24 bg-neutral-900 border border-neutral-800 rounded-md p-3 text-sm text-white placeholder-neutral-600 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none transition-shadow"
-                            placeholder="Add a private note..."
-                            value={logic.newNote}
-                            onChange={(e) => logic.setNewNote(e.target.value)}
-                        ></textarea>
-                        <button 
-                            onClick={logic.handleSaveNote}
-                            disabled={!logic.newNote.trim()}
-                            className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium py-2 rounded-md mt-3 transition-colors"
-                        >
-                            Save Note
-                        </button>
-                    </div>
-                )}
-
-            </div>
+function BadgeSelect({
+  value, options, color, onChange,
+}: { value: string; options: string[]; color: string; onChange: (v: string) => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded text-[11px] font-semibold ${BADGE_COLORS[color]} cursor-pointer hover:opacity-80 transition-opacity`}
+      >
+        {value || 'Sin valor'}
+        <ChevronDown size={10} />
+      </button>
+      {open && (
+        <div className="absolute top-full mt-1 left-0 z-50 bg-[#111] border border-white/10 rounded-lg shadow-2xl overflow-hidden min-w-[160px]">
+          {options.map(opt => (
+            <button
+              key={opt}
+              onClick={() => { onChange(opt); setOpen(false); }}
+              className={`w-full text-left px-3 py-2 text-[12px] hover:bg-white/5 transition-colors flex items-center justify-between ${value === opt ? 'text-white' : 'text-neutral-400'}`}
+            >
+              {opt}
+              {value === opt && <Check size={11} className="text-emerald-400" />}
+            </button>
+          ))}
         </div>
+      )}
+    </div>
+  );
+}
+
+function FileRow({
+  label, fieldKey, cardId, groupId, url,
+}: { label: string; fieldKey: string; cardId: string; groupId: string; url?: string }) {
+  const { currentUser, activeEntity } = useAuth();
+  const getTenantPath = () => {
+    if (!currentUser?.uid || !activeEntity) return '';
+    return `users/${currentUser.uid}/entities/${activeEntity}`;
+  };
+  const [uploading, setUploading] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !cardId || !groupId) return;
+    setUploading(true);
+    try {
+      const storageRef = ref(storage, `cards/${cardId}/${fieldKey}/${file.name}`);
+      await uploadBytes(storageRef, file);
+      const downloadURL = await getDownloadURL(storageRef);
+      await updateDoc(doc(db, `${getTenantPath()}/kanban-groups`, groupId, 'cards', cardId), {
+        [`documents.${fieldKey}`]: { url: downloadURL, name: file.name },
+      });
+      toast.success(`${label} subido`);
+    } catch {
+      toast.error('Error al subir archivo');
+    } finally {
+      setUploading(false);
+      if (inputRef.current) inputRef.current.value = '';
+    }
+  };
+
+  return (
+    <div className="flex items-center group px-4 py-2 hover:bg-white/[0.03] transition-colors rounded-lg gap-3 min-h-[36px]">
+      <Paperclip size={14} className="text-neutral-600 flex-shrink-0" />
+      <span className="w-40 text-[12px] text-neutral-500 truncate flex-shrink-0">{label}</span>
+      <div className="flex-1 flex items-center justify-end gap-2">
+        {url ? (
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 px-2.5 py-0.5 bg-neutral-800 border border-neutral-700 rounded text-[11px] text-neutral-200 hover:bg-neutral-700 transition-colors max-w-[120px] truncate"
+          >
+            <FileText size={10} />
+            <span className="truncate">{label.slice(0, 15)}...</span>
+            <ExternalLink size={9} className="flex-shrink-0" />
+          </a>
+        ) : (
+          <span className="text-[12px] text-neutral-700 italic">Vacío</span>
+        )}
+        <button
+          onClick={() => inputRef.current?.click()}
+          className="opacity-0 group-hover:opacity-100 transition-opacity ml-2 p-1 rounded hover:bg-white/5 text-neutral-600 hover:text-neutral-300"
+        >
+          {uploading ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
+        </button>
+        <input ref={inputRef} type="file" className="hidden" onChange={handleFile} />
+      </div>
+    </div>
+  );
+}
+
+export default function ContactPanel({ card, groups }: ContactPanelProps) {
+  const { currentUser, activeEntity } = useAuth();
+  const getTenantPath = () => {
+    if (!currentUser?.uid || !activeEntity) return '';
+    return `users/${currentUser.uid}/entities/${activeEntity}`;
+  };
+
+  const [liveData, setLiveData]           = useState<any>(null);
+  const [contactData, setContactData]     = useState<any>(null);
+  const [editingName, setEditingName]     = useState(false);
+  const [nameValue, setNameValue]         = useState('');
+
+  const [currentId, setCurrentId] = useState<string | null>(null);
+  const [currentGroupId, setCurrentGroupId] = useState<string | null>(null);
+
+  useEffect(() => {
+     if (card?.id) setCurrentId(card.id);
+     if (card?.groupId) setCurrentGroupId(card.groupId);
+  }, [card]);
+
+  useEffect(() => {
+    if (!currentId || !currentGroupId) return;
+    return onSnapshot(
+      doc(db, `${getTenantPath()}/kanban-groups`, currentGroupId, 'cards', currentId),
+      snap => { if (snap.exists()) setLiveData({ id: snap.id, ...snap.data() }); }
     );
+  }, [currentId, currentGroupId]);
+
+  useEffect(() => {
+    const crmId = liveData?.crmId || card?.crmId;
+    if (!crmId) { setContactData(null); return; }
+    return onSnapshot(
+      doc(db, `${getTenantPath()}/contacts`, crmId),
+      snap => { if (snap.exists()) setContactData({ id: snap.id, ...snap.data() }); }
+    );
+  }, [liveData?.crmId, card?.crmId]);
+
+  useEffect(() => {
+    const base = liveData || card || {};
+    setNameValue(base.contactName || '');
+  }, [liveData?.id, card?.id]);
+
+  const update = async (fields: Record<string, any>) => {
+    if (!currentId || !currentGroupId) return;
+    try {
+      await updateDoc(doc(db, `${getTenantPath()}/kanban-groups`, currentGroupId, 'cards', currentId), fields);
+    } catch { toast.error('Error al guardar'); }
+  };
+
+  useEffect(() => {
+    if (!currentId || !currentGroupId || !liveData || liveData.crmId) return;
+    const generate = async () => {
+      try {
+        const counterRef = doc(db, `${getTenantPath()}/system_metadata`, 'counters');
+        let numericId = '';
+        await runTransaction(db, async (tx) => {
+          const snap = await tx.get(counterRef);
+          const next = (snap.exists() ? (snap.data().crmIdCount || 0) : 0) + 1;
+          tx.set(counterRef, { crmIdCount: next }, { merge: true });
+          numericId = String(next).padStart(10, '0');
+        });
+        await updateDoc(doc(db, `${getTenantPath()}/kanban-groups`, currentGroupId, 'cards', currentId), { crmId: numericId });
+        await setDoc(doc(db, `${getTenantPath()}/contacts`, numericId), {
+          crmId: numericId,
+          contactName: liveData.contactName || '',
+          contactNumber: liveData.contactNumber || '',
+          kanbanGroupId: currentGroupId,
+          kanbanCardId: currentId,
+          createdAt: new Date().toISOString(),
+        }, { merge: true });
+      } catch (err) { console.error('Error ID:', err); }
+    };
+    generate();
+  }, [liveData, currentId, currentGroupId]);
+
+  const handleCopyLink = () => {
+    const crmId = liveData?.crmId || card?.crmId;
+    if (!crmId) return;
+    const link = `${window.location.origin}/application/${crmId}`;
+    navigator.clipboard.writeText(link);
+    toast.success('Link copiado');
+  };
+
+  if (!card) {
+      return (
+          <div className="w-[420px] bg-black border-l border-white/[0.07] flex flex-col h-full flex-shrink-0 items-center justify-center">
+              <span className="text-neutral-600 text-sm">Selecciona una conversación</span>
+          </div>
+      );
+  }
+
+  const base = liveData || card || {};
+  const data = {
+    ...base,
+    contactName: base.contactName || (contactData?.firstName ? `${contactData.firstName} ${contactData.lastName || ''}` : ''),
+  };
+
+  return (
+    <div className="w-[420px] bg-black border-l border-white/[0.07] flex flex-col h-full flex-shrink-0">
+      <div className="flex-1 overflow-y-auto px-6 py-8">
+        <div className="flex items-center gap-3 flex-wrap mb-8">
+          {(() => {
+            const c = (data.channel || data.source || '').toLowerCase();
+            if (c.includes('instagram')) return <Instagram size={22} className="text-pink-500" />;
+            if (c.includes('messenger') || c.includes('facebook')) return <Facebook size={22} className="text-blue-600" />;
+            if (c.includes('web')) return <Globe2 size={22} className="text-cyan-400" />;
+            return <MessageCircle size={22} className="text-emerald-500" />;
+          })()}
+
+          {editingName ? (
+            <input autoFocus value={nameValue} onChange={e => setNameValue(e.target.value)}
+              onBlur={() => { setEditingName(false); update({ contactName: nameValue }); }}
+              className="bg-transparent text-white text-[24px] font-bold outline-none border-b border-white/20 flex-1" />
+          ) : (
+            <h1 onClick={() => setEditingName(true)} className="text-[24px] font-bold text-white cursor-text hover:bg-white/[0.03] rounded px-1 -mx-1 truncate max-w-[200px]">
+              {data.contactName || <span className="text-neutral-600 italic">Sin nombre</span>}
+            </h1>
+          )}
+
+          {data.crmId ? (
+            <button onClick={handleCopyLink} className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white/5 border border-white/10 text-neutral-500 hover:text-neutral-300 text-[10px] font-mono ml-auto">
+              <Link size={10} /> #{data.crmId}
+            </button>
+          ) : (
+            <span className="text-[10px] text-neutral-700 font-mono ml-auto">Generando...</span>
+          )}
+        </div>
+
+        <div className="space-y-0.5">
+          <div className="flex items-center px-4 py-2 hover:bg-white/[0.03] rounded-lg gap-3">
+            <List size={14} className="text-neutral-600" />
+            <span className="w-32 text-[12px] text-neutral-500">Status</span>
+            <BadgeSelect value={data.status || 'Nuevo Aplicante'} options={BADGE_OPTIONS} color="green" onChange={v => update({ status: v })} />
+          </div>
+          
+          <div className="py-3"><div className="h-[1px] bg-white/[0.05]" /></div>
+          
+          {DOC_FIELDS.map(field => (
+            <FileRow key={field.key} label={field.label} fieldKey={field.key} cardId={data.id} groupId={data.groupId} url={data.documents?.[field.key]?.url} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 }
 

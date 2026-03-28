@@ -204,12 +204,12 @@ export default function ConversationModal({
     if (!isOpen || !card?.id || !card?.groupId || !liveData || liveData.crmId) return;
     const generate = async () => {
       try {
-        const counterRef = doc(db, 'counters', 'crmId');
+        const counterRef = doc(db, `${getTenantPath()}/system_metadata`, 'counters');
         let numericId = '';
         await runTransaction(db, async (tx) => {
           const snap = await tx.get(counterRef);
-          const next = (snap.exists() ? (snap.data().count || 0) : 0) + 1;
-          tx.set(counterRef, { count: next }, { merge: true });
+          const next = (snap.exists() ? (snap.data().crmIdCount || 0) : 0) + 1;
+          tx.set(counterRef, { crmIdCount: next }, { merge: true });
           numericId = String(next).padStart(10, '0');
         });
         await updateDoc(doc(db, `${getTenantPath()}/kanban-groups`, card.groupId, 'cards', card.id), { crmId: numericId });

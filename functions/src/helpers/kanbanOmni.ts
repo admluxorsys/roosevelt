@@ -44,70 +44,64 @@ export async function handleKanbanUpdateOmni(message: UnifiedMessage, userId?: s
         platform_metadata
     } = message;
 
-    // --- 1. SEARCH FOR EXISTING CARD (outside transaction, with index-safe fallbacks) ---
-    let snapshot: admin.firestore.QuerySnapshot | null = null;
-
-    // Strategy A: By platform_ids.{platform} (works for all platforms)
-    try {
-        const s = await db.collectionGroup('cards')
-            .where(`platform_ids.${source_platform}`, '==', external_id)
-            .limit(1)
-            .get();
-        if (!s.empty) snapshot = s;
-    } catch (e: any) {
-        functions.logger.warn(`[Omni] platform_ids index not ready for ${source_platform}, using fallback. (${e.code})`);
-    }
-
-    // Strategy B: Legacy contactNumber match (keeps backward compat with old WhatsApp cards)
-    if (!snapshot) {
-        try {
-            const s = await db.collectionGroup('cards')
-                .where('contactNumber', '==', external_id)
-                .limit(1)
-                .get();
-            if (!s.empty) snapshot = s;
-        } catch (e: any) {
-            functions.logger.warn(`[Omni] contactNumber index not ready (${e.code})`);
-        }
-    }
-
-    // Strategy C: contactNumberClean fallback
-    if (!snapshot && (source_platform === 'whatsapp' || source_platform === 'sms')) {
-        const cleanNumber = external_id.replace(/\+/g, '');
-        try {
-            const s = await db.collectionGroup('cards')
-                .where('contactNumberClean', '==', cleanNumber)
-                .limit(1)
-                .get();
-            if (!s.empty) snapshot = s;
-        } catch (e: any) {
-            functions.logger.warn(`[Omni] contactNumberClean index not ready (${e.code})`);
-        }
-    }
-
-    // --- 2. Pre-query ALL groups OUTSIDE the transaction (no orderBy = no index needed) ---
+    // --- 1. RESOLVE GROUPS PATH ---
     const groupsPath = (userId && entityId) 
         ? `users/${userId}/entities/${entityId}/kanban-groups` 
         : 'kanban-groups';
 
     const groupsRef = db.collection(groupsPath);
     const allGroupsSnap = await groupsRef.get();
+    let inboxGroupId: string;
 
-    if (allGroupsSnap.empty) {
-        functions.logger.error(`[Omni] CRITICAL: No kanban-groups found in path: ${groupsPath}`);
-        // If it's a tenant vault and it's empty, we might need to create a default group or throw
-        throw new Error('No Kanban groups found for this entity. Please create at least one group.');
+    // --- 2. SEARCH FOR EXISTING CARD (Iterative, no index required) ---
+    let snapshot: any = null;
+    
+    if (!allGroupsSnap.empty) {
+        for (const groupDoc of allGroupsSnap.docs) {
+            const cardSnap = await groupDoc.ref.collection('cards')
+                .where('external_id', '==', external_id)
+                .limit(1)
+                .get();
+            
+            if (!cardSnap.empty) {
+                snapshot = cardSnap;
+                break;
+            }
+            
+            // Fallback for legacy WhatsApp cards (contactNumber)
+            const legacySnap = await groupDoc.ref.collection('cards')
+                .where('contactNumber', '==', external_id)
+                .limit(1)
+                .get();
+            
+            if (!legacySnap.empty) {
+                snapshot = legacySnap;
+                break;
+            }
+        }
     }
 
-    // Find "Bandeja de Entrada" case-insensitively. Fall back to first group.
-    const inboxGroupDoc = allGroupsSnap.docs.find(
-        g => (g.data().name || '').toLowerCase().includes('bandeja')
-    ) || allGroupsSnap.docs[0];
+    // --- 3. RESOLVE INBOX GROUP (Self-healing) ---
+    if (allGroupsSnap.empty) {
+        functions.logger.info(`[Omni] No kanban-groups found. Creating default 'Bandeja de Entrada' for path: ${groupsPath}`);
+        
+        const defaultGroupData = {
+            name: 'Bandeja de Entrada',
+            color: '#3B82F6', // Blue-500
+            order: 0,
+            createdAt: admin.firestore.FieldValue.serverTimestamp()
+        };
+        
+        const newGroupRef = await groupsRef.add(defaultGroupData);
+        const newGroupSnap = await newGroupRef.get();
+        inboxGroupId = newGroupSnap.id;
+    } else {
+        const inboxGroupDoc = allGroupsSnap.docs.find(
+            g => (g.data().name || '').toLowerCase().includes('bandeja')
+        ) || allGroupsSnap.docs[0];
 
-    const inboxGroupId = inboxGroupDoc.id;
-    functions.logger.info(
-        `[Omni] Inbox group resolved for ${groupsPath}: id=${inboxGroupId} name="${inboxGroupDoc.data().name}"`
-    );
+        inboxGroupId = inboxGroupDoc.id;
+    }
 
     // --- 3. EXECUTE TRANSACTION (Update or Create) ---
     return db.runTransaction(async (transaction) => {
@@ -120,7 +114,7 @@ export async function handleKanbanUpdateOmni(message: UnifiedMessage, userId?: s
             functions.logger.info(`[Omni] Updating existing card for ${source_platform}:${external_id}`);
 
             const updatePayload: any = {
-                lastMessage: message_text,
+                lastMessage: message_text || (message_type === 'image' ? '📷 Imagen' : message_type === 'video' ? '🎥 Video' : message_type === 'audio' ? '🎵 Audio' : 'Mensaje'),
                 updatedAt: admin.firestore.FieldValue.serverTimestamp(),
                 last_interaction_source: source_platform,
                 last_interaction_type: message_type,
@@ -145,7 +139,7 @@ export async function handleKanbanUpdateOmni(message: UnifiedMessage, userId?: s
                 media_url: message.media_url || null
             });
 
-            updatePayload.unreadCount = admin.firestore.FieldValue.increment(1);
+            // unreadCount already incremented in initial payload. Removed redundant line.
 
             transaction.update(cardRef, updatePayload);
 

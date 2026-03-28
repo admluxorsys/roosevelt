@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.migrateCards = exports.moveCard = exports.googleFormsWebhook = exports.tiktokWebhook = exports.webchatWebhook = exports.xWebhook = exports.telegramWebhook = exports.metaWebhook = exports.whatsappWebhook = void 0;
+exports.migrateCards = exports.moveCard = exports.baileysWebhook = exports.googleFormsWebhook = exports.tiktokWebhook = exports.webchatWebhook = exports.xWebhook = exports.telegramWebhook = exports.metaWebhook = exports.whatsappWebhook = void 0;
 const admin = require("firebase-admin");
 if (!admin.apps.length) {
     admin.initializeApp();
@@ -19,6 +19,8 @@ var tiktok_1 = require("./webhooks/tiktok");
 Object.defineProperty(exports, "tiktokWebhook", { enumerable: true, get: function () { return tiktok_1.tiktokWebhook; } });
 var googleForms_1 = require("./webhooks/googleForms");
 Object.defineProperty(exports, "googleFormsWebhook", { enumerable: true, get: function () { return googleForms_1.googleFormsWebhook; } });
+var baileys_1 = require("./webhooks/baileys");
+Object.defineProperty(exports, "baileysWebhook", { enumerable: true, get: function () { return baileys_1.baileysWebhook; } });
 var kanbanOperations_1 = require("./helpers/kanbanOperations");
 Object.defineProperty(exports, "moveCard", { enumerable: true, get: function () { return kanbanOperations_1.moveCard; } });
 var migrateCards_1 = require("./helpers/migrateCards");

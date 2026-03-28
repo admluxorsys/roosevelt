@@ -78,26 +78,30 @@ export const metaWebhook = functions.https.onRequest(async (req: functions.https
                                 const webhookEvent = change.value;
                                 const phoneNumberId = webhookEvent.metadata?.phone_number_id;
                                 
-                                functions.logger.info(`Received ${platform} message from ${phoneNumberId}`, webhookEvent);
+                                // --- TENANT RESOLUTION ---
+                                let userId = req.query['u'] as string;
+                                let entityId = req.query['e'] as string;
                                 
-                                // Resolve Tenant by Phone Number ID (Collection Group Query to respect Rule 4)
-                                const integrationsSnap = await admin.firestore()
-                                    .collectionGroup('integrations')
-                                    .where('phoneNumberId', '==', phoneNumberId)
-                                    .limit(1)
-                                    .get();
-                                
-                                if (integrationsSnap.empty) {
-                                    functions.logger.error(`[WhatsApp Webhook] No isolated integration found for ${phoneNumberId}.`);
-                                    continue;
+                                if (!userId || !entityId) {
+                                    functions.logger.info(`[WhatsApp Webhook] No query params found. Falling back to collectionGroup search for ${phoneNumberId}`);
+                                    const integrationsSnap = await admin.firestore()
+                                        .collectionGroup('integrations')
+                                        .where('phoneNumberId', '==', phoneNumberId)
+                                        .limit(1)
+                                        .get();
+                                    
+                                    if (integrationsSnap.empty) {
+                                        functions.logger.error(`[WhatsApp Webhook] No isolated integration found for ${phoneNumberId}.`);
+                                        continue;
+                                    }
+
+                                    const integrationDoc = integrationsSnap.docs[0];
+                                    const pathParts = integrationDoc.ref.path.split('/');
+                                    userId = pathParts[1];
+                                    entityId = pathParts[3];
                                 }
 
-                                const integrationDoc = integrationsSnap.docs[0];
-                                const pathParts = integrationDoc.ref.path.split('/');
-                                const userId = pathParts[1]; // users/{userId}/entities/{entityId}/...
-                                const entityId = pathParts[3]; 
-
-                                // const { userId, entityId } = tenant; // Old way replaced by path parsing
+                                functions.logger.info(`[WhatsApp Webhook] Processing for Tenant: ${userId}/${entityId}`);
                                 
                                 // Normalize and process
                                 const contactName = webhookEvent.contacts?.[0]?.profile?.name || 'Cliente WhatsApp';

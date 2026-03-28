@@ -52,7 +52,7 @@ export default function RootLayout({
           <AuthProvider>
             <SidebarProvider>
               {children}
-              {/* <Toaster /> */}
+              <Toaster position="top-right" richColors theme="dark" />
             </SidebarProvider>
           </AuthProvider>
         </ThemeProvider>

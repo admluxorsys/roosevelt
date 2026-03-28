@@ -19,6 +19,8 @@ export function WhatsAppCloudAPIModal({ isOpen, onClose, activeIntegration }: Pr
     const [devMode, setDevMode] = useState(false);
     const [clickCount, setClickCount] = useState(0);
     const [isEditing, setIsEditing] = useState(false);
+    const [initialLoading, setInitialLoading] = useState(true);
+    const [updatedAt, setUpdatedAt] = useState<any>(null);
     
     // Step 1 State
     const [accountAction, setAccountAction] = useState<'new' | 'existing'>('new');
@@ -38,6 +40,7 @@ export function WhatsAppCloudAPIModal({ isOpen, onClose, activeIntegration }: Pr
     // Real-time listener for Config
     useEffect(() => {
         if (!isOpen || !currentUser || !activeEntity) return;
+        setInitialLoading(true);
 
         const publicRef = doc(db, `users/${currentUser.uid}/entities/${activeEntity}/integrations/whatsapp`);
         const internalRef = doc(db, `users/${currentUser.uid}/entities/${activeEntity}/integrations/whatsapp_internal`);
@@ -48,6 +51,7 @@ export function WhatsAppCloudAPIModal({ isOpen, onClose, activeIntegration }: Pr
                 const data = snap.data();
                 if (data.status === 'Connected') {
                     setStep(4);
+                    setUpdatedAt(data.updatedAt);
                     setWaConfig(prev => ({
                         ...prev,
                         displayPhoneNumber: data.displayPhoneNumber || '',
@@ -77,8 +81,11 @@ export function WhatsAppCloudAPIModal({ isOpen, onClose, activeIntegration }: Pr
                 // Si es modo dev y se guardó, mostrar éxito
                 if (data.status === 'Internal') {
                     setStep(4);
+                    setUpdatedAt(data.updatedAt);
                 }
             }
+            // Pequeño delay para evitar parpadeo si carga muy rápido
+            setTimeout(() => setInitialLoading(false), 500);
         });
 
         return () => {
@@ -104,8 +111,9 @@ export function WhatsAppCloudAPIModal({ isOpen, onClose, activeIntegration }: Pr
         const newCount = clickCount + 1;
         setClickCount(newCount);
         if (newCount === 5) {
-            setDevMode(true);
-            toast.success("Modo Desarrollador Activado");
+            setDevMode(!devMode);
+            setClickCount(0);
+            toast.success(devMode ? "Modo Desarrollador Desactivado" : "Modo Desarrollador Activado");
         }
     };
 
@@ -152,23 +160,30 @@ export function WhatsAppCloudAPIModal({ isOpen, onClose, activeIntegration }: Pr
             }, { merge: true });
 
             toast.dismiss();
-            toast.success("WhatsApp conectado correctamente.");
-            onClose();
+            toast.success("Configuración guardada correctamente.");
+            setStep(4);
+            setDevMode(false);
+            setIsEditing(false);
         } catch (error) {
             console.error(error);
             toast.error("Error al guardar.");
         }
     };
 
-    const handleDeleteConfig = async (isPublic: boolean = false) => {
+    const handleDeleteConfig = async () => {
         if (!currentUser || !activeEntity) return;
         if (!confirm("¿Seguro que quieres eliminar esta conexión? Esto desconectará WhatsApp.")) return;
 
-        toast.loading(isPublic ? "Desconectando WhatsApp..." : "Eliminando datos internos...");
+        toast.loading("Desconectando servicios...");
         try {
-            const path = isPublic ? 'whatsapp' : 'whatsapp_internal';
-            const configRef = doc(db, `users/${currentUser.uid}/entities/${activeEntity}/integrations/${path}`);
-            await deleteDoc(configRef);
+            // Borrar ambas posibles rutas para asegurar limpieza total
+            const publicRef = doc(db, `users/${currentUser.uid}/entities/${activeEntity}/integrations/whatsapp`);
+            const internalRef = doc(db, `users/${currentUser.uid}/entities/${activeEntity}/integrations/whatsapp_internal`);
+            
+            await Promise.all([
+                deleteDoc(publicRef),
+                deleteDoc(internalRef)
+            ]);
             
             // Reset local state
             setWaConfig({
@@ -180,9 +195,8 @@ export function WhatsAppCloudAPIModal({ isOpen, onClose, activeIntegration }: Pr
                 appId: '',
             });
             setStep(1);
-            if (!isPublic) {
-                setDevMode(false);
-            }
+            setDevMode(false);
+            setIsEditing(false);
 
             toast.dismiss();
             toast.success("Desconectado correctamente.");
@@ -282,7 +296,16 @@ export function WhatsAppCloudAPIModal({ isOpen, onClose, activeIntegration }: Pr
                             </div>
 
                             <AnimatePresence mode="wait">
-                                {devMode ? (
+                                {initialLoading ? (
+                                    <motion.div 
+                                        key="loading"
+                                        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                                        className="flex-1 flex flex-col items-center justify-center p-12 text-center"
+                                    >
+                                        <div className="w-12 h-12 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mb-4" />
+                                        <p className="text-xs text-neutral-500 font-medium uppercase tracking-widest">Verificando conexión...</p>
+                                    </motion.div>
+                                ) : (devMode && (step !== 4 || isEditing)) ? (
                                     <motion.div 
                                         key="dev"
                                         initial={{ opacity: 0, scale: 0.98 }} 
@@ -292,11 +315,14 @@ export function WhatsAppCloudAPIModal({ isOpen, onClose, activeIntegration }: Pr
                                     >
                                         <div className="flex items-center justify-between mb-8">
                                             <button 
-                                                onClick={() => setDevMode(false)}
+                                                onClick={() => {
+                                                    if (step === 4) setIsEditing(false);
+                                                    else setDevMode(false);
+                                                }}
                                                 className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-neutral-500 hover:text-white transition-colors"
                                             >
                                                 <ChevronLeft className="w-3 h-3" />
-                                                REGRESAR AL ASISTENTE
+                                                {step === 4 ? 'REGRESAR AL ESTADO' : 'REGRESAR AL ASISTENTE'}
                                             </button>
                                             <div className="flex items-center gap-2 text-blue-500">
                                                 <Settings className="w-3 h-3" />
@@ -304,7 +330,7 @@ export function WhatsAppCloudAPIModal({ isOpen, onClose, activeIntegration }: Pr
                                             </div>
                                         </div>
 
-                                        <div className="bg-amber-500/10 border border-amber-500/20 p-5 rounded-3xl mb-8">
+                                        <div className="bg-amber-500/10 border border-amber-500/20 p-5 rounded-3xl mb-4">
                                             <div className="flex items-center gap-3 mb-2">
                                                 <Settings className="w-4 h-4 text-amber-500" />
                                                 <h3 className="text-xs font-black uppercase tracking-wider text-amber-500">CONFIGURACIÓN INTERNA</h3>
@@ -314,31 +340,41 @@ export function WhatsAppCloudAPIModal({ isOpen, onClose, activeIntegration }: Pr
                                             </p>
                                         </div>
 
+                                        {(waConfig.phoneNumberId && (waConfig.phoneNumberId.includes('+') || waConfig.phoneNumberId.length < 10)) && (
+                                            <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-2xl flex gap-3 animate-pulse mb-4">
+                                                <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                                                <p className="text-[9px] text-red-400 leading-tight font-bold uppercase italic">
+                                                    ¡ERROR! El "Phone ID" NO es tu número de teléfono. 
+                                                    Es un ID numérico de 15 dígitos de Meta.
+                                                </p>
+                                            </div>
+                                        )}
+
                                         <div className="grid grid-cols-2 gap-4 mb-4">
                                             <div className="space-y-2">
-                                                <label className="text-[9px] font-black uppercase tracking-widest text-neutral-500 ml-2">Phone Number ID</label>
+                                                <label className="text-[9px] font-black uppercase tracking-widest text-neutral-500 ml-2">Identificador de Teléfono (Phone ID)</label>
                                                 <input 
                                                     type="text"
-                                                    placeholder="Ej: 1530283084729"
+                                                    placeholder="Ej: 676837795516836"
                                                     value={waConfig.phoneNumberId}
-                                                    onChange={(e) => setWaConfig({...waConfig, phoneNumberId: e.target.value})}
-                                                    className="w-full h-12 bg-white/5 border border-white/10 rounded-2xl px-5 text-sm focus:border-white/20 transition-all outline-none font-light"
+                                                    onChange={(e) => setWaConfig({...waConfig, phoneNumberId: e.target.value.replace(/\D/g, '')})}
+                                                    className="w-full h-12 bg-white/5 border border-white/10 rounded-2xl px-5 text-sm focus:border-white/20 transition-all outline-none font-mono"
                                                 />
                                             </div>
                                             <div className="space-y-2">
-                                                <label className="text-[9px] font-black uppercase tracking-widest text-neutral-500 ml-2">Número / Nombre Cuenta</label>
+                                                <label className="text-[9px] font-black uppercase tracking-widest text-neutral-500 ml-2">Número de Teléfono Visible</label>
                                                 <input 
                                                     type="text"
-                                                    placeholder="Ej: +52 222 333 4444"
+                                                    placeholder="Ej: +1 385 888 2799"
                                                     value={waConfig.displayPhoneNumber}
                                                     onChange={(e) => setWaConfig({...waConfig, displayPhoneNumber: e.target.value})}
-                                                    className="w-full h-12 bg-white/5 border border-white/10 rounded-2xl px-5 text-sm focus:border-white/20 transition-all outline-none font-light"
+                                                    className="w-full h-12 bg-white/5 border border-white/10 rounded-2xl px-5 text-sm focus:border-white/20 transition-all outline-none"
                                                 />
                                             </div>
                                         </div>
 
                                         <div className="space-y-2 mb-6">
-                                            <label className="text-[9px] font-black uppercase tracking-widest text-neutral-500 ml-2">WABA ID</label>
+                                            <label className="text-[9px] font-black uppercase tracking-widest text-neutral-500 ml-2">WhatsApp Business Account ID (WABA)</label>
                                             <input 
                                                 type="text"
                                                 placeholder="Ej: 25304791939521"
@@ -547,43 +583,82 @@ export function WhatsAppCloudAPIModal({ isOpen, onClose, activeIntegration }: Pr
                                                     <div className="w-20 h-20 bg-green-500/10 rounded-full flex items-center justify-center mb-6">
                                                         <CheckCircle2 className="w-10 h-10 text-green-500" />
                                                     </div>
-                                                    <h3 className="text-2xl font-medium text-white mb-2">¡WhatsApp Conectado!</h3>
+                                                    <h3 
+                                                        onClick={handleLogoClick}
+                                                        className="text-2xl font-medium text-white mb-2 cursor-default select-none"
+                                                    >
+                                                        ¡WhatsApp Conectado!
+                                                    </h3>
                                                     <p className="text-sm text-neutral-400 mb-8 max-w-sm">
                                                         Tu cuenta de WhatsApp Business (Cloud API) está activa y lista para recibir mensajes.
                                                     </p>
                                                     
                                                     <div className="bg-white/[0.02] border border-white/5 rounded-3xl p-6 w-full mb-8">
                                                         <div className="flex justify-between items-center px-2 mb-4">
-                                                            <div className="flex items-center gap-2">
-                                                                <span className="text-[10px] font-black uppercase tracking-widest text-neutral-500 italic">Identidad de la Cuenta</span>
-                                                                <button 
-                                                                    onClick={() => setIsEditing(!isEditing)}
-                                                                    className="p-1.5 hover:bg-white/5 rounded-lg transition-colors text-neutral-500 hover:text-white"
+                                                            {devMode ? (
+                                                                <div 
+                                                                    onClick={handleLogoClick}
+                                                                    className="flex items-center gap-2 cursor-default select-none"
                                                                 >
-                                                                    <Settings className="w-3.5 h-3.5" />
-                                                                </button>
-                                                            </div>
+                                                                    <span className="text-[10px] font-black uppercase tracking-widest text-neutral-500 italic">Identidad de la Cuenta</span>
+                                                                    <button 
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            setIsEditing(!isEditing);
+                                                                        }}
+                                                                        className="p-1.5 hover:bg-white/5 rounded-lg transition-colors text-neutral-500 hover:text-white"
+                                                                    >
+                                                                        <Settings className="w-3.5 h-3.5" />
+                                                                    </button>
+                                                                </div>
+                                                            ) : (
+                                                                <div 
+                                                                    onClick={handleLogoClick}
+                                                                    className="flex items-center gap-2 cursor-default select-none font-sans"
+                                                                >
+                                                                    <ShieldCheck className="w-4 h-4 text-green-500/50" />
+                                                                    <span className="text-[10px] font-black uppercase tracking-widest text-neutral-500 italic">Conexión Verificada</span>
+                                                                </div>
+                                                            )}
                                                             <span className="text-[10px] text-green-500 font-bold uppercase tracking-widest">Online</span>
                                                         </div>
 
                                                         {isEditing ? (
                                                             <div className="space-y-4 text-left">
+                                                                {(waConfig.phoneNumberId && (waConfig.phoneNumberId.includes('+') || waConfig.phoneNumberId.length < 10)) && (
+                                                                    <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl flex gap-3 animate-pulse">
+                                                                        <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                                                                        <p className="text-[9px] text-red-400 leading-tight font-bold uppercase italic">
+                                                                            ¡ERROR DETECTADO! El "Phone ID" NO es tu número de teléfono. 
+                                                                            Es un código numérico (ej: 105938475869485) de Meta.
+                                                                        </p>
+                                                                    </div>
+                                                                )}
                                                                 <div>
-                                                                    <label className="text-[9px] uppercase tracking-tighter text-neutral-500 mb-1 block">Phone Number ID</label>
+                                                                    <label className="text-[9px] uppercase tracking-tighter text-neutral-500 mb-1 block font-black">Identificador de Teléfono (Phone ID - Meta)</label>
                                                                     <input 
                                                                         type="text" value={waConfig.phoneNumberId} 
-                                                                        onChange={(e) => setWaConfig({...waConfig, phoneNumberId: e.target.value})}
-                                                                        className="w-full bg-white/5 border border-white/10 rounded-xl h-10 px-4 text-xs text-white focus:outline-none focus:border-blue-500/50"
-                                                                        placeholder="Ej: 1234567890..."
+                                                                        onChange={(e) => setWaConfig({...waConfig, phoneNumberId: e.target.value.replace(/\D/g, '')})}
+                                                                        className="w-full bg-white/5 border border-white/10 rounded-xl h-10 px-4 text-xs text-white focus:outline-none focus:border-blue-500/50 font-mono"
+                                                                        placeholder="Ej: 105938475869485"
                                                                     />
                                                                 </div>
                                                                 <div>
-                                                                    <label className="text-[9px] uppercase tracking-tighter text-neutral-500 mb-1 block">WABA ID</label>
+                                                                    <label className="text-[9px] uppercase tracking-tighter text-neutral-500 mb-1 block font-black">WABA ID (Cuenta Business - Meta)</label>
                                                                     <input 
                                                                         type="text" value={waConfig.wabaId} 
-                                                                        onChange={(e) => setWaConfig({...waConfig, wabaId: e.target.value})}
-                                                                        className="w-full bg-white/5 border border-white/10 rounded-xl h-10 px-4 text-xs text-white focus:outline-none focus:border-blue-500/50"
+                                                                        onChange={(e) => setWaConfig({...waConfig, wabaId: e.target.value.replace(/\D/g, '')})}
+                                                                        className="w-full bg-white/5 border border-white/10 rounded-xl h-10 px-4 text-xs text-white focus:outline-none focus:border-blue-500/50 font-mono"
                                                                         placeholder="Ej: 0987654321..."
+                                                                    />
+                                                                </div>
+                                                                <div>
+                                                                    <label className="text-[9px] uppercase tracking-tighter text-neutral-500 mb-1 block font-black">Número de Teléfono Visible (Para el Panel)</label>
+                                                                    <input 
+                                                                        type="text" value={waConfig.displayPhoneNumber} 
+                                                                        onChange={(e) => setWaConfig({...waConfig, displayPhoneNumber: e.target.value})}
+                                                                        className="w-full bg-white/5 border border-white/10 rounded-xl h-10 px-4 text-xs text-white focus:outline-none focus:border-blue-500/50"
+                                                                        placeholder="Ej: +593987654321"
                                                                     />
                                                                 </div>
                                                                 <button 
@@ -598,64 +673,82 @@ export function WhatsAppCloudAPIModal({ isOpen, onClose, activeIntegration }: Pr
 
                                                                 <div className="mt-4 p-4 bg-blue-500/5 border border-blue-500/10 rounded-2xl flex gap-3">
                                                                     <Info className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
-                                                                    <div className="text-[10px] text-blue-200/60 leading-relaxed">
-                                                                        <p className="font-bold mb-1 text-blue-300">¿Dónde encuentro estos IDs?</p>
-                                                                        Ve a tu <span className="text-blue-400">Meta Developer Portal</span> → pestaña <span className="text-blue-400">WhatsApp</span> → <span className="text-blue-400">Configuración de la API</span>. Copia los IDs que aparecen allí para tu número de uDreams.
+                                                                    <div className="text-[10px] text-blue-200/60 leading-relaxed font-sans">
+                                                                        <p className="font-bold mb-1 text-blue-300">¿Cómo conectar correctamente?</p>
+                                                                        1. Ve al <span className="text-blue-400 font-bold">Portal de Meta</span> → WhatsApp → Configuración de API.<br/>
+                                                                        2. Copia el <span className="text-white font-bold">Identificador de número de teléfono</span> (ID numérico).<br/>
+                                                                        3. <span className="text-red-400 font-bold">¡NO PEQUES TU NÚMERO DE TELÉFONO!</span> El ID es un código de 15 dígitos.<br/>
+                                                                        4. En "Número Visible" pon tu número real con el + (ej: +5939...)
                                                                     </div>
                                                                 </div>
+                                                                {updatedAt && (
+                                                                    <p className="text-[8px] text-neutral-600 font-medium uppercase tracking-widest text-center mt-4">
+                                                                        Última actualización: {new Date(updatedAt.seconds * 1000).toLocaleString()}
+                                                                    </p>
+                                                                )}
                                                             </div>
                                                         ) : (
-                                                            <div className="space-y-3">
-                                                                <div className="h-14 bg-white/5 rounded-2xl flex items-center px-6 justify-between group">
+                                                            <div className="space-y-3 font-sans">
+                                                                <div className="h-20 bg-white/5 rounded-2xl flex items-center px-6 justify-between group">
                                                                     <div className="text-left">
-                                                                        <span className="text-[8px] uppercase tracking-widest text-neutral-500 block mb-0.5">Número Activo</span>
-                                                                        <p className="text-sm font-medium text-white">
+                                                                        <span className="text-[10px] uppercase tracking-widest text-neutral-500 block mb-1">Número de Negocio Activo</span>
+                                                                        <p className="text-2xl font-light text-white tracking-tight">
                                                                             {waConfig.displayPhoneNumber ? `+${waConfig.displayPhoneNumber.replace(/\+/g, '')}` : (waConfig.phoneNumberId ? `ID: ${waConfig.phoneNumberId.substring(0, 10)}...` : "Esperando configuración...")}
                                                                         </p>
                                                                     </div>
-                                                                    <div className={`p-2 rounded-xl ${waConfig.displayPhoneNumber ? 'bg-green-500/20' : 'bg-yellow-500/20'}`}>
-                                                                        <ShieldCheck className={`w-4 h-4 ${waConfig.displayPhoneNumber ? 'text-green-500' : 'text-yellow-500'}`} />
-                                                                    </div>
-                                                                </div>
-                                                                {!waConfig.displayPhoneNumber && waConfig.phoneNumberId && (
-                                                                    <p className="text-[9px] text-amber-500/70 text-left px-2 italic">
-                                                                        ⚠️ Se muestra el <b>Phone ID</b> de Meta. Para ver tu número real, edita la configuración y escribe tu número manualmente.
-                                                                    </p>
-                                                                )}
-                                                                 <div className="flex gap-2">
-                                                                    <div className="flex-1 h-10 bg-white/[0.01] border border-white/5 rounded-xl flex flex-col justify-center px-4 text-left">
-                                                                        <span className="text-[7px] uppercase text-neutral-600 font-bold">Phone ID</span>
-                                                                        <span className="text-[9px] text-neutral-400 font-mono truncate select-all cursor-pointer">{waConfig.phoneNumberId || 'Sin asignar'}</span>
-                                                                    </div>
-                                                                    <div className="flex-1 h-10 bg-white/[0.01] border border-white/5 rounded-xl flex flex-col justify-center px-4 text-left">
-                                                                        <span className="text-[7px] uppercase text-neutral-600 font-bold">WABA ID</span>
-                                                                        <span className="text-[9px] text-neutral-400 font-mono truncate select-all cursor-pointer">{waConfig.wabaId || 'Sin asignar'}</span>
+                                                                    <div className={`p-2.5 rounded-2xl ${waConfig.displayPhoneNumber ? 'bg-green-500/20' : 'bg-yellow-500/20'}`}>
+                                                                        <ShieldCheck className={`w-6 h-6 ${waConfig.displayPhoneNumber ? 'text-green-500' : 'text-yellow-500'}`} />
                                                                     </div>
                                                                 </div>
 
-                                                                <div className="mt-4 pt-4 border-t border-white/5 space-y-3">
-                                                                    <div className="flex items-center gap-2 mb-1">
-                                                                        <QrCode className="w-3.5 h-3.5 text-blue-500" />
-                                                                        <span className="text-[9px] font-black uppercase tracking-widest text-neutral-500">Configuración del Webhook</span>
-                                                                    </div>
-                                                                    
-                                                                    <div className="bg-blue-500/5 rounded-xl p-3 text-left space-y-2 border border-blue-500/10">
-                                                                        <div>
-                                                                            <span className="text-[7px] uppercase text-blue-400/60 block mb-0.5 font-bold">URL de Callback</span>
-                                                                            <span className="text-[8px] text-blue-200/80 font-mono break-all select-all">
-                                                                                {`https://us-central1-roosevelt-491004.cloudfunctions.net/metaWebhook?u=${currentUser?.uid}&e=${activeEntity}`}
-                                                                            </span>
+                                                                {/* Technical Details only in Dev Mode */}
+                                                                {devMode && (
+                                                                    <motion.div 
+                                                                        initial={{ opacity: 0, height: 0 }}
+                                                                        animate={{ opacity: 1, height: 'auto' }}
+                                                                        className="pt-4 space-y-4"
+                                                                    >
+                                                                        {!waConfig.displayPhoneNumber && waConfig.phoneNumberId && (
+                                                                            <p className="text-[9px] text-amber-500/70 text-left px-2 italic">
+                                                                                ⚠️ Se muestra el <b>Phone ID</b> de Meta. Para ver tu número real, edita la configuración y escribe tu número manualmente.
+                                                                            </p>
+                                                                        )}
+                                                                        <div className="flex gap-2 text-sans">
+                                                                            <div className="flex-1 h-10 bg-white/[0.01] border border-white/5 rounded-xl flex flex-col justify-center px-4 text-left">
+                                                                                <span className="text-[7px] uppercase text-neutral-600 font-bold">Phone ID</span>
+                                                                                <span className="text-[9px] text-neutral-400 font-mono truncate select-all cursor-pointer">{waConfig.phoneNumberId || 'Sin asignar'}</span>
+                                                                            </div>
+                                                                            <div className="flex-1 h-10 bg-white/[0.01] border border-white/5 rounded-xl flex flex-col justify-center px-4 text-left">
+                                                                                <span className="text-[7px] uppercase text-neutral-600 font-bold">WABA ID</span>
+                                                                                <span className="text-[9px] text-neutral-400 font-mono truncate select-all cursor-pointer">{waConfig.wabaId || 'Sin asignar'}</span>
+                                                                            </div>
                                                                         </div>
-                                                                        <div>
-                                                                            <span className="text-[7px] uppercase text-blue-400/60 block mb-0.5 font-bold">Token de Verificación (Verify Token)</span>
-                                                                            <span className="text-[9px] text-blue-100 font-mono font-bold select-all">{waConfig.verifyToken}</span>
+
+                                                                        <div className="pt-4 border-t border-white/5 space-y-3">
+                                                                            <div className="flex items-center gap-2 mb-1">
+                                                                                <QrCode className="w-3.5 h-3.5 text-blue-500" />
+                                                                                <span className="text-[9px] font-black uppercase tracking-widest text-neutral-500">Configuración del Webhook</span>
+                                                                            </div>
+                                                                            
+                                                                            <div className="bg-blue-500/5 rounded-xl p-3 text-left space-y-2 border border-blue-500/10">
+                                                                                <div>
+                                                                                    <span className="text-[7px] uppercase text-blue-400/60 block mb-0.5 font-bold">URL de Callback</span>
+                                                                                    <span className="text-[8px] text-blue-200/80 font-mono break-all select-all">
+                                                                                        {`https://us-central1-roosevelt-491004.cloudfunctions.net/metaWebhook?u=${currentUser?.uid}&e=${activeEntity}`}
+                                                                                    </span>
+                                                                                </div>
+                                                                                <div>
+                                                                                    <span className="text-[7px] uppercase text-blue-400/60 block mb-0.5 font-bold">Token de Verificación (Verify Token)</span>
+                                                                                    <span className="text-[9px] text-blue-100 font-mono font-bold select-all">{waConfig.verifyToken}</span>
+                                                                                </div>
+                                                                            </div>
+                                                                            
+                                                                            <p className="text-[8px] text-neutral-500 leading-tight italic">
+                                                                                Pega estos datos en el "Paso 3" del portal de Meta para recibir mensajes en el Omnicanal.
+                                                                            </p>
                                                                         </div>
-                                                                    </div>
-                                                                    
-                                                                    <p className="text-[8px] text-neutral-500 leading-tight italic">
-                                                                        Pega estos datos en el "Paso 3" del portal de Meta para recibir mensajes en el Omnicanal.
-                                                                    </p>
-                                                                </div>
+                                                                    </motion.div>
+                                                                )}
                                                             </div>
                                                         )}
                                                     </div>
@@ -668,7 +761,7 @@ export function WhatsAppCloudAPIModal({ isOpen, onClose, activeIntegration }: Pr
                                                             Cerrar Panel
                                                         </button>
                                                         <button 
-                                                            onClick={() => handleDeleteConfig(true)}
+                                                            onClick={handleDeleteConfig}
                                                             className="h-12 px-6 bg-red-500/10 hover:bg-red-500/20 text-red-500 text-sm font-medium rounded-2xl transition-all border border-red-500/20"
                                                         >
                                                             Desconectar

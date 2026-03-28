@@ -65,23 +65,49 @@ export async function sendWhatsAppMessage(
 
     // 1. Multi-Tenant Token Resolution
     if (options.userId && options.entityId) {
-        const configPath = `users/${options.userId}/entities/${options.entityId}/integrations/whatsapp`;
         try {
+            // First try standard paths for the specific user
+            const configPath = `users/${options.userId}/entities/${options.entityId}/integrations/whatsapp`;
+            const internalPath = `users/${options.userId}/entities/${options.entityId}/integrations/whatsapp_internal`;
+            
             const configDoc = await db.doc(configPath).get();
-            if (configDoc.exists) {
-                const data = configDoc.data();
-                if (data?.accessToken && data?.phoneNumberId) {
-                    token = data.accessToken;
-                    phoneNumberId = data.phoneNumberId;
+            let data = configDoc.data();
+
+            if (!data?.accessToken || !data?.phoneNumberId) {
+                const internalDoc = await db.doc(internalPath).get();
+                if (internalDoc.exists) data = internalDoc.data();
+            }
+
+            // [BACKUP DISCOVERY] If still not found, search all users' entities for this entityId
+            // This is useful in dev if userId is misaligned
+            if (!data?.accessToken || !data?.phoneNumberId) {
+                console.log(`[sendWhatsAppMessage] Config not found for user ${options.userId}. Searching all users...`);
+                const usersSnap = await db.collection('users').get();
+                for (const userDoc of usersSnap.docs) {
+                    const fallbackPath = `users/${userDoc.id}/entities/${options.entityId}/integrations/whatsapp`;
+                    const fallbackSnap = await db.doc(fallbackPath).get();
+                    if (fallbackSnap.exists && fallbackSnap.data()?.accessToken) {
+                        data = fallbackSnap.data();
+                        console.log(`[sendWhatsAppMessage] FOUND config via discovery at ${fallbackPath}`);
+                        break;
+                    }
                 }
             }
+
+            if (data?.accessToken && data?.phoneNumberId) {
+                token = data.accessToken;
+                phoneNumberId = data.phoneNumberId;
+            } else {
+                console.warn(`[sendWhatsAppMessage] No valid config found for entity ${options.entityId}`);
+            }
         } catch (err) {
-            console.error(`[sendWhatsAppMessage] Failed to fetch tenant config for ${options.entityId}:`, err);
+            console.error(`[sendWhatsAppMessage] Error resolving config:`, err);
         }
     }
 
+    // 2. Final Extraction & Validation
     if (!token || !phoneNumberId) {
-        throw new Error(`Missing WhatsApp configuration for ${options.entityId || 'Global'}`);
+        throw new Error(`Configuración de WhatsApp faltante para '${options.entityId}'. \nDetalles: userId=${options.userId}, hasToken=${!!token}, hasPhoneId=${!!phoneNumberId}`);
     }
 
     const url = `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`;

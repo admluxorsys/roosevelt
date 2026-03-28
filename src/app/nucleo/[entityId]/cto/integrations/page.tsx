@@ -38,7 +38,12 @@ export default function IntegrationsPage() {
             const data: Record<string, any> = {};
             snapshot.docs.forEach(d => {
                 const docData = d.data();
-                if (d.id !== '_init' && docData.status === 'Connected') {
+                if (d.id === '_init') return;
+
+                // Mapeo lógico: Si es la versión interna de whatsapp, cuenta como la integración principal 'whatsapp'
+                if (d.id === 'whatsapp_internal' && (docData.status === 'Internal' || docData.status === 'Connected')) {
+                    data['whatsapp'] = docData;
+                } else if (docData.status === 'Connected') {
                     data[d.id] = docData;
                 }
             });

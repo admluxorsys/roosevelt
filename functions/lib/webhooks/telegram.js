@@ -4,7 +4,8 @@ exports.telegramWebhook = void 0;
 const functions = require("firebase-functions");
 const messageNormalizer_1 = require("../helpers/messageNormalizer");
 const kanbanOmni_1 = require("../helpers/kanbanOmni");
-const admin = require("firebase-admin");
+const botEngine_1 = require("../helpers/botEngine");
+const tenantResolver_1 = require("../helpers/tenantResolver");
 /**
  * TELEGRAM WEBHOOK HANDLER
  *
@@ -12,33 +13,22 @@ const admin = require("firebase-admin");
  */
 exports.telegramWebhook = functions.https.onRequest(async (req, res) => {
     if (req.method === 'POST') {
-        const secretToken = req.headers['x-telegram-bot-api-secret-token'];
-        if (secretToken !== 'malamia') {
-            functions.logger.warn('Telegram Secret Token Mismatch');
-            res.sendStatus(403);
-            return;
+        const secretToken = req.headers['x-telegram-bot-api-secret-token'] || 'malamia';
+        // --- RESOLUCIÓN DE INQUILINO (TENANT RESOLUTION) ---
+        const tenant = await (0, tenantResolver_1.resolveTenant)('telegram', secretToken);
+        if (!tenant) {
+            functions.logger.error(`[Telegram Webhook] No mapping found for secret token: ${secretToken}`);
         }
+        const userId = (tenant === null || tenant === void 0 ? void 0 : tenant.userId) || 'legacy';
+        const entityId = (tenant === null || tenant === void 0 ? void 0 : tenant.entityId) || 'roosevelt';
         const update = req.body;
         if (update.message) {
             functions.logger.info('Received Telegram message', update.message);
             try {
                 const unifiedMsg = (0, messageNormalizer_1.normalizeTelegramMessage)(update.message);
-                const cardResult = await (0, kanbanOmni_1.handleKanbanUpdateOmni)(unifiedMsg);
+                const cardResult = await (0, kanbanOmni_1.handleKanbanUpdateOmni)(unifiedMsg, userId, entityId);
                 if (cardResult && cardResult.success) {
-                    // Optimización: Solo invocar bot si es mensaje de texto entrante del usuario (o comando)
-                    if (unifiedMsg.message_type === 'text') {
-                        const { getActiveBot, executeBotFlow } = await Promise.resolve().then(() => require('../helpers/botEngine'));
-                        const activeBot = await getActiveBot();
-                        if (activeBot) {
-                            const db = (await Promise.resolve().then(() => require('firebase-admin'))).firestore();
-                            // Fetch full card data to pass to bot
-                            const cardSnap = await db.collectionGroup('cards').where(admin.firestore.FieldPath.documentId(), '==', cardResult.cardId).get();
-                            if (!cardSnap.empty) {
-                                const fullCardData = Object.assign({ id: cardSnap.docs[0].id }, cardSnap.docs[0].data());
-                                await executeBotFlow(activeBot, unifiedMsg.external_id, fullCardData, unifiedMsg.message_text);
-                            }
-                        }
-                    }
+                    await (0, botEngine_1.tryTriggerBot)(userId, entityId, 'telegram', unifiedMsg.external_id, unifiedMsg.message_text);
                 }
                 res.sendStatus(200);
             }

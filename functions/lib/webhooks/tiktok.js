@@ -4,7 +4,8 @@ exports.tiktokWebhook = void 0;
 const functions = require("firebase-functions");
 const messageNormalizer_1 = require("../helpers/messageNormalizer");
 const kanbanOmni_1 = require("../helpers/kanbanOmni");
-const admin = require("firebase-admin");
+const botEngine_1 = require("../helpers/botEngine");
+const tenantResolver_1 = require("../helpers/tenantResolver");
 /**
  * TIKTOK WEBHOOK HANDLER
  *
@@ -35,22 +36,16 @@ exports.tiktokWebhook = functions.https.onRequest(async (req, res) => {
     if (req.method === 'POST') {
         functions.logger.info('Received TikTok event', req.body);
         try {
-            // TikTok payload structure varies. using generic normalization.
+            // TikTok payload structure varies. 
+            const accountId = req.body.recipient_id || req.body.advertiser_id || 'default';
+            // --- RESOLUCIÓN DE INQUILINO (TENANT RESOLUTION) ---
+            const tenant = await (0, tenantResolver_1.resolveTenant)('tiktok', accountId);
+            const userId = (tenant === null || tenant === void 0 ? void 0 : tenant.userId) || 'legacy';
+            const entityId = (tenant === null || tenant === void 0 ? void 0 : tenant.entityId) || 'roosevelt';
             const unifiedMsg = (0, messageNormalizer_1.normalizeTikTokMessage)(req.body);
-            const cardResult = await (0, kanbanOmni_1.handleKanbanUpdateOmni)(unifiedMsg);
+            const cardResult = await (0, kanbanOmni_1.handleKanbanUpdateOmni)(unifiedMsg, userId, entityId);
             if (cardResult && cardResult.success) {
-                if (unifiedMsg.message_type === 'text') {
-                    const { getActiveBot, executeBotFlow } = await Promise.resolve().then(() => require('../helpers/botEngine'));
-                    const activeBot = await getActiveBot();
-                    if (activeBot) {
-                        const db = admin.firestore();
-                        const cardSnap = await db.collectionGroup('cards').where(admin.firestore.FieldPath.documentId(), '==', cardResult.cardId).get();
-                        if (!cardSnap.empty) {
-                            const fullCardData = Object.assign({ id: cardSnap.docs[0].id }, cardSnap.docs[0].data());
-                            await executeBotFlow(activeBot, unifiedMsg.external_id, fullCardData, unifiedMsg.message_text);
-                        }
-                    }
-                }
+                await (0, botEngine_1.tryTriggerBot)(userId, entityId, 'tiktok', unifiedMsg.external_id, unifiedMsg.message_text);
             }
             res.sendStatus(200);
         }

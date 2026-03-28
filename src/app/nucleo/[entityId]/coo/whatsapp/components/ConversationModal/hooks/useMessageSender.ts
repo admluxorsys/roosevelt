@@ -37,7 +37,7 @@ export const useMessageSender = ({
 
     const { uploading, progress, uploadFile } = useFileUpload();
 
-    // 24h Window Check
+    // 24h Window Check (Improved Resilience)
     const isWithin24Hours = useMemo(() => {
         if (!liveCardData?.messages || liveCardData.messages.length === 0) return false;
         const userMessages = liveCardData.messages.filter(m => m.sender !== 'agent');
@@ -46,11 +46,29 @@ export const useMessageSender = ({
         const lastUserMsg = userMessages[userMessages.length - 1];
         if (!lastUserMsg.timestamp) return false;
 
-        const lastMsgDate = lastUserMsg.timestamp.toDate();
-        const now = new Date();
-        const diffHours = (now.getTime() - lastMsgDate.getTime()) / (1000 * 60 * 60);
+        try {
+            const now = new Date();
+            let lastMsgDate: Date;
+            
+            if (lastUserMsg.timestamp.toDate) {
+                lastMsgDate = lastUserMsg.timestamp.toDate();
+            } else if (lastUserMsg.timestamp.seconds) {
+                lastMsgDate = new Date(lastUserMsg.timestamp.seconds * 1000);
+            } else if (lastUserMsg.timestamp instanceof Date) {
+                lastMsgDate = lastUserMsg.timestamp;
+            } else if (typeof lastUserMsg.timestamp === 'string' || typeof lastUserMsg.timestamp === 'number') {
+                lastMsgDate = new Date(lastUserMsg.timestamp);
+            } else {
+                // Fallback for objects that might NOT have toDate but are still timestamps
+                lastMsgDate = new Date();
+            }
 
-        return diffHours < 24;
+            const diffHours = (now.getTime() - lastMsgDate.getTime()) / (1000 * 60 * 60);
+            return diffHours < 24;
+        } catch (e) {
+            console.warn('[useMessageSender] Error parsing timestamp for 24h check:', e);
+            return true; // Default to true to try sending text instead of failing on template
+        }
     }, [liveCardData?.messages]);
 
     const handleSendMessage = async () => {
@@ -124,41 +142,51 @@ export const useMessageSender = ({
                 body: JSON.stringify(payload)
             });
 
-            const result = await response.json();
+            let result;
+            try {
+                result = await response.json();
+            } catch (e) {
+                const text = await response.text();
+                console.error('[useMessageSender] Response is not JSON:', text);
+                result = { error: 'Server Error (Non-JSON)', details: text.substring(0, 500) };
+            }
 
             if (!response.ok) {
                 const errorMsg = result.error || 'Error al enviar';
-                const details = result.details ? `\nDetalles: ${JSON.stringify(result.details)}` : '';
-                toast.error(`${errorMsg}${details}`);
                 
-                // Mark message as failed instead of removing it
+                // Mostrar el error detallado en un Toast para diagnóstico rápido
+                let detail = '';
+                if (typeof result.details === 'object') {
+                    detail = result.details?.error?.message || JSON.stringify(result.details);
+                } else {
+                    detail = result.details || '';
+                }
+                
+                toast.error(`${errorMsg}: ${detail}`, {
+                    duration: 10000, // Show for 10 seconds
+                    action: {
+                        label: 'Ver Detalle',
+                        onClick: () => alert(JSON.stringify(result, null, 2))
+                    }
+                });
+                
+                // Mark message as failed
                 setLiveCardData(prev => {
                     if (!prev) return null;
                     return {
                         ...prev,
-                        messages: prev.messages?.map(m => (m as any).id === tempMsgId ? { ...m, status: 'failed' } : m)
+                        messages: prev.messages?.map(m => (m as any).id === tempMsgId ? { ...m, status: 'failed', error: detail } : m)
                     };
                 });
                 setNewMessage(messageToSend);
-                setIsSending(false);
-                return;
-            }
-
-            if (result.success) {
-                toast.success(`Mensaje enviado a ${result.sentTo}`);
-                if (result.cardId && result.groupId) {
-                    if (result.cardId !== currentCardId || result.groupId !== currentGroupId) {
-                        setForcedGroupId(result.groupId);
-                        setForcedCardId(result.cardId);
-                    }
-                }
+            } else {
+                toast.success('Mensaje enviado');
             }
         } catch (error: any) {
-            // Keep console.warn instead of error to avoid Next.js overlay in dev
-            console.warn('[MessageSender] Caught error:', error);
-            toast.error('Error de conexión o de red.');
+            console.error('[useMessageSender] Fatal Error:', error);
+            toast.error(`Error de Conexión: ${error.message}`);
             
-            // Mark message as failed
+            // Mark as failed in catch too
             setLiveCardData(prev => {
                 if (!prev) return null;
                 return {
@@ -267,15 +295,9 @@ export const useMessageSender = ({
         if (!msgToRetry.id || !msgToRetry.text) return;
         setNewMessage(msgToRetry.text);
         
-        // Remove failed message from UI before retrying
-        setLiveCardData(prev => {
-            if (!prev) return null;
-            return {
-                ...prev,
-                messages: prev.messages?.filter(m => (m as any).id !== msgToRetry.id)
-            };
-        });
-
+        // We no longer remove the failed message from UI/Firestore, 
+        // as the user wants error messages to stay registered.
+        
         // Small delay to ensure state updates before sending
         setTimeout(() => {
             handleSendMessage();

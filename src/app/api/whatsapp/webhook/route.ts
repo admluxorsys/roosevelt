@@ -78,7 +78,7 @@ export async function POST(req: Request) {
             debugLog(`[POST] Status Update [${status}] for message ${messageId} in tenant ${entityId}`);
 
             // Find card containing this message in the tenant's context
-            const cardsRef = db.collection(`${entityPath}/kamban-groups`);
+            const cardsRef = db.collection(`${entityPath}/kanban-groups`);
             const groupsSnapshot = await cardsRef.get();
             
             for (const group of groupsSnapshot.docs) {
@@ -132,7 +132,7 @@ export async function POST(req: Request) {
                 const cleanFrom = from.replace(/\D/g, '');
                 
                 // Find group and card in the tenant's context
-                const groupsRef = db.collection(`${entityPath}/kamban-groups`);
+                const groupsRef = db.collection(`${entityPath}/kanban-groups`);
                 const groupsSnapshot = await groupsRef.get();
                 
                 let targetCardDoc: any = null;
@@ -174,7 +174,23 @@ export async function POST(req: Request) {
                     const defaultGroup = groupsSnapshot.docs[0];
                     if (defaultGroup) {
                         const newCardRef = defaultGroup.ref.collection('cards').doc();
+                        
+                        // 1. Generate CRM ID (Requires Transaction on system_metadata/counters)
+                        let numericId = String(Date.now()).slice(-10);
+                        try {
+                            const counterRef = db.collection(`${entityPath}/system_metadata`).doc('counters');
+                            await db.runTransaction(async (tx) => {
+                                const snap = await tx.get(counterRef);
+                                const next = (snap.exists ? (snap.data()?.crmIdCount || 0) : 0) + 1;
+                                tx.set(counterRef, { crmIdCount: next }, { merge: true });
+                                numericId = String(next).padStart(10, '0');
+                            });
+                        } catch (err) {
+                            debugLog(`[POST] Error generating CRM ID: ${err}`);
+                        }
+
                         await newCardRef.set({
+                            crmId: numericId,
                             contactName: value.contacts?.[0]?.profile?.name || from,
                             contactNumber: from,
                             contactNumberClean: cleanFrom,
@@ -187,6 +203,20 @@ export async function POST(req: Request) {
                             source: 'whatsapp',
                             primary_channel: 'whatsapp'
                         });
+
+                        // 2. Create the Contact in the CRM Database
+                        const contactName = value.contacts?.[0]?.profile?.name || from;
+                        await db.collection(`${entityPath}/contacts`).doc(numericId).set({
+                            crmId: numericId,
+                            contactName: contactName,
+                            firstName: contactName,
+                            contactNumber: from,
+                            phone: `+${cleanFrom}`, // Standardize
+                            kanbanGroupId: defaultGroup.id,
+                            kanbanCardId: newCardRef.id,
+                            createdAt: new Date().toISOString()
+                        }, { merge: true });
+
                         cardId = newCardRef.id;
                         groupId = defaultGroup.id;
                     }
@@ -231,7 +261,7 @@ async function triggerChatbot(from: string, text: string, groupId: string, cardI
 
         const botData = activeBotDoc.data();
         const flow = botData.flow || { nodes: [], edges: [] };
-        const cardRef = db.doc(`${entityPath}/kamban-groups/${groupId}/cards/${cardId}`);
+        const cardRef = db.collection('users').doc(userId).collection('entities').doc(entityId).collection('kanban-groups').doc(groupId).collection('cards').doc(cardId);
         
         const cardSnap = await cardRef.get();
         if (!cardSnap.exists) return;
@@ -388,7 +418,16 @@ async function triggerChatbot(from: string, text: string, groupId: string, cardI
                 if (edge) {
                     await cardRef.update({ 'chatbotState.waitingForInput': false });
                     await executeNode(edge.target);
+                } else {
+                    debugLog(`[Chatbot] Invalid input for interactive node ${node.id}, user sent '${text}'. Resending node.`);
+                    // Resend the interactive node so the user knows they need to click an option
+                    await executeNode(node.id);
                 }
+            } else {
+                 // Failsafe: if waiting for input but node is something else, just start over.
+                 await cardRef.update({ 'chatbotState.waitingForInput': false });
+                 const startNode = flow.nodes.find((n: any) => n.type === 'startNode');
+                 if (startNode) await executeNode(startNode.id);
             }
         } else {
             const startNode = flow.nodes.find((n: any) => n.type === 'startNode');

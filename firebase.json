@@ -32,7 +32,7 @@
       "port": 5001
     },
     "ui": {
-      "port": 4000
+      "port": 4001
     }
   },
   "firestore": {

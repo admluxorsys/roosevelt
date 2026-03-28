@@ -40,6 +40,15 @@ service cloud.firestore {
       allow read: if true;
     }
 
+    // Specific rules for isolated tenant data
+    match /users/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+
+      match /entities/{entityId}/{document=**} {
+         allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
+    }
+
     // Catch-all for authenticated users
     match /{document=**} {
       allow read, write: if request.auth != null;

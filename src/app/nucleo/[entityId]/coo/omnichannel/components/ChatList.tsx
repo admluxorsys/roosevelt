@@ -62,10 +62,45 @@ export default function ChatList({ selectedFolder, activeConversationId, setActi
             );
         }
 
-        // 4. Sorting
+        // 4. Deduplication logic
+        // If multiple cards exist for the same contact, we only show the one with the latest update
+        const uniqueMap = new Map<string, any>();
+        filtered.forEach(c => {
+            // Robust key: Use normalized phone for WhatsApp, or external_id/id for others
+            const phone = c.contactNumber || c.contactNumberClean;
+            const key = phone ? phone.replace(/\D/g, '') : (c.platform_ids?.[c.source] || c.external_id || c.id);
+            
+            const existing = uniqueMap.get(key);
+            
+            const getTimestamp = (card: any) => {
+                const ts = card.updatedAt;
+                if (!ts) return 0;
+                if (typeof ts.toDate === 'function') return ts.toDate().getTime();
+                if (ts.seconds) return ts.seconds * 1000;
+                if (ts instanceof Date) return ts.getTime();
+                if (typeof ts === 'number') return ts;
+                return 0;
+            };
+
+            if (!existing || getTimestamp(c) > getTimestamp(existing)) {
+                uniqueMap.set(key, c);
+            }
+        });
+        filtered = Array.from(uniqueMap.values());
+
+        // 5. Sorting
         filtered.sort((a, b) => {
-            const timeA = a.updatedAt?.seconds || 0;
-            const timeB = b.updatedAt?.seconds || 0;
+            const getTimestamp = (card: any) => {
+                const ts = card.updatedAt;
+                if (!ts) return 0;
+                if (typeof ts.toDate === 'function') return ts.toDate().getTime();
+                if (ts.seconds) return ts.seconds * 1000;
+                if (ts instanceof Date) return ts.getTime();
+                if (typeof ts === 'number') return ts;
+                return 0;
+            };
+            const timeA = getTimestamp(a);
+            const timeB = getTimestamp(b);
             return sortBy === 'newest' ? timeB - timeA : timeA - timeB;
         });
 
@@ -74,7 +109,7 @@ export default function ChatList({ selectedFolder, activeConversationId, setActi
             name: c.contactName || c.contactNumber || 'Desconocido',
             channel: c.channel || c.source || c.primary_channel || 'WhatsApp',
             snippet: c.lastMessage || c.description || 'Nueva conversación',
-            time: c.updatedAt ? typeof c.updatedAt.toDate === 'function' ? c.updatedAt.toDate().toLocaleDateString(undefined, {month: 'short', day: 'numeric', hour: '2-digit', minute:'2-digit'}) : 'Reciente' : '',
+            time: c.updatedAt ? (typeof c.updatedAt.toDate === 'function' ? c.updatedAt.toDate() : (c.updatedAt.seconds ? new Date(c.updatedAt.seconds * 1000) : new Date(c.updatedAt))).toLocaleDateString(undefined, {month: 'short', day: 'numeric', hour: '2-digit', minute:'2-digit'}) : 'Reciente',
             unread: c.unreadCount || 0,
             status: 'open',
             presence: c.presence || null

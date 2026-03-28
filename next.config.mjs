@@ -59,6 +59,18 @@ const nextConfig = {
       { source: '/cso/conexion', destination: '/suite/cto/integrations', permanent: true },
     ];
   },
+  async rewrites() {
+    return [
+      {
+        source: '/socket.io/:path*',
+        destination: 'http://localhost:4000/socket.io/:path*',
+      },
+      {
+        source: '/api/internal/:path*',
+        destination: 'http://localhost:4000/api/internal/:path*',
+      }
+    ];
+  },
   typescript: {
     ignoreBuildErrors: false,
   },

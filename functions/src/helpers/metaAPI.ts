@@ -2,14 +2,37 @@
 import * as functions from 'firebase-functions';
 import axios from 'axios';
 
+import * as admin from 'firebase-admin';
+
 // Get tokens from environment variables
 const PAGE_ACCESS_TOKEN = process.env.META_PAGE_ACCESS_TOKEN;
 export const INSTAGRAM_ACCESS_TOKEN = process.env.INSTAGRAM_ACCESS_TOKEN || process.env.META_PAGE_ACCESS_TOKEN;
 
+interface Context {
+    userId?: string;
+    entityId?: string;
+}
 
 // Generic function to make requests to Graph API
-async function callSendApi(messageData: object, token?: string): Promise<any> {
-    const accessToken = token || PAGE_ACCESS_TOKEN;
+async function callSendApi(messageData: object, token?: string, ctx?: Context): Promise<any> {
+    let accessToken = token || PAGE_ACCESS_TOKEN;
+
+    // Resolve tenant-specific token if context provided
+    if (ctx?.userId && ctx?.entityId && !token) {
+        try {
+            const db = admin.firestore();
+            // Try WhatsApp config first as it often contains the Meta system token
+            const configSnap = await db.doc(`users/${ctx.userId}/entities/${ctx.entityId}/integrations/whatsapp`).get();
+            if (configSnap.exists) {
+                const data = configSnap.data();
+                if (data?.accessToken) {
+                    accessToken = data.accessToken;
+                }
+            }
+        } catch (error) {
+            functions.logger.error('[Meta API] Error fetching tenant token', error);
+        }
+    }
 
     if (!accessToken) {
         functions.logger.error('Missing Access Token (Meta/Instagram).');
@@ -31,7 +54,7 @@ async function callSendApi(messageData: object, token?: string): Promise<any> {
 /**
  * Sends a text message to a user via Messenger.
  */
-export async function sendMetaMessage(recipientId: string, text: string, token?: string): Promise<any> {
+export async function sendMetaMessage(recipientId: string, text: string, token?: string, ctx?: Context): Promise<any> {
     if (!text) return;
 
     const messageData = {
@@ -43,13 +66,13 @@ export async function sendMetaMessage(recipientId: string, text: string, token?:
         }
     };
 
-    return await callSendApi(messageData, token);
+    return await callSendApi(messageData, token, ctx);
 }
 
 /**
  * Sends a media message (image, video, etc.).
  */
-export async function sendMetaMediaMessage(recipientId: string, mediaUrl: string, mediaType: 'image' | 'video' | 'audio' | 'file' = 'image', token?: string): Promise<any> {
+export async function sendMetaMediaMessage(recipientId: string, mediaUrl: string, mediaType: 'image' | 'video' | 'audio' | 'file' = 'image', token?: string, ctx?: Context): Promise<any> {
     if (!mediaUrl) return;
 
     const messageData = {
@@ -67,14 +90,14 @@ export async function sendMetaMediaMessage(recipientId: string, mediaUrl: string
         }
     };
 
-    return await callSendApi(messageData, token);
+    return await callSendApi(messageData, token, ctx);
 }
 
 /**
  * Marks a message as read in Messenger.
  * Note: Facebook does not have an explicit "mark as read" endpoint same as WhatsApp, but we can send "sender_action: mark_seen".
  */
-export async function markMetaMessageAsRead(recipientId: string, token?: string): Promise<any> {
+export async function markMetaMessageAsRead(recipientId: string, token?: string, ctx?: Context): Promise<any> {
     const messageData = {
         recipient: {
             id: recipientId
@@ -82,14 +105,14 @@ export async function markMetaMessageAsRead(recipientId: string, token?: string)
         sender_action: 'mark_seen'
     };
 
-    return await callSendApi(messageData, token);
+    return await callSendApi(messageData, token, ctx);
 }
 
 /**
  * Sends Quick Replies (Buttons).
  * Facebook Quick Replies are different from WhatsApp Buttons.
  */
-export async function sendMetaQuickReplies(recipientId: string, text: string, quickReplies: any[], token?: string): Promise<any> {
+export async function sendMetaQuickReplies(recipientId: string, text: string, quickReplies: any[], token?: string, ctx?: Context): Promise<any> {
     // Format quick replies for Messenger
     // Expected format: { content_type: 'text', title: 'Yes', payload: 'YES_PAYLOAD' }
     const formattedQRs = quickReplies.slice(0, 13).map(qr => ({
@@ -108,5 +131,5 @@ export async function sendMetaQuickReplies(recipientId: string, text: string, qu
         }
     };
 
-    return await callSendApi(messageData, token);
+    return await callSendApi(messageData, token, ctx);
 }

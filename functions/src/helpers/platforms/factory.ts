@@ -7,15 +7,15 @@ import { XAdapter } from './x';
 import { WebChatAdapter } from './webchat';
 import { TikTokAdapter } from './tiktok';
 
-export function getMessagingAdapter(platform: string): MessagingAdapter {
+export function getMessagingAdapter(platform: string, userId?: string, entityId?: string): MessagingAdapter {
     switch (platform.toLowerCase()) {
         case 'whatsapp':
-            return new WhatsAppAdapter();
+            return new WhatsAppAdapter(userId, entityId);
         case 'messenger':
         case 'facebook':
-            return new MetaAdapter('messenger');
+            return new MetaAdapter('messenger', userId, entityId);
         case 'instagram':
-            return new MetaAdapter('instagram');
+            return new MetaAdapter('instagram', userId, entityId);
         case 'telegram':
             return new TelegramAdapter();
         case 'x':
@@ -29,6 +29,6 @@ export function getMessagingAdapter(platform: string): MessagingAdapter {
         default:
             // Default to WhatsApp for legacy compatibility or throw error
             console.warn(`Unknown platform ${platform}, defaulting to WhatsAppAdapter`);
-            return new WhatsAppAdapter();
+            return new WhatsAppAdapter(userId, entityId);
     }
 }

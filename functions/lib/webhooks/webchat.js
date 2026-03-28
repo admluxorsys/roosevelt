@@ -4,6 +4,8 @@ exports.webchatWebhook = void 0;
 const functions = require("firebase-functions");
 const messageNormalizer_1 = require("../helpers/messageNormalizer");
 const kanbanOmni_1 = require("../helpers/kanbanOmni");
+const botEngine_1 = require("../helpers/botEngine");
+const tenantResolver_1 = require("../helpers/tenantResolver");
 /**
  * WEB CHAT WEBHOOK HANDLER
  *
@@ -30,25 +32,17 @@ exports.webchatWebhook = functions.https.onRequest(async (req, res) => {
                 return;
             }
             functions.logger.info('Received WebChat message', body);
+            // For WebChat, we resolve tenant by sessionId OR a dedicated widgetId
+            // If body.entityId is provided by widget, we use it directly, but still resolve mapping for userId
+            const platformId = body.widgetId || body.entityId || 'default';
+            const tenant = await (0, tenantResolver_1.resolveTenant)('webchat', platformId);
+            const userId = (tenant === null || tenant === void 0 ? void 0 : tenant.userId) || 'legacy';
+            const entityId = (tenant === null || tenant === void 0 ? void 0 : tenant.entityId) || 'roosevelt';
             const unifiedMsg = (0, messageNormalizer_1.normalizeWebChatMessage)(body);
-            const cardResult = await (0, kanbanOmni_1.handleKanbanUpdateOmni)(unifiedMsg);
-            // Trigger Bot
+            const cardResult = await (0, kanbanOmni_1.handleKanbanUpdateOmni)(unifiedMsg, userId, entityId);
+            // Trigger Bot (Unified Logic)
             if (cardResult && cardResult.success) {
-                if (unifiedMsg.message_type === 'text') { // Only trigger for text for now
-                    const { getActiveBot, executeBotFlow } = await Promise.resolve().then(() => require('../helpers/botEngine'));
-                    const activeBot = await getActiveBot();
-                    if (activeBot) {
-                        const admin = await Promise.resolve().then(() => require('firebase-admin'));
-                        const db = admin.firestore();
-                        const cardSnap = await db.collectionGroup('cards').where(admin.firestore.FieldPath.documentId(), '==', cardResult.cardId).get();
-                        // For WebChat, external_id is sessionId.
-                        // executeBotFlow needs to know this to continue thread.
-                        if (!cardSnap.empty) {
-                            const fullCardData = Object.assign({ id: cardSnap.docs[0].id }, cardSnap.docs[0].data());
-                            await executeBotFlow(activeBot, unifiedMsg.external_id, fullCardData, unifiedMsg.message_text);
-                        }
-                    }
-                }
+                await (0, botEngine_1.tryTriggerBot)(userId, entityId, 'webchat', unifiedMsg.external_id, unifiedMsg.message_text);
             }
             res.status(200).json({ success: true });
         }
