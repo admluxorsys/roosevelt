@@ -56,8 +56,8 @@ interface WhatsAppSendOptions {
  * If userId and entityId are provided, it fetches the credentials from Firestore.
  */
 export async function sendWhatsAppMessage(
-    toNumber: string, 
-    message: string, 
+    toNumber: string,
+    message: string,
     options: WhatsAppSendOptions = {}
 ): Promise<any> {
     let token = process.env.WHATSAPP_ACCESS_TOKEN;
@@ -69,7 +69,7 @@ export async function sendWhatsAppMessage(
             // First try standard paths for the specific user
             const configPath = `users/${options.userId}/entities/${options.entityId}/integrations/whatsapp`;
             const internalPath = `users/${options.userId}/entities/${options.entityId}/integrations/whatsapp_internal`;
-            
+
             const configDoc = await db.doc(configPath).get();
             let data = configDoc.data();
 
@@ -78,21 +78,7 @@ export async function sendWhatsAppMessage(
                 if (internalDoc.exists) data = internalDoc.data();
             }
 
-            // [BACKUP DISCOVERY] If still not found, search all users' entities for this entityId
-            // This is useful in dev if userId is misaligned
-            if (!data?.accessToken || !data?.phoneNumberId) {
-                console.log(`[sendWhatsAppMessage] Config not found for user ${options.userId}. Searching all users...`);
-                const usersSnap = await db.collection('users').get();
-                for (const userDoc of usersSnap.docs) {
-                    const fallbackPath = `users/${userDoc.id}/entities/${options.entityId}/integrations/whatsapp`;
-                    const fallbackSnap = await db.doc(fallbackPath).get();
-                    if (fallbackSnap.exists && fallbackSnap.data()?.accessToken) {
-                        data = fallbackSnap.data();
-                        console.log(`[sendWhatsAppMessage] FOUND config via discovery at ${fallbackPath}`);
-                        break;
-                    }
-                }
-            }
+            // Explicitly removed backup discovery scan to enforce tenant isolation and improve speed
 
             if (data?.accessToken && data?.phoneNumberId) {
                 token = data.accessToken;

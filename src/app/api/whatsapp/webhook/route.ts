@@ -36,11 +36,11 @@ export async function GET(req: Request) {
 // POST: Handle incoming messages
 export async function POST(req: Request) {
     debugLog('--- [Master Webhook] INCOMING HIT ---');
-    
+
     try {
         const rawBody = await req.clone().text();
         const body = JSON.parse(rawBody);
-        
+
         const entry = body.entry?.[0];
         const changes = entry?.changes?.[0];
         const value = changes?.value;
@@ -80,17 +80,18 @@ export async function POST(req: Request) {
             // Find card containing this message in the tenant's context
             const cardsRef = db.collection(`${entityPath}/kanban-groups`);
             const groupsSnapshot = await cardsRef.get();
-            
-            for (const group of groupsSnapshot.docs) {
+
+            // OPTIMIZED: Search in parallel instead of sequentially blocking
+            const updatePromises = groupsSnapshot.docs.map(async (group) => {
                 const cardSnapshot = await group.ref.collection('cards')
                     .where('platform_ids.whatsapp', '==', recipientId)
                     .get();
-                
+
                 if (!cardSnapshot.empty) {
                     const cardDoc = cardSnapshot.docs[0];
                     const messages = cardDoc.data().messages || [];
                     let changed = false;
-                    
+
                     const updatedMessages = messages.map((m: any) => {
                         if (m.whatsappMessageId === messageId || m.kambanMessageId === messageId) {
                             changed = true;
@@ -103,18 +104,19 @@ export async function POST(req: Request) {
                         await cardDoc.ref.update({ messages: updatedMessages });
                         debugLog(`[POST] Status synced to card ${cardDoc.id}`);
                     }
-                    break;
                 }
-            }
+            });
+
+            await Promise.all(updatePromises);
             return NextResponse.json({ success: true });
         }
 
         // 3. INCOMING MESSAGE HANDLING
         const message = value?.messages?.[0];
         if (message) {
-            const from = message.from; 
+            const from = message.from;
             let text = message.text?.body || '';
-            
+
             // Handle interactive/button responses
             if (message.type === 'interactive') {
                 const interactive = message.interactive;
@@ -130,26 +132,54 @@ export async function POST(req: Request) {
 
             if (from && text) {
                 const cleanFrom = from.replace(/\D/g, '');
-                
-                // Find group and card in the tenant's context
-                const groupsRef = db.collection(`${entityPath}/kanban-groups`);
-                const groupsSnapshot = await groupsRef.get();
-                
+
+                // OPTIMIZED O(1) Search: Find group and card via indexed Contacts context
                 let targetCardDoc: any = null;
                 let targetGroupId: string | null = null;
 
-                for (const groupDoc of groupsSnapshot.docs) {
-                    const cardsSnapshot = await groupDoc.ref.collection('cards')
-                        .where('contactNumberClean', '==', cleanFrom)
-                        .limit(1)
-                        .get();
-                    
-                    if (!cardsSnapshot.empty) {
-                        targetCardDoc = cardsSnapshot.docs[0];
-                        targetGroupId = groupDoc.id;
-                        break;
+                const contactSnap = await db.collection(`${entityPath}/contacts`)
+                    .where('phone', '==', `+${cleanFrom}`)
+                    .limit(1)
+                    .get();
+
+                if (!contactSnap.empty) {
+                    const contactData = contactSnap.docs[0].data();
+                    targetGroupId = contactData.kanbanGroupId;
+                    const contactCardId = contactData.kanbanCardId;
+
+                    if (targetGroupId && contactCardId) {
+                        const cardRef = db.doc(`${entityPath}/kanban-groups/${targetGroupId}/cards/${contactCardId}`);
+                        const cardGet = await cardRef.get();
+                        if (cardGet.exists) {
+                            targetCardDoc = cardGet;
+                        }
                     }
                 }
+
+                // Fallback search in parallel if contact doesn't exist but card somehow does (legacy)
+                if (!targetCardDoc || !targetGroupId) {
+                    const groupsRef = db.collection(`${entityPath}/kanban-groups`);
+                    const groupsSnapshot = await groupsRef.get();
+
+                    const searchPromises = groupsSnapshot.docs.map(async (groupDoc) => {
+                        const cardsSnapshot = await groupDoc.ref.collection('cards')
+                            .where('contactNumberClean', '==', cleanFrom)
+                            .limit(1)
+                            .get();
+                        return cardsSnapshot.empty ? null : { doc: cardsSnapshot.docs[0], id: groupDoc.id };
+                    });
+
+                    const results = await Promise.all(searchPromises);
+                    const found = results.find(r => r !== null);
+                    if (found) {
+                        targetCardDoc = found.doc;
+                        targetGroupId = found.id;
+                    }
+                }
+
+                // Reference used below for default group in card creation
+                const groupsRef = db.collection(`${entityPath}/kanban-groups`);
+                const groupsSnapshot = await groupsRef.get();
 
                 const newMessage = {
                     sender: 'user' as const,
@@ -174,7 +204,7 @@ export async function POST(req: Request) {
                     const defaultGroup = groupsSnapshot.docs[0];
                     if (defaultGroup) {
                         const newCardRef = defaultGroup.ref.collection('cards').doc();
-                        
+
                         // 1. Generate CRM ID (Requires Transaction on system_metadata/counters)
                         let numericId = String(Date.now()).slice(-10);
                         try {
@@ -222,13 +252,16 @@ export async function POST(req: Request) {
                     }
                 }
 
-                // 4. TRIGGER CHATBOT (Specific to this tenant)
+                // 4. TRIGGER CHATBOT (Specific to this tenant) - OPTIMIZED: Asynchronous Non-blocking
                 if (groupId && cardId) {
                     debugLog(`[POST] Triggering chatbot for ${entityId}...`);
                     try {
-                        await triggerChatbot(from, text, groupId, cardId, userId, entityId);
+                        // Do NOT await, allow webhook to respond to Meta immediately
+                        triggerChatbot(from, text, groupId, cardId, userId, entityId).catch(botError => {
+                            debugLog(`[POST] Chatbot Async Error: ${botError?.message || String(botError)}`);
+                        });
                     } catch (botError: any) {
-                        debugLog(`[POST] Chatbot Error: ${botError.message}`);
+                        debugLog(`[POST] Chatbot Trigger Error: ${botError.message}`);
                     }
                 }
             }
@@ -243,7 +276,7 @@ export async function POST(req: Request) {
 
 async function triggerChatbot(from: string, text: string, groupId: string, cardId: string, userId: string, entityId: string) {
     debugLog(`[Chatbot Engine] Starting for Tenant: ${entityId} | From: ${from}`);
-    
+
     const { sendWhatsAppMessage } = await import('@/lib/sendProviders');
     const entityPath = `users/${userId}/entities/${entityId}`;
 
@@ -251,9 +284,9 @@ async function triggerChatbot(from: string, text: string, groupId: string, cardI
         // 1. Fetch Tenant-specific Chatbot
         const botsRef = db.collection(`${entityPath}/chatbots`);
         const botsSnapshot = await botsRef.get();
-        
+
         const activeBotDoc = botsSnapshot.docs.find(doc => doc.data().isActive === true || doc.data().isActive === 'true');
-        
+
         if (!activeBotDoc) {
             debugLog(`[Chatbot] No active robot for entity ${entityId}.`);
             return;
@@ -262,7 +295,7 @@ async function triggerChatbot(from: string, text: string, groupId: string, cardI
         const botData = activeBotDoc.data();
         const flow = botData.flow || { nodes: [], edges: [] };
         const cardRef = db.collection('users').doc(userId).collection('entities').doc(entityId).collection('kanban-groups').doc(groupId).collection('cards').doc(cardId);
-        
+
         const cardSnap = await cardRef.get();
         if (!cardSnap.exists) return;
         const cardData = cardSnap.data() || {};
@@ -281,7 +314,7 @@ async function triggerChatbot(from: string, text: string, groupId: string, cardI
             }
             return p;
         };
-        
+
         const currentState = cardData.chatbotState || {};
         const currentNodeId = currentState.currentNodeId;
 
@@ -302,7 +335,7 @@ async function triggerChatbot(from: string, text: string, groupId: string, cardI
             if (node.type === 'textMessageNode') {
                 const msg = replaceVars(node.data?.content || node.data?.text || 'Hola');
                 const res = await sendWhatsAppMessage(from, msg, sendOpts);
-                
+
                 await cardRef.update({
                     messages: admin.firestore.FieldValue.arrayUnion({
                         sender: 'agent', text: msg, timestamp: new Date(), whatsappMessageId: res.messages?.[0]?.id || null, platform: 'whatsapp'
@@ -424,10 +457,10 @@ async function triggerChatbot(from: string, text: string, groupId: string, cardI
                     await executeNode(node.id);
                 }
             } else {
-                 // Failsafe: if waiting for input but node is something else, just start over.
-                 await cardRef.update({ 'chatbotState.waitingForInput': false });
-                 const startNode = flow.nodes.find((n: any) => n.type === 'startNode');
-                 if (startNode) await executeNode(startNode.id);
+                // Failsafe: if waiting for input but node is something else, just start over.
+                await cardRef.update({ 'chatbotState.waitingForInput': false });
+                const startNode = flow.nodes.find((n: any) => n.type === 'startNode');
+                if (startNode) await executeNode(startNode.id);
             }
         } else {
             const startNode = flow.nodes.find((n: any) => n.type === 'startNode');
