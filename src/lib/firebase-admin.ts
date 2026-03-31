@@ -8,6 +8,13 @@ if (!admin.apps.length) {
         const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
         let serviceAccountEnv = process.env.FIREBASE_SERVICE_ACCOUNT;
         
+        const possiblePaths = [
+            path.join(process.cwd(), 'serviceAccountKey.json'),
+            path.join(__dirname, '..', '..', '..', 'serviceAccountKey.json'),
+        ];
+        let serviceAccountPath = possiblePaths.find(p => fs.existsSync(p));
+        let initialized = false;
+
         if (serviceAccountEnv) {
             try {
                 // Remove possible wrapping quotes (handles some OS/env issues)
