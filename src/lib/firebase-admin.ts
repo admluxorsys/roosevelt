@@ -9,28 +9,36 @@ if (!admin.apps.length) {
         let serviceAccountEnv = process.env.FIREBASE_SERVICE_ACCOUNT;
         
         if (serviceAccountEnv) {
-            serviceAccountEnv = serviceAccountEnv.trim();
-            if ((serviceAccountEnv.startsWith("'") && serviceAccountEnv.endsWith("'")) ||
-                (serviceAccountEnv.startsWith('"') && serviceAccountEnv.endsWith('"'))) {
-                serviceAccountEnv = serviceAccountEnv.substring(1, serviceAccountEnv.length - 1);
-            }
-        }
-
-        const possiblePaths = [
-            path.join(process.cwd(), 'serviceAccountKey.json'),
-            path.join(__dirname, '..', '..', '..', 'serviceAccountKey.json'),
-        ];
-        let serviceAccountPath = possiblePaths.find(p => fs.existsSync(p));
-
-        let initialized = false;
-
-        if (serviceAccountEnv) {
             try {
-                const serviceAccount = JSON.parse(serviceAccountEnv);
+                // Remove possible wrapping quotes (handles some OS/env issues)
+                let cleanedEnv = serviceAccountEnv.trim();
+                while ((cleanedEnv.startsWith("'") && cleanedEnv.endsWith("'")) || 
+                       (cleanedEnv.startsWith('"') && cleanedEnv.endsWith('"'))) {
+                    cleanedEnv = cleanedEnv.slice(1, -1);
+                }
+                
+                let parsedServiceAccount;
+                try {
+                    // Strategy 1: Standard double-escaped newlines in JSON
+                    parsedServiceAccount = JSON.parse(cleanedEnv);
+                } catch (firstErr) {
+                    // Strategy 2: Attempt to unescape \n sequences in the raw string if Strategy 1 fails
+                    // This handles cases where Vercel/CI might have double-escaped the JSON entry
+                    const fixedRaw = cleanedEnv.replace(/\\n/g, '\n');
+                    parsedServiceAccount = JSON.parse(fixedRaw);
+                }
+
+                // Strategy 3: Ensure the private_key specifically has real newlines
+                // Firebase Admin SDK cert() is very picky about the 0x0A character
+                if (parsedServiceAccount.private_key && typeof parsedServiceAccount.private_key === 'string') {
+                    parsedServiceAccount.private_key = parsedServiceAccount.private_key.replace(/\\n/g, '\n');
+                }
+
                 admin.initializeApp({
-                    credential: admin.credential.cert(serviceAccount),
+                    credential: admin.credential.cert(parsedServiceAccount),
                     projectId
                 });
+                
                 console.log(`[Firebase Admin] ✅ SUCCESS: Initialized from ENV.`);
                 initialized = true;
             } catch (jsonError: any) {
