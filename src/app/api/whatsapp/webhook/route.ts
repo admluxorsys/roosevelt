@@ -270,7 +270,19 @@ export async function POST(req: Request) {
                     });
                 } else {
                     // Create NEW card in a default group or 'unassigned'
-                    const defaultGroup = groupsSnapshot.docs[0];
+                    let defaultGroup = groupsSnapshot.docs[0];
+                    if (!defaultGroup) {
+                        // If NO groups exist, deterministically create exactly one 'Inbox'
+                        const defaultGroupRef = db.collection(`${entityPath}/kanban-groups`).doc('default_inbox');
+                        await defaultGroupRef.set({
+                            name: 'Inbox',
+                            order: 0,
+                            color: 'bg-[#121212]/50',
+                            createdAt: admin.firestore.FieldValue.serverTimestamp()
+                        }, { merge: true });
+                        defaultGroup = await defaultGroupRef.get() as any;
+                    }
+
                     if (defaultGroup) {
                         const newCardRef = defaultGroup.ref.collection('cards').doc();
 
@@ -307,6 +319,7 @@ export async function POST(req: Request) {
                         const contactName = value.contacts?.[0]?.profile?.name || from;
                         await db.collection(`${entityPath}/contacts`).doc(numericId).set({
                             crmId: numericId,
+                            name: contactName, // Required for CRM UI
                             contactName: contactName,
                             firstName: contactName,
                             contactNumber: from,
