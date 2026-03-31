@@ -391,6 +391,39 @@ async function triggerChatbot(from: string, text: string, groupId: string, cardI
             return p;
         };
 
+        // Helper: Intelligence Input Cleaner (Extract Emails/Clean Greetings)
+        const processCapturedValue = (raw: string, varName: string) => {
+            let clean = raw.trim();
+            const lowerVar = varName.toLowerCase();
+
+            // 1. Email Extraction Strategy
+            if (lowerVar.includes('email') || lowerVar.includes('correo')) {
+                const emailRegex = /([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/;
+                const match = clean.match(emailRegex);
+                if (match) return match[1];
+            }
+
+            // 2. Name Cleaning Strategy (Remove "Hola, me llamo...")
+            if (lowerVar.includes('nombre') || lowerVar.includes('name')) {
+                const prefixes = [
+                    /^(hola|buenos\s+dias|buenas\s+tardes|buenas\s+noches),?\s+(soy|mi\s+nombre\s+es|me\s+llamo)\s+/i,
+                    /^(hola|hey),?\s+/i,
+                    /^mi\s+nombre\s+es\s+/i,
+                    /^me\s+llamo\s+/i,
+                    /^soy\s+/i,
+                    /^i\s+am\s+/i,
+                    /^my\s+name\s+is\s+/i
+                ];
+                for (const p of prefixes) {
+                    if (p.test(clean)) {
+                        clean = clean.replace(p, '');
+                        break;
+                    }
+                }
+            }
+            return clean;
+        };
+
         const currentState = cardData.chatbotState || {};
         const currentNodeId = currentState.currentNodeId;
 
@@ -529,7 +562,14 @@ async function triggerChatbot(from: string, text: string, groupId: string, cardI
         if (currentState.waitingForInput && currentNodeId) {
             const node = flow.nodes.find((n: any) => n.id === currentNodeId);
             if (node?.type === 'captureInputNode' || node?.type === 'textMessageNode') {
-                await cardRef.update({ [`variables.${currentState.variableName || 'input'}`]: text, 'chatbotState.waitingForInput': false });
+                const variableName = currentState.variableName || 'input';
+                const processedValue = processCapturedValue(text, variableName);
+                
+                await cardRef.update({ 
+                    [`variables.${variableName}`]: processedValue, 
+                    'chatbotState.waitingForInput': false 
+                });
+                
                 const next = flow.edges.find((e: any) => e.source === node.id);
                 if (next) await executeNode(next.target);
             } else if (node?.type === 'quickReplyNode' || node?.type === 'listMessageNode') {
