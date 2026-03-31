@@ -69,26 +69,47 @@ export function WhatsAppCloudAPIModal({ isOpen, onClose, activeIntegration }: Pr
         setInitialLoading(true);
 
         const configRef = doc(db, `users/${currentUser.uid}/entities/${activeEntity}/integrations/whatsapp`);
+        const internalConfigRef = doc(db, `users/${currentUser.uid}/entities/${activeEntity}/integrations/whatsapp_internal`);
         
+        let unsubInternal: any = null;
+
         const unsub = onSnapshot(configRef, (snap) => {
             if (snap.exists()) {
+                if (unsubInternal) { unsubInternal(); unsubInternal = null; }
                 const data = snap.data();
-                if (data.status === 'Connected') {
+                if ((data.status === 'Connected' || data.status === 'Internal') && data.phoneNumberId) {
                     setStep(4);
                     setUpdatedAt(data.updatedAt);
-                    setWaConfig(prev => ({
-                        ...prev,
-                        ...data,
-                        displayPhoneNumber: data.displayPhoneNumber || '',
-                    }));
+                    setWaConfig(prev => ({ ...prev, ...data, displayPhoneNumber: data.displayPhoneNumber || '' }));
                 }
+                setTimeout(() => setInitialLoading(false), 500);
             } else {
-                setStep(1);
+                // Fallback to internal if standard doesn't exist
+                if (!unsubInternal) {
+                    unsubInternal = onSnapshot(internalConfigRef, (internalSnap) => {
+                        if (internalSnap.exists()) {
+                            const data = internalSnap.data();
+                            if ((data.status === 'Connected' || data.status === 'Internal') && data.phoneNumberId) {
+                                setStep(4);
+                                setUpdatedAt(data.updatedAt);
+                                setWaConfig(prev => ({ ...prev, ...data, displayPhoneNumber: data.displayPhoneNumber || '' }));
+                            }
+                        } else {
+                            setStep(1);
+                        }
+                        setTimeout(() => setInitialLoading(false), 500);
+                    });
+                } else {
+                    setStep(1);
+                    setTimeout(() => setInitialLoading(false), 500);
+                }
             }
-            setTimeout(() => setInitialLoading(false), 500);
         });
 
-        return () => unsub();
+        return () => {
+            unsub();
+            if (unsubInternal) unsubInternal();
+        };
     }, [isOpen, currentUser, activeEntity]);
 
     if (!activeIntegration || activeIntegration.id !== 'whatsapp') return null;
@@ -190,7 +211,12 @@ export function WhatsAppCloudAPIModal({ isOpen, onClose, activeIntegration }: Pr
         const toastId = toast.loading("Desconectando...");
         try {
             const configRef = doc(db, `users/${currentUser.uid}/entities/${activeEntity}/integrations/whatsapp`);
-            await deleteDoc(configRef);
+            const internalConfigRef = doc(db, `users/${currentUser.uid}/entities/${activeEntity}/integrations/whatsapp_internal`);
+            
+            await Promise.all([
+                deleteDoc(configRef),
+                deleteDoc(internalConfigRef)
+            ]);
 
             // Turn off any active chatbots
             const botsRef = collection(db, `users/${currentUser.uid}/entities/${activeEntity}/chatbots`);

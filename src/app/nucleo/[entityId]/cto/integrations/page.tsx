@@ -44,6 +44,7 @@ export default function IntegrationsPage() {
                 if (d.id === 'whatsapp_internal' && (docData.status === 'Internal' || docData.status === 'Connected')) {
                     data['whatsapp'] = docData;
                 } else if (docData.status === 'Connected') {
+                    if (d.id === 'whatsapp' && !docData.phoneNumberId) return; // Ignore incomplete setups
                     data[d.id] = docData;
                 }
             });
