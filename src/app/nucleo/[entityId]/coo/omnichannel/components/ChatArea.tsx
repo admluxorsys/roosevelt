@@ -12,7 +12,6 @@ interface ChatAreaProps {
     groups: any[];
     groupName: string;
     allConversations: any[];
-    toggleContactPanel: () => void;
 }
 
 const QUICK_REPLIES = [
@@ -22,7 +21,7 @@ const QUICK_REPLIES = [
     { id: 'bye', label: 'Despedida', text: '¡Gracias por contactarnos! Que tengas un excelente día.' },
 ];
 
-export default function ChatArea({ card, groups, groupName, allConversations, toggleContactPanel }: ChatAreaProps) {
+export default function ChatArea({ card, groups, groupName, allConversations }: ChatAreaProps) {
     const [showQuickReplies, setShowQuickReplies] = useState(false);
     const [showMoreMenu, setShowMoreMenu] = useState(false);
     const [showAttachments, setShowAttachments] = useState(false);
@@ -56,11 +55,11 @@ export default function ChatArea({ card, groups, groupName, allConversations, to
             mediaRecorder.onstop = () => {
                 const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
                 const audioFile = new File([audioBlob], `Audio-${Date.now()}.webm`, { type: 'audio/webm' });
-                
-                
+
+
                 logic.setSelectedFile(audioFile);
                 logic.setFilePreviewUrl(URL.createObjectURL(audioFile));
-                
+
                 // stream.getTracks().forEach(track => track.stop());
                 stream.getTracks().forEach(track => track.stop());
             };
@@ -85,7 +84,7 @@ export default function ChatArea({ card, groups, groupName, allConversations, to
 
     const cancelRecording = () => {
         if (mediaRecorderRef.current && isRecording) {
-            mediaRecorderRef.current.stop(); 
+            mediaRecorderRef.current.stop();
             audioChunksRef.current = []; // Discard
             setIsRecording(false);
             if (timerRef.current) clearInterval(timerRef.current);
@@ -116,7 +115,7 @@ export default function ChatArea({ card, groups, groupName, allConversations, to
                 const tenantPath = `users/${currentUser.uid}/entities/${activeEntity}`;
                 try {
                     const cardRef = doc(db, tenantPath, 'kanban-groups', card.groupId, 'cards', card.id);
-                    await updateDoc(cardRef, { 
+                    await updateDoc(cardRef, {
                         unreadCount: 0,
                         lastReadAt: Timestamp.now()
                     });
@@ -127,7 +126,7 @@ export default function ChatArea({ card, groups, groupName, allConversations, to
         };
 
         resetUnread();
-        
+
         // Also reset when window gains focus
         window.addEventListener('focus', resetUnread);
         return () => window.removeEventListener('focus', resetUnread);
@@ -135,7 +134,7 @@ export default function ChatArea({ card, groups, groupName, allConversations, to
 
     const logic = useConversationLogic({
         isOpen: true,
-        onClose: () => {},
+        onClose: () => { },
         card: card,
         groupName: groupName,
         groups: groups,
@@ -150,7 +149,7 @@ export default function ChatArea({ card, groups, groupName, allConversations, to
     }, [card?.id, logic.liveCardData?.messages?.length]);
 
     const contactName = card?.contactName || card?.contactNumber || 'Desconocido';
-    const isOnline = card?.isOnline ?? true; 
+    const isOnline = card?.isOnline ?? true;
 
     const handleSelectQuickReply = (text: string) => {
         logic.setNewMessage(text);
@@ -159,7 +158,7 @@ export default function ChatArea({ card, groups, groupName, allConversations, to
 
     const handleCloseConversation = async () => {
         if (!card?.id || !card?.groupId || !currentUser?.uid || !activeEntity) return;
-        
+
         const isConfirmed = window.confirm("¿Estás seguro de que deseas eliminar permanentemente esta conversación? Esta acción no se puede deshacer.");
         if (!isConfirmed) return;
 
@@ -214,11 +213,8 @@ export default function ChatArea({ card, groups, groupName, allConversations, to
                     <button className="p-1.5 hover:bg-neutral-800 rounded transition-colors" title="Mark as Unread">
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
                     </button>
-                    <button className="p-1.5 hover:bg-neutral-800 rounded transition-colors" title="Contact Info" onClick={toggleContactPanel}>
-                        <Info size={16} />
-                    </button>
                     <div className="relative" ref={moreMenuRef}>
-                        <button 
+                        <button
                             onClick={() => setShowMoreMenu(!showMoreMenu)}
                             className={`p-2 transition-colors rounded-md ${showMoreMenu ? 'text-white bg-neutral-800' : 'text-neutral-400 hover:text-white hover:bg-neutral-800'}`}
                             title="More Actions"
@@ -230,25 +226,15 @@ export default function ChatArea({ card, groups, groupName, allConversations, to
                         {showMoreMenu && (
                             <div className="absolute top-full right-0 mt-2 w-52 bg-neutral-900 border border-neutral-800 rounded-lg shadow-2xl z-[70] overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
                                 <div className="p-1">
-                                    <button 
-                                        className="w-full flex items-center px-3 py-2.5 text-xs text-neutral-300 hover:bg-neutral-800 transition-colors rounded-md group text-left"
-                                        onClick={() => {
-                                            setShowMoreMenu(false);
-                                            toggleContactPanel();
-                                        }}
-                                    >
-                                        <User size={14} className="mr-3 text-neutral-500 group-hover:text-blue-400" />
-                                        Ver Perfil del Contacto
-                                    </button>
                                     <div className="h-px bg-neutral-800 my-1 mx-2" />
-                                    <button 
+                                    <button
                                         className="w-full flex items-center px-3 py-2.5 text-xs text-neutral-300 hover:bg-neutral-800 transition-colors rounded-md group text-left"
                                         onClick={handleCloseConversation}
                                     >
                                         <XCircle size={14} className="mr-3 text-neutral-500 group-hover:text-yellow-500" />
                                         Finalizar Conversación
                                     </button>
-                                    <button 
+                                    <button
                                         className={`w-full flex items-center px-3 py-2.5 text-xs transition-colors rounded-md group text-left ${logic.liveCardData?.isBlocked ? 'text-green-400 hover:bg-green-500/10' : 'text-red-400 hover:bg-red-500/10'}`}
                                         onClick={handleBlockContact}
                                     >
@@ -271,8 +257,8 @@ export default function ChatArea({ card, groups, groupName, allConversations, to
                         {(msgs as any[]).map((msg: any, msgIdx: number) => {
                             const prevMsg = (msgs as any[])[msgIdx - 1];
                             const EXPIRE_THRESHOLD = 48 * 60 * 60 * 1000; // 48 hours
-                            
-                            const showGapMarker = prevMsg && msg.timestamp?.toDate && prevMsg.timestamp?.toDate && 
+
+                            const showGapMarker = prevMsg && msg.timestamp?.toDate && prevMsg.timestamp?.toDate &&
                                 (msg.timestamp.toDate().getTime() - prevMsg.timestamp.toDate().getTime() > EXPIRE_THRESHOLD);
 
                             return (
@@ -294,10 +280,10 @@ export default function ChatArea({ card, groups, groupName, allConversations, to
                                         <div className={`max-w-[75%] group ${msg.sender === 'agent' ? 'flex flex-col items-end' : 'flex flex-col items-start'}`}>
 
                                             <div className={`px-2.5 py-1.5 rounded-xl relative ${msg.sender === 'agent'
-                                                    ? 'bg-blue-600 text-white rounded-br-none shadow-lg'
-                                                    : 'bg-neutral-800 text-neutral-200 rounded-bl-none shadow-sm'
+                                                ? 'bg-blue-600 text-white rounded-br-none shadow-lg'
+                                                : 'bg-neutral-800 text-neutral-200 rounded-bl-none shadow-sm'
                                                 }`}>
-                                                
+
                                                 {/* File Support */}
                                                 {msg.fileUrl && (
                                                     <div className="mb-1.5">
@@ -380,8 +366,8 @@ export default function ChatArea({ card, groups, groupName, allConversations, to
                                                     msg.status === 'sending' ? (
                                                         <Loader2 size={10} className="ml-1 animate-spin text-neutral-500" />
                                                     ) : msg.status === 'failed' ? (
-                                                        <div 
-                                                            className="ml-2 flex items-center gap-1 bg-red-500/10 text-red-500 px-1.5 py-0.5 rounded cursor-pointer hover:bg-red-500/20 transition-colors border border-red-500/20" 
+                                                        <div
+                                                            className="ml-2 flex items-center gap-1 bg-red-500/10 text-red-500 px-1.5 py-0.5 rounded cursor-pointer hover:bg-red-500/20 transition-colors border border-red-500/20"
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
                                                                 logic.retryMessage?.(msg);
@@ -423,9 +409,9 @@ export default function ChatArea({ card, groups, groupName, allConversations, to
                     const lastMsg = lastMsgArray[lastMsgArray.length - 1];
                     const EXPIRE_THRESHOLD = 48 * 60 * 60 * 1000;
                     const now = new Date().getTime();
-                    const lastTs = lastMsg.timestamp?.toDate ? lastMsg.timestamp.toDate().getTime() : 
-                                   (lastMsg.timestamp?.seconds ? lastMsg.timestamp.seconds * 1000 : 0);
-                    
+                    const lastTs = lastMsg.timestamp?.toDate ? lastMsg.timestamp.toDate().getTime() :
+                        (lastMsg.timestamp?.seconds ? lastMsg.timestamp.seconds * 1000 : 0);
+
                     if (lastTs > 0 && (now - lastTs > EXPIRE_THRESHOLD)) {
                         return (
                             <div className="flex justify-center my-6">
@@ -443,7 +429,7 @@ export default function ChatArea({ card, groups, groupName, allConversations, to
 
             {/* Input Area */}
             <div className="p-4 bg-[#111] border-t border-neutral-800 flex-shrink-0 relative">
-                
+
                 {/* File Preview Overlay */}
                 {logic.filePreviewUrl && (
                     <div className="absolute bottom-full left-4 mb-4 bg-neutral-900 border border-neutral-800 rounded-2xl shadow-2xl p-3 z-50 animate-in fade-in slide-in-from-bottom-4 duration-300 w-72">
@@ -459,7 +445,7 @@ export default function ChatArea({ card, groups, groupName, allConversations, to
                                     </div>
                                 </div>
                             )}
-                            <button 
+                            <button
                                 onClick={logic.handleCancelPreview}
                                 className="absolute -top-2 -right-2 bg-neutral-950 text-white rounded-full p-1 border border-neutral-800 hover:bg-red-500 transition-colors shadow-lg"
                             >
@@ -479,8 +465,8 @@ export default function ChatArea({ card, groups, groupName, allConversations, to
                         )}
                         {!logic.uploading && (
                             <div className="mt-3 flex gap-2">
-                                <Button 
-                                    size="sm" 
+                                <Button
+                                    size="sm"
                                     className="flex-1 h-8 bg-blue-600 hover:bg-blue-700 text-[10px] font-black uppercase tracking-widest rounded-lg"
                                     onClick={logic.handleDisplayFileSend}
                                 >
@@ -500,7 +486,7 @@ export default function ChatArea({ card, groups, groupName, allConversations, to
                         </div>
                         <div className="max-h-60 overflow-y-auto">
                             {QUICK_REPLIES.map(reply => (
-                                <button 
+                                <button
                                     key={reply.id}
                                     onClick={() => handleSelectQuickReply(reply.text)}
                                     className="w-full text-left px-4 py-3 hover:bg-neutral-800 border-b border-neutral-800/50 last:border-0 transition-colors group"
@@ -514,12 +500,12 @@ export default function ChatArea({ card, groups, groupName, allConversations, to
                 )}
 
                 <div className="flex items-end bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden focus-within:ring-1 focus-within:ring-blue-500 transition-shadow relative">
-                    
+
                     {logic.liveCardData?.isBlocked && (
                         <div className="absolute inset-0 bg-neutral-900/80 backdrop-blur-[2px] z-20 flex items-center justify-center gap-3 animate-in fade-in duration-300">
                             <Ban size={16} className="text-red-500" />
                             <span className="text-[11px] font-bold text-neutral-400 uppercase tracking-widest">Contacto Bloqueado</span>
-                            <button 
+                            <button
                                 onClick={logic.handleToggleBlock}
                                 className="ml-2 text-blue-500 hover:text-blue-400 text-[10px] font-black uppercase tracking-widest border-b border-blue-500/30 transition-all hover:border-blue-400"
                             >
@@ -528,7 +514,7 @@ export default function ChatArea({ card, groups, groupName, allConversations, to
                         </div>
                     )}
 
-                    <button 
+                    <button
                         disabled={logic.liveCardData?.isBlocked}
                         onClick={() => setShowQuickReplies(!showQuickReplies)}
                         className={`p-3 transition-colors ${showQuickReplies ? 'text-blue-500 bg-blue-500/10' : 'text-neutral-400 hover:text-white'}`}
@@ -539,7 +525,7 @@ export default function ChatArea({ card, groups, groupName, allConversations, to
 
                     {/* Attachment Menu */}
                     <div className="relative" ref={attachmentsRef}>
-                        <button 
+                        <button
                             onClick={() => setShowAttachments(!showAttachments)}
                             className={`p-3 transition-colors ${showAttachments ? 'text-blue-500 bg-blue-500/10' : 'text-neutral-400 hover:text-white'}`}
                             title="Adjuntos"
@@ -594,17 +580,17 @@ export default function ChatArea({ card, groups, groupName, allConversations, to
 
                     <div className="flex items-center px-2 pb-2 h-[44px]">
                         <input {...logic.getInputProps()} />
-                        
+
                         {isRecording ? (
                             <>
-                                <button 
+                                <button
                                     onClick={cancelRecording}
                                     className="p-2 text-neutral-500 hover:text-red-400 transition-colors mx-1"
                                     title="Cancelar grabación"
                                 >
                                     <X size={18} />
                                 </button>
-                                <button 
+                                <button
                                     onClick={stopRecording}
                                     className="ml-2 p-2 rounded-full bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-500/20 transition-transform hover:scale-105 flex items-center justify-center w-8 h-8"
                                     title="Enviar Audio PTT"

@@ -4,17 +4,15 @@ import React, { useState } from 'react';
 import InboxSidebar from './components/InboxSidebar';
 import ChatList from './components/ChatList';
 import ChatArea from './components/ChatArea';
-import ContactPanel from './components/ContactPanel';
 import { useKanbanBoard } from '../whatsapp/hooks/useKanbanBoard';
 
 export default function OmnichannelInboxPage() {
     // State to manage which conversation is active
     const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
     const [selectedFolder, setSelectedFolder] = useState<string>('all');
-    const [showContactPanel, setShowContactPanel] = useState(true);
 
     const { cards, groups, loading } = useKanbanBoard();
-    
+
     // Find active card data
     const activeCard = cards.find(c => c.id === activeConversationId) || null;
     const activeGroupName = groups.find(g => activeCard && g.id === activeCard.groupId)?.name || '';
@@ -47,16 +45,7 @@ export default function OmnichannelInboxPage() {
                             groups={groups}
                             groupName={activeGroupName}
                             allConversations={cards}
-                            toggleContactPanel={() => setShowContactPanel(!showContactPanel)}
                         />
-
-                        {/* Contact Details Panel (Rightmost) */}
-                        {showContactPanel && (
-                            <ContactPanel 
-                                card={activeCard}
-                                groups={groups}
-                            />
-                        )}
                     </>
                 ) : (
                     <div className="flex flex-1 items-center justify-center flex-col text-neutral-500">
