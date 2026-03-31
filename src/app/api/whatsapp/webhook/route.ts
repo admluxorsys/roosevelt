@@ -376,7 +376,7 @@ async function triggerChatbot(from: string, text: string, groupId: string, cardI
             if (!val) return '';
             let p = val;
             const context = {
-                nombre: cardData.contactName || 'Amigo',
+                nombre: cardData.contactName || '',
                 ...(cardData.variables || {}),
                 ...(cardData.customFields || {})
             };
@@ -414,10 +414,9 @@ async function triggerChatbot(from: string, text: string, groupId: string, cardI
                     lastMessage: msg.substring(0, 47) + '...',
                     updatedAt: new Date(),
                     unreadCount: 0,
+                    'chatbotState.currentNodeId': node.id,
+                    'chatbotState.waitingForInput': true
                 });
-
-                const next = flow.edges.find((e: any) => e.source === node.id);
-                if (next) await executeNode(next.target);
                 return;
             }
 
@@ -524,7 +523,7 @@ async function triggerChatbot(from: string, text: string, groupId: string, cardI
 
         if (currentState.waitingForInput && currentNodeId) {
             const node = flow.nodes.find((n: any) => n.id === currentNodeId);
-            if (node?.type === 'captureInputNode') {
+            if (node?.type === 'captureInputNode' || node?.type === 'textMessageNode') {
                 await cardRef.update({ [`variables.${currentState.variableName || 'input'}`]: text, 'chatbotState.waitingForInput': false });
                 const next = flow.edges.find((e: any) => e.source === node.id);
                 if (next) await executeNode(next.target);
