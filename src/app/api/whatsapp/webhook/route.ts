@@ -70,22 +70,42 @@ export async function POST(req: Request) {
             return NextResponse.json({ success: false, error: 'No phone_number_id' });
         }
 
-        // 1. TENANT IDENTIFICATION (Resilient Strategy: Agnostic + URL Fallback)
+        // 1. TENANT IDENTIFICATION (Optimized O(1) Indexed Lookup)
         debugLog(`[POST] Searching tenant for Phone ID: ${recipientPhoneNumberId}`);
-        const { resolveTenant } = await import('@/lib/tenantResolver');
 
         let userId = searchParams.get('u');
         let entityId = searchParams.get('e');
 
-        // Try discovery from vault
-        const tenant = await resolveTenant('whatsapp', recipientPhoneNumberId);
+        if (!userId || !entityId) {
+            const tenantSnap = await db.collectionGroup('integrations_whatsapp')
+                .where('phoneNumberId', '==', recipientPhoneNumberId)
+                .limit(1)
+                .get();
 
-        if (tenant) {
-            userId = tenant.userId;
-            entityId = tenant.entityId;
+            if (!tenantSnap.empty) {
+                const pathSegments = tenantSnap.docs[0].ref.path.split('/');
+                if (pathSegments.length >= 4) {
+                    userId = pathSegments[1];
+                    entityId = pathSegments[3];
+                }
+            } else {
+                // Fallback to internal/testing path
+                const internalSnap = await db.collectionGroup('integrations_whatsapp_internal')
+                    .where('phoneNumberId', '==', recipientPhoneNumberId)
+                    .limit(1)
+                    .get();
+                if (!internalSnap.empty) {
+                    const pathSegments = internalSnap.docs[0].ref.path.split('/');
+                    if (pathSegments.length >= 4) {
+                        userId = pathSegments[1];
+                        entityId = pathSegments[3];
+                    }
+                }
+            }
+        }
+
+        if (userId && entityId) {
             debugLog(`[POST] Tenant Discovery Success: User=${userId}, Entity=${entityId}`);
-        } else if (userId && entityId) {
-            debugLog(`[POST] Using Tenant from URL: User=${userId}, Entity=${entityId}`);
         } else {
             // BACKUP SEARCH: try a legacy system mapping if it exists
             const mappingRef = db.doc(`system_mappings/whatsapp_numbers/numbers/${recipientPhoneNumberId}`);
@@ -117,12 +137,8 @@ export async function POST(req: Request) {
             const cardsRef = db.collection(`${entityPath}/kanban-groups`);
             const groupsSnapshot = await cardsRef.get();
 
-<<<<<<< Updated upstream
             // OPTIMIZED: Search in parallel instead of sequentially blocking
             const updatePromises = groupsSnapshot.docs.map(async (group) => {
-=======
-            for (const group of groupsSnapshot.docs) {
->>>>>>> Stashed changes
                 const cardSnapshot = await group.ref.collection('cards')
                     .where('platform_ids.whatsapp', '==', recipientId)
                     .get();
@@ -154,6 +170,11 @@ export async function POST(req: Request) {
         // 3. INCOMING MESSAGE HANDLING
         const message = value?.messages?.[0];
         if (message) {
+            // Drop bot echoes and invalid messages entirely to prevent empty duplicate cards
+            if (message.from === recipientPhoneNumberId || message.is_echo || value?.statuses) {
+                return NextResponse.json({ success: true, ignored: 'echo_or_status' });
+            }
+
             const from = message.from;
             let text = message.text?.body || '';
 
@@ -173,7 +194,7 @@ export async function POST(req: Request) {
             if (from && text) {
                 const cleanFrom = from.replace(/\D/g, '');
 
-<<<<<<< Updated upstream
+
                 // OPTIMIZED O(1) Search: Find group and card via indexed Contacts context
                 let targetCardDoc: any = null;
                 let targetGroupId: string | null = null;
@@ -195,55 +216,33 @@ export async function POST(req: Request) {
                             targetCardDoc = cardGet;
                         }
                     }
-=======
-                // Find all potential cards for this number across all groups
-                const allMatches: any[] = [];
-                const groupsRef = db.collection(`${entityPath}/kanban-groups`);
-                const groupsSnapshot = await groupsRef.get();
-
-                for (const groupDoc of groupsSnapshot.docs) {
-                    const cardsSnapshot = await groupDoc.ref.collection('cards')
-                        .where('contactNumberClean', '==', cleanFrom)
-                        .get();
-
-                    cardsSnapshot.forEach(doc => {
-                        allMatches.push({ doc, groupId: groupDoc.id });
-                    });
                 }
 
-                let targetCardDoc: any = null;
-                let targetGroupId: string | null = null;
-
-                if (allMatches.length > 0) {
-                    // Pick the one with the latest update
-                    allMatches.sort((a, b) => {
-                        const tA = (a.doc.data().updatedAt?.toDate?.() || new Date(0)).getTime();
-                        const tB = (b.doc.data().updatedAt?.toDate?.() || new Date(0)).getTime();
-                        return tB - tA;
-                    });
-                    targetCardDoc = allMatches[0].doc;
-                    targetGroupId = allMatches[0].groupId;
->>>>>>> Stashed changes
-                }
-
-                // Fallback search in parallel if contact doesn't exist but card somehow does (legacy)
+                // Fallback search across all groups
                 if (!targetCardDoc || !targetGroupId) {
+                    const allMatches: any[] = [];
                     const groupsRef = db.collection(`${entityPath}/kanban-groups`);
                     const groupsSnapshot = await groupsRef.get();
 
-                    const searchPromises = groupsSnapshot.docs.map(async (groupDoc) => {
+                    for (const groupDoc of groupsSnapshot.docs) {
                         const cardsSnapshot = await groupDoc.ref.collection('cards')
                             .where('contactNumberClean', '==', cleanFrom)
-                            .limit(1)
                             .get();
-                        return cardsSnapshot.empty ? null : { doc: cardsSnapshot.docs[0], id: groupDoc.id };
-                    });
 
-                    const results = await Promise.all(searchPromises);
-                    const found = results.find(r => r !== null);
-                    if (found) {
-                        targetCardDoc = found.doc;
-                        targetGroupId = found.id;
+                        cardsSnapshot.forEach(doc => {
+                            allMatches.push({ doc, groupId: groupDoc.id });
+                        });
+                    }
+
+                    if (allMatches.length > 0) {
+                        // Pick the one with the latest update
+                        allMatches.sort((a, b) => {
+                            const tA = (a.doc.data().updatedAt?.toDate?.() || new Date(0)).getTime();
+                            const tB = (b.doc.data().updatedAt?.toDate?.() || new Date(0)).getTime();
+                            return tB - tA;
+                        });
+                        targetCardDoc = allMatches[0].doc;
+                        targetGroupId = allMatches[0].groupId;
                     }
                 }
 
@@ -322,7 +321,6 @@ export async function POST(req: Request) {
                     }
                 }
 
-<<<<<<< Updated upstream
                 // 4. TRIGGER CHATBOT (Specific to this tenant) - OPTIMIZED: Asynchronous Non-blocking
                 if (groupId && cardId) {
                     debugLog(`[POST] Triggering chatbot for ${entityId}...`);
@@ -334,12 +332,6 @@ export async function POST(req: Request) {
                     } catch (botError: any) {
                         debugLog(`[POST] Chatbot Trigger Error: ${botError.message}`);
                     }
-=======
-                // Trigger Chatbot (Local/Hybrid development support)
-                if (groupId && cardId) {
-                    console.log(`[Webhook] 🤖 Triggering Chatbot for ${from}...`);
-                    await triggerChatbot(from, text, groupId, cardId, userId, entityId);
->>>>>>> Stashed changes
                 }
 
             }
