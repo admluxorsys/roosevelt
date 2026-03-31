@@ -3,12 +3,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import {
-  X, List, Calendar, Paperclip, CheckSquare, AlignLeft, Plus, Upload,
+  X, List, Calendar, Paperclip, CheckSquare, AlignLeft, Plus, Upload, Trash2,
   FileText, File, Loader2, Check, ChevronDown, ExternalLink, Link, Copy,
   MessageCircle, Instagram, Facebook, Globe2
 } from 'lucide-react';
 import { db, storage } from '@/lib/firebase';
-import { doc, onSnapshot, updateDoc, setDoc, runTransaction } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc, setDoc, runTransaction, deleteField } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { toast } from 'sonner';
 
@@ -90,8 +90,8 @@ function BadgeSelect({
 }
 
 function FileRow({
-  label, fieldKey, cardId, groupId, url,
-}: { label: string; fieldKey: string; cardId: string; groupId: string; url?: string }) {
+  label, fieldKey, cardId, groupId, fileData, allowMultiple
+}: { label: string; fieldKey: string; cardId: string; groupId: string; fileData?: any; allowMultiple?: boolean }) {
   const { currentUser, activeEntity } = useAuth();
   const getTenantPath = () => {
     if (!currentUser?.uid || !activeEntity) return '';
@@ -100,19 +100,33 @@ function FileRow({
   const [uploading, setUploading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const files = Array.isArray(fileData) ? fileData : (fileData?.url ? [fileData] : []);
+
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !cardId || !groupId) return;
+    const selectedFiles = e.target.files;
+    if (!selectedFiles?.length || !cardId || !groupId) return;
     setUploading(true);
     try {
-      const storageRef = ref(storage, `cards/${cardId}/${fieldKey}/${file.name}`);
-      await uploadBytes(storageRef, file);
-      const downloadURL = await getDownloadURL(storageRef);
+      const newFiles = allowMultiple ? [...files] : [];
+      let lastFile: any = null;
+
+      for (let i = 0; i < selectedFiles.length; i++) {
+        const file = selectedFiles[i];
+        const storagePath = `uploads/${currentUser?.uid}/entities/${activeEntity}/cards/${cardId}/${fieldKey}/${Date.now()}_${file.name}`;
+        const storageRef = ref(storage, storagePath);
+        await uploadBytes(storageRef, file);
+        const downloadURL = await getDownloadURL(storageRef);
+        const fileObj = { url: downloadURL, name: file.name };
+        newFiles.push(fileObj);
+        lastFile = fileObj;
+      }
+
       await updateDoc(doc(db, `${getTenantPath()}/kanban-groups`, groupId, 'cards', cardId), {
-        [`documents.${fieldKey}`]: { url: downloadURL, name: file.name },
+        [`documents.${fieldKey}`]: allowMultiple ? newFiles : lastFile,
       });
-      toast.success(`${label} subido`);
-    } catch {
+      toast.success(`${label} subido(s)`);
+    } catch (error) {
+      console.error("Upload error:", error);
       toast.error('Error al subir archivo');
     } finally {
       setUploading(false);
@@ -120,32 +134,83 @@ function FileRow({
     }
   };
 
+  const handleDelete = async (index?: number) => {
+    if (!confirm(`¿Seguro que quieres eliminar el archivo?`)) return;
+    try {
+      if (allowMultiple && index !== undefined) {
+        const newFiles = [...files];
+        newFiles.splice(index, 1);
+        await updateDoc(doc(db, `${getTenantPath()}/kanban-groups`, groupId, 'cards', cardId), {
+          [`documents.${fieldKey}`]: newFiles.length > 0 ? newFiles : deleteField(),
+        });
+      } else {
+        await updateDoc(doc(db, `${getTenantPath()}/kanban-groups`, groupId, 'cards', cardId), {
+          [`documents.${fieldKey}`]: deleteField(),
+        });
+      }
+      toast.success(`Archivo eliminado`);
+    } catch {
+      toast.error('Error al eliminar archivo');
+    }
+  };
+
   return (
-    <div className="flex items-center group px-4 py-2 hover:bg-white/[0.03] transition-colors rounded-lg gap-3 min-h-[36px]">
+    <div className="flex min-h-[36px] items-center group px-4 py-2 hover:bg-white/[0.03] transition-colors rounded-lg gap-3">
       <Paperclip size={14} className="text-neutral-600 flex-shrink-0" />
       <span className="w-44 text-[12px] text-neutral-500 truncate flex-shrink-0">{label}</span>
-      <div className="flex-1 flex items-center gap-2">
-        {url ? (
-          <a
-            href={url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1.5 px-2.5 py-0.5 bg-neutral-800 border border-neutral-700 rounded text-[11px] text-neutral-200 hover:bg-neutral-700 transition-colors max-w-[180px] truncate"
-          >
-            <FileText size={10} />
-            <span className="truncate">{label.slice(0, 20)}...</span>
-            <ExternalLink size={9} className="flex-shrink-0" />
-          </a>
+      <div className="flex-1 flex flex-wrap items-center gap-2">
+        {files.length > 0 ? (
+          files.map((f, i) => (
+            <div key={i} className="flex items-center gap-1 group/file">
+              <a
+                href={f.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 px-2.5 py-0.5 bg-neutral-800 border border-neutral-700 rounded text-[11px] text-neutral-200 hover:bg-neutral-700 transition-colors max-w-[170px] truncate"
+              >
+                <FileText size={10} />
+                <span className="truncate">{f.name ? f.name.slice(0, 20) : 'Archivo'}</span>
+                <ExternalLink size={9} className="flex-shrink-0" />
+              </a>
+              <button
+                 onClick={(e) => { e.preventDefault(); handleDelete(i); }}
+                 className="p-1 rounded opacity-0 group-hover/file:opacity-100 hover:bg-red-500/10 text-neutral-600 hover:text-red-400 transition-all"
+                 title="Eliminar archivo"
+              >
+                <X size={12} />
+              </button>
+            </div>
+          ))
         ) : (
           <span className="text-[12px] text-neutral-700 italic">Vacío</span>
         )}
-        <button
-          onClick={() => inputRef.current?.click()}
-          className="opacity-0 group-hover:opacity-100 transition-opacity ml-auto p-1 rounded hover:bg-white/5 text-neutral-600 hover:text-neutral-300"
-        >
-          {uploading ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
-        </button>
-        <input ref={inputRef} type="file" className="hidden" onChange={handleFile} />
+        
+        <div className="opacity-0 group-hover:opacity-100 transition-opacity ml-auto flex items-center gap-1">
+          {files.length > 0 && !allowMultiple && (
+            <button
+               onClick={() => handleDelete()}
+               className="p-1 rounded hover:bg-red-500/10 text-neutral-600 hover:text-red-400 transition-colors"
+               title="Eliminar todo"
+            >
+              <Trash2 size={13} />
+            </button>
+          )}
+          <button
+            onClick={() => inputRef.current?.click()}
+            className="p-1 rounded hover:bg-white/5 text-neutral-600 hover:text-neutral-300 transition-colors"
+            title={files.length > 0 ? (allowMultiple ? "Subir más" : "Reemplazar") : "Subir archivo"}
+          >
+            {uploading ? <Loader2 size={13} className="animate-spin" /> : (allowMultiple ? <Plus size={13} /> : <Upload size={13} />)}
+          </button>
+        </div>
+        <input 
+          ref={inputRef} 
+          type="file" 
+          multiple={allowMultiple}
+          accept=".pdf,.doc,.docx,.xls,.xlsx,image/*,video/*"
+          className="hidden" 
+          onChange={handleFile} 
+        />
       </div>
     </div>
   );
@@ -295,7 +360,15 @@ export default function ConversationModal({
             {/* Otros campos */}
             <div className="py-2"><div className="h-[1px] bg-white/[0.05]" /></div>
             {DOC_FIELDS.map(field => (
-              <FileRow key={field.key} label={field.label} fieldKey={field.key} cardId={data.id} groupId={data.groupId} url={data.documents?.[field.key]?.url} />
+              <FileRow 
+                key={field.key} 
+                label={field.label} 
+                fieldKey={field.key} 
+                cardId={data.id} 
+                groupId={data.groupId} 
+                fileData={data.documents?.[field.key]} 
+                allowMultiple={field.key === 'photo'}
+              />
             ))}
           </div>
         </div>

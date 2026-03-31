@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';import { useAuth } from '@/contexts/AuthContext';
+import { useState, useEffect } from 'react';import { useAuth } from '@/contexts/AuthContext';
 
 import { db } from '@/lib/firebase';
 import { collection, query, orderBy, onSnapshot, doc, updateDoc, arrayUnion, Timestamp, addDoc } from 'firebase/firestore';
@@ -76,14 +76,19 @@ export const useKambanBoard = (filterTerm: string = '') => {
         // Determine dest group
         let destGroupId = overId;
         const isOverGroup = groups.some(g => g.id === overId);
+        
         if (!isOverGroup) {
             // Dropped on a card?
             const overCard = cards.find(c => c.id === overId);
-            if (overCard) destGroupId = overCard.groupId;
-            else return;
+            if (overCard) {
+                destGroupId = overCard.groupId;
+            } else {
+                console.warn("[useKambanBoard] Over target not found:", overId);
+                return;
+            }
         }
 
-        if (sourceGroupId === destGroupId) return; // Reorder logic TODO
+        if (sourceGroupId === destGroupId) return;
 
         // Optimistic Update
         setCards(prev => prev.map(c =>
@@ -93,6 +98,7 @@ export const useKambanBoard = (filterTerm: string = '') => {
         const destGroup = groups.find(g => g.id === destGroupId);
 
         try {
+            console.log(`[useKambanBoard] Moving card ${activeId} from ${sourceGroupId} to ${destGroupId}`);
             await moveCardCallable({
                 cardId: activeId,
                 sourceGroupId,
@@ -101,19 +107,25 @@ export const useKambanBoard = (filterTerm: string = '') => {
                 entityId: activeEntity
             });
 
-            await updateDoc(doc(db, `${getTenantPath()}/kanban-groups`, destGroupId, 'cards', activeId), {
+            const cardRef = doc(db, `${getTenantPath()}/kanban-groups`, destGroupId, 'cards', activeId);
+            await updateDoc(cardRef, {
+                groupId: destGroupId,
                 history: arrayUnion({
                     id: `hist_${Date.now()}`,
                     type: 'status',
                     content: `Movido a ${destGroup?.name || 'Grupo'}`,
                     timestamp: Timestamp.now(),
-                    author: 'Usuario'
+                    author: currentUser?.displayName || 'Usuario'
                 })
             });
             toast.success(`Movido a ${destGroup?.name}`);
         } catch (error) {
-            console.error('Move failed', error);
-            toast.error('Error al mover');
+            console.error('[useKambanBoard] Move failed:', error);
+            toast.error('Error al mover tarjeta');
+            // Revert optimistic update
+            setCards(prev => prev.map(c =>
+                c.id === activeId ? { ...c, groupId: sourceGroupId } : c
+            ));
         }
     };
 
@@ -151,5 +163,3 @@ export const useKambanBoard = (filterTerm: string = '') => {
         setCards
     };
 };
-
-

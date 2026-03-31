@@ -339,6 +339,17 @@ export default function ContactsPage() {
 
         const filtered = data.filter(contact => {
             if (!contact.id || seenIds.has(contact.id)) return false;
+            
+            // VALIDATION: Prevent empty "ghost" data from Omnichannel or Kanban
+            const phoneStr = String(contact.phone || '').replace(/\D/g, '');
+            const hasPhone = phoneStr.length > 5;
+            const hasName = contact.name && String(contact.name).trim() !== '' && String(contact.name).trim().toLowerCase() !== 'sin nombre';
+            
+            if (!hasPhone && !hasName) {
+                // If the contact has no phone and no real name, don't show it (prevents empty ghost records)
+                return false;
+            }
+
             seenIds.add(contact.id);
             return true;
         });
@@ -539,7 +550,14 @@ export default function ContactsPage() {
                         }
                     });
                     // Finalize contact data
-                    if (!mappedContact.name && !rowDataTemp.nombre && !rowDataTemp.name) continue;
+                    // Ensure the contact has standard names avoiding ghost records
+                    if (!mappedContact.name && !rowDataTemp.nombre && !rowDataTemp.name) {
+                        const hasPhone = (mappedContact.phone || '').toString().replace(/[^\d+]/g, '').length > 5;
+                        if (!hasPhone && !mappedContact.email) {
+                            // Do NOT save if there is no name, no phone, and no email
+                            continue;
+                        }
+                    }
                     if (!mappedContact.name) mappedContact.name = rowDataTemp.name || rowDataTemp.nombre || 'Sin Nombre';
 
                     // Normalize phone and check duplicates
@@ -660,6 +678,19 @@ export default function ContactsPage() {
                 }
 
                 // --- CRM SYNC LOGIC ---
+
+                if (!primaryCard.contactName && !primaryCard.email && !phone) {
+                    continue; // Skip completely empty kanban cards
+                }
+
+                const nameStr = (primaryCard.contactName || 'Sin Nombre').trim();
+                const phoneStr = String(phone || '').replace(/\D/g, '');
+                
+                // Final validation before saving
+                if (phoneStr.length < 5 && nameStr.toLowerCase() === 'sin nombre') {
+                    continue; // Do NOT generate empty ghost records in CRM
+                }
+
                 // 1. Check if contact already exists by phone (normalized match)
                 // We fetch all and filter in memory to be safe with formatting variations, 
                 // but usually the normalizePhoneNumber is stable.
@@ -667,7 +698,7 @@ export default function ContactsPage() {
                 const existingDocs = await getDocs(existingContactQuery);
 
                 const contactData: any = {
-                    name: primaryCard.contactName || 'Sin Nombre',
+                    name: nameStr,
                     email: primaryCard.email || '',
                     source: 'WhatsApp',
                     stage: 'In Progress',

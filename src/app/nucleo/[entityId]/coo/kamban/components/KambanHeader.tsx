@@ -18,7 +18,9 @@ export const KambanHeader = ({
     setFilter,
     channelStats,
     isSidebarCollapsed,
-    toggleSidebar
+    toggleSidebar,
+    onNewChat,
+    onSettings
 }: any) => {
     return (
         <div className="h-[52px] border-b border-white/5 bg-black/40 backdrop-blur-xl flex items-center justify-between px-4 flex-shrink-0 z-20">
@@ -142,13 +144,22 @@ export const KambanHeader = ({
                         </DropdownMenuContent>
                     </DropdownMenu>
 
-                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-neutral-400 hover:text-white border border-transparent hover:border-white/5 hover:bg-white/5">
+                    <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={onSettings}
+                        className="h-7 w-7 p-0 text-neutral-400 hover:text-white border border-transparent hover:border-white/5 hover:bg-white/5"
+                    >
                         <Settings size={13} />
                     </Button>
                 </div>
 
                 <div className="pl-2">
-                    <Button size="sm" className="h-8 bg-blue-600 hover:bg-blue-500 text-white gap-2 shadow-lg shadow-blue-900/20 text-[11px] px-3 font-medium rounded-lg">
+                    <Button 
+                        size="sm" 
+                        onClick={onNewChat}
+                        className="h-8 bg-blue-600 hover:bg-blue-500 text-white gap-2 shadow-lg shadow-blue-900/20 text-[11px] px-3 font-medium rounded-lg"
+                    >
                         <UserPlus size={14} />
                         <span>New Chat</span>
                     </Button>

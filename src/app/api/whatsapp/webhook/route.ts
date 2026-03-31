@@ -193,7 +193,12 @@ export async function POST(req: Request) {
 
             if (from && text) {
                 const cleanFrom = from.replace(/\D/g, '');
-
+                
+                // Strict Validation: Prevent blank/ghost records if Meta API hallucinates
+                if (!cleanFrom || cleanFrom.length < 5) {
+                    debugLog('[POST] Ignoring message: Missing or invalid phone number from Meta.');
+                    return NextResponse.json({ success: true, ignored: 'invalid_sender_format' });
+                }
 
                 // OPTIMIZED O(1) Search: Find group and card via indexed Contacts context
                 let targetCardDoc: any = null;
@@ -317,17 +322,21 @@ export async function POST(req: Request) {
 
                         // 2. Create the Contact in the CRM Database
                         const contactName = value.contacts?.[0]?.profile?.name || from;
-                        await db.collection(`${entityPath}/contacts`).doc(numericId).set({
-                            crmId: numericId,
-                            name: contactName, // Required for CRM UI
-                            contactName: contactName,
-                            firstName: contactName,
-                            contactNumber: from,
-                            phone: `+${cleanFrom}`, // Standardize
-                            kanbanGroupId: defaultGroup.id,
-                            kanbanCardId: newCardRef.id,
-                            createdAt: new Date().toISOString()
-                        }, { merge: true });
+                        
+                        // Strict validation: Do not populate CRM with completely blank records if fallback fails
+                        if (contactName.trim() || cleanFrom.length >= 5) {
+                            await db.collection(`${entityPath}/contacts`).doc(numericId).set({
+                                crmId: numericId,
+                                name: contactName || cleanFrom, // Required for CRM UI
+                                contactName: contactName || cleanFrom,
+                                firstName: contactName || cleanFrom,
+                                contactNumber: from,
+                                phone: `+${cleanFrom}`, // Standardize
+                                kanbanGroupId: defaultGroup.id,
+                                kanbanCardId: newCardRef.id,
+                                createdAt: new Date().toISOString()
+                            }, { merge: true });
+                        }
 
                         cardId = newCardRef.id;
                         groupId = defaultGroup.id;

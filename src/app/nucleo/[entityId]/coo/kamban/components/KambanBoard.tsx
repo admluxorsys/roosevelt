@@ -18,6 +18,12 @@ import KambanColumn from './KambanColumn';
 import Card from './Card';
 import ConversationModal from './ConversationModal';
 import { useSidebar } from '@/components/SidebarContext';
+import { SelectContactModal } from './SelectContactModal';
+import { CreateClientModal } from './CreateClientModal';
+import { useRouter } from 'next/navigation';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { toast } from 'sonner';
 
 import { useAuth } from '@/contexts/AuthContext';
 export default function KambanBoard() {
@@ -34,12 +40,46 @@ export default function KambanBoard() {
   const [filter, setFilter] = useState<'all' | 'unread' | 'unassigned'>('all');
   const [isCompact, setIsCompact] = useState(true);
 
+  const [isGlobalSelectContactOpen, setIsGlobalSelectContactOpen] = useState(false);
+  const [isGlobalCreateClientOpen, setIsGlobalCreateClientOpen] = useState(false);
+  const router = useRouter();
+
   const { isCollapsed, toggleSidebar } = useSidebar();
   const { groups, cards, loading, handleDragEnd, handleUpdateColor, handleAddGroup } = useKambanBoard(searchTerm);
 
   const onAddGroup = async () => {
     const name = window.prompt('New group name:');
     if (name) await handleAddGroup(name);
+  };
+
+  const handleGlobalAddCard = async (contact?: any) => {
+    // Adds to the first group (Inbox)
+    const firstGroup = groups[0];
+    if (!firstGroup) {
+      toast.error("Crea una bandeja primero");
+      return;
+    }
+    try {
+      const cardData: any = {
+        contactName: contact?.name || 'New Contact',
+        contactNumber: contact?.phone || '',
+        email: contact?.email || '',
+        clientId: contact?.clientId || '',
+        lastMessage: 'Conversation started...',
+        channel: contact ? 'CRM Link' : 'Manual',
+        source: 'manual',
+        groupId: firstGroup.id,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        messages: [],
+      };
+      await addDoc(collection(db, `${getTenantPath()}/kanban-groups/${firstGroup.id}/cards`), cardData);
+      toast.success(contact ? `Contact "${contact.name}" added.` : 'New conversation created.');
+      setIsGlobalSelectContactOpen(false);
+    } catch (error) {
+      console.error('Error adding card:', error);
+      toast.error('Error adding contact.');
+    }
   };
 
   const filteredCards = useMemo(() => {
@@ -111,6 +151,8 @@ export default function KambanBoard() {
         channelStats={channelStats}
         isSidebarCollapsed={isCollapsed}
         toggleSidebar={toggleSidebar}
+        onNewChat={() => setIsGlobalSelectContactOpen(true)}
+        onSettings={() => router.push(`/nucleo/${activeEntity}/cto/integrations`)}
       />
 
       <div className="flex-1 overflow-x-auto overflow-y-auto">
@@ -158,6 +200,24 @@ export default function KambanBoard() {
         allConversations={cards}
         onSelectConversation={(card) => setSelectedCard(card)}
         stats={{ totalConversations: cards.length, totalGroups: groups.length }}
+      />
+
+      {/* Global Modals */}
+      <SelectContactModal
+        isOpen={isGlobalSelectContactOpen}
+        onClose={() => setIsGlobalSelectContactOpen(false)}
+        onSelect={(contact) => handleGlobalAddCard(contact)}
+        onAddNew={() => {
+          setIsGlobalSelectContactOpen(false);
+          setIsGlobalCreateClientOpen(true);
+        }}
+      />
+
+      <CreateClientModal
+        isOpen={isGlobalCreateClientOpen}
+        onClose={() => setIsGlobalCreateClientOpen(false)}
+        groups={groups}
+        initialGroupId={groups[0]?.id}
       />
     </div>
   );

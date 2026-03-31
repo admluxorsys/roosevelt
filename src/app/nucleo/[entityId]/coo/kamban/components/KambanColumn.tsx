@@ -38,15 +38,15 @@ interface CardData {
 }
 
 const colors = [
-    { name: 'Default', value: 'bg-[#121212]/50', cardColor: 'bg-[#181818]/50', textColor: 'text-neutral-400', pill: 'bg-neutral-800' },
-    { name: 'Gray', value: 'bg-[#1a1a1a]', cardColor: 'bg-[#222222]', textColor: 'text-neutral-400', pill: 'bg-[#2a2a2a]' },
-    { name: 'Orange', value: 'bg-[#1c1811]', cardColor: 'bg-[#241f16]', textColor: 'text-orange-400', pill: 'bg-[#3a2a1a]' },
-    { name: 'Yellow', value: 'bg-[#1c1b11]', cardColor: 'bg-[#242316]', textColor: 'text-yellow-400', pill: 'bg-[#3a351a]' },
-    { name: 'Green', value: 'bg-[#111814]', cardColor: 'bg-[#16211b]', textColor: 'text-emerald-400', pill: 'bg-[#1a3a2a]' },
-    { name: 'Blue', value: 'bg-[#111418]', cardColor: 'bg-[#161b21]', textColor: 'text-blue-400', pill: 'bg-[#1a2a3a]' },
-    { name: 'Purple', value: 'bg-[#18111c]', cardColor: 'bg-[#211624]', textColor: 'text-purple-400', pill: 'bg-[#2a1a3a]' },
-    { name: 'Pink', value: 'bg-[#1c1114]', cardColor: 'bg-[#24161b]', textColor: 'text-pink-400', pill: 'bg-[#3a1a25]' },
-    { name: 'Red', value: 'bg-[#1c1111]', cardColor: 'bg-[#241616]', textColor: 'text-rose-400', pill: 'bg-[#3a1a1a]' },
+    { name: 'Default', value: 'bg-[#161616]', cardColor: 'bg-[#1e1e1e]', textColor: 'text-neutral-400', pill: 'bg-neutral-800 text-neutral-200' },
+    { name: 'Gray', value: 'bg-[#1f1f1f]', cardColor: 'bg-[#272727]', textColor: 'text-neutral-400', pill: 'bg-[#3a3a3a] text-neutral-200' },
+    { name: 'Orange', value: 'bg-[#331c0e]', cardColor: 'bg-[#27150a]', textColor: 'text-orange-400', pill: 'bg-[#7a3b1f] text-orange-50' },
+    { name: 'Yellow', value: 'bg-[#332b0e]', cardColor: 'bg-[#27210a]', textColor: 'text-yellow-400', pill: 'bg-[#7a651f] text-yellow-50' },
+    { name: 'Green', value: 'bg-[#123122]', cardColor: 'bg-[#0e2419]', textColor: 'text-emerald-400', pill: 'bg-[#1a5b3d] text-emerald-50' },
+    { name: 'Blue', value: 'bg-[#0c2438]', cardColor: 'bg-[#081a29]', textColor: 'text-blue-400', pill: 'bg-[#1a4a75] text-blue-50' },
+    { name: 'Purple', value: 'bg-[#2f1c34]', cardColor: 'bg-[#241527]', textColor: 'text-purple-400', pill: 'bg-[#6b3576] text-purple-50' },
+    { name: 'Pink', value: 'bg-[#38111e]', cardColor: 'bg-[#290c16]', textColor: 'text-pink-400', pill: 'bg-[#82193f] text-pink-50' },
+    { name: 'Red', value: 'bg-[#3b1212]', cardColor: 'bg-[#2b0d0d]', textColor: 'text-rose-400', pill: 'bg-[#8c1818] text-rose-50' },
 ];
 
 interface kambanColumnProps {
@@ -168,13 +168,20 @@ export const kambanColumn = ({
 
     // --- DELETE GROUP ---
     const handleDeleteGroup = async () => {
-        if (group.name === 'Bandeja de Entrada') return;
+        if (allGroups.length <= 1) {
+            toast.error("No puedes eliminar la única bandeja que queda.");
+            return;
+        }
 
-        if (!window.confirm(`Are you sure you want to delete the column "${group.name}"? All conversations will be moved to the Inbox.`)) return;
+        if (!window.confirm(`¿Estás seguro de eliminar "${group.name}"? Todas las conversaciones se moverán a la bandeja Inbox.`)) return;
 
-        const inbox = allGroups.find(g => g.name === 'Inbox' || g.name === 'Bandeja de Entrada');
+        const inbox = allGroups.find(g => g.id === 'default_inbox') || 
+                      allGroups.find(g => g.name === 'Inbox' && g.id !== group.id) ||
+                      allGroups.find(g => (g.name === 'Inbox' || g.name === 'Bandeja de Entrada') && g.id !== group.id) ||
+                      allGroups.find(g => g.id !== group.id);
+
         if (!inbox) {
-            alert("Could not find 'Inbox' allowed to move conversations.");
+            alert("No se encontró una bandeja de destino válida.");
             return;
         }
 
@@ -191,7 +198,7 @@ export const kambanColumn = ({
 
         try {
             await batch.commit();
-            toast.success(`Column deleted. Conversations moved to Inbox.`);
+            toast.success(`Columna eliminada. Conversaciones movidas a ${inbox.name}.`);
         } catch (error) {
             console.error('Error deleting group:', error);
             toast.error('Error deleting column.');
@@ -225,8 +232,8 @@ export const kambanColumn = ({
 
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-7 w-7 text-neutral-500 hover:text-neutral-300 hover:bg-white/10 rounded-full transition-colors ml-auto">
-                                    <MoreVertical size={14} />
+                                <Button variant="ghost" size="icon" className="h-7 w-7 text-white/50 hover:text-white hover:bg-white/10 rounded-full transition-colors ml-auto">
+                                    <MoreVertical size={16} />
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="bg-neutral-900 border-neutral-800 text-white shadow-2xl rounded-xl p-1 w-56">
@@ -276,8 +283,8 @@ export const kambanColumn = ({
                                     <span>Import CSV</span>
                                 </DropdownMenuItem>
 
-                                {/* Delete Group (only if not Bandeja de Entrada) */}
-                                {group.name !== 'Bandeja de Entrada' && (
+                                {/* Delete Group (only if not the last one) */}
+                                {allGroups.length > 1 && (
                                     <>
                                         <div className="h-px bg-neutral-800 my-1 mx-1" />
                                         <DropdownMenuItem
@@ -360,5 +367,3 @@ export const kambanColumn = ({
 };
 
 export default kambanColumn;
-
-
