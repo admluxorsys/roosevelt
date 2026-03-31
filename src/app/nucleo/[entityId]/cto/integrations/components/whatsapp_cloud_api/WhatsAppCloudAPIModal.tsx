@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { Integration } from '../../config';
 import { useAuth } from '@/contexts/AuthContext';
 import { db } from '@/lib/firebase';
-import { doc, setDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
+import { doc, setDoc, deleteDoc, onSnapshot, collection, query, where, getDocs, updateDoc } from 'firebase/firestore';
 
 interface Props {
     isOpen: boolean;
@@ -109,7 +109,31 @@ export function WhatsAppCloudAPIModal({ isOpen, onClose, activeIntegration }: Pr
             return;
         }
 
-        toast.loading("Guardando configuración...");
+        const toastId = toast.loading("Verificando credenciales...");
+
+        try {
+            const validationRes = await fetch('/api/whatsapp/validate-phone-id', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    phoneNumberId: waConfig.phoneNumberId,
+                    userId: currentUser.uid,
+                    entityId: activeEntity
+                })
+            });
+            const validationData = await validationRes.json();
+
+            if (!validationData.valid) {
+                toast.error(validationData.message || "El número ya está vinculado a otra cuenta.", { id: toastId });
+                return;
+            }
+        } catch (error) {
+            console.error("Validation error:", error);
+            toast.error("Hubo un problema verificando el número.", { id: toastId });
+            return;
+        }
+
+        toast.loading("Guardando configuración...", { id: toastId });
         try {
             const configRef = doc(db, `users/${currentUser.uid}/entities/${activeEntity}/integrations/whatsapp`);
             await setDoc(configRef, {
@@ -119,14 +143,12 @@ export function WhatsAppCloudAPIModal({ isOpen, onClose, activeIntegration }: Pr
                 updatedAt: new Date(),
             }, { merge: true });
 
-            toast.dismiss();
-            toast.success("¡WhatsApp conectado!");
+            toast.success("¡WhatsApp conectado!", { id: toastId });
             setIsEditing(false);
             setStep(4);
         } catch (error) {
             console.error(error);
-            toast.dismiss();
-            toast.error("Error al guardar.");
+            toast.error("Error al guardar.", { id: toastId });
         }
     };
 
@@ -165,10 +187,26 @@ export function WhatsAppCloudAPIModal({ isOpen, onClose, activeIntegration }: Pr
         if (!currentUser || !activeEntity) return;
         if (!confirm("¿Seguro que quieres desconectar WhatsApp?")) return;
 
-        toast.loading("Desconectando...");
+        const toastId = toast.loading("Desconectando...");
         try {
             const configRef = doc(db, `users/${currentUser.uid}/entities/${activeEntity}/integrations/whatsapp`);
             await deleteDoc(configRef);
+
+            // Turn off any active chatbots
+            const botsRef = collection(db, `users/${currentUser.uid}/entities/${activeEntity}/chatbots`);
+            
+            // Handle both true and 'true' just in case
+            const qReal = query(botsRef, where('isActive', '==', true));
+            const qStr = query(botsRef, where('isActive', '==', 'true'));
+            
+            const [snapsReal, snapsStr] = await Promise.all([getDocs(qReal), getDocs(qStr)]);
+            
+            const updatePromises: Promise<void>[] = [];
+            snapsReal.forEach(bot => updatePromises.push(updateDoc(bot.ref, { isActive: false })));
+            snapsStr.forEach(bot => updatePromises.push(updateDoc(bot.ref, { isActive: false })));
+            
+            await Promise.all(updatePromises);
+
             setWaConfig({
                 phoneNumberId: '', wabaId: '', accessToken: '', displayPhoneNumber: '',
                 verifyToken: Math.random().toString(36).substring(7),
@@ -176,11 +214,10 @@ export function WhatsAppCloudAPIModal({ isOpen, onClose, activeIntegration }: Pr
             });
             setStep(1);
             setIsEditing(false);
-            toast.dismiss();
-            toast.success("Desconectado.");
+            toast.success("Desconectado.", { id: toastId });
         } catch (error) {
             console.error(error);
-            toast.error("Error al desconectar.");
+            toast.error("Error al desconectar.", { id: toastId });
         }
     };
 

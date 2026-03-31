@@ -352,11 +352,16 @@ async function triggerChatbot(from: string, text: string, groupId: string, cardI
     const entityPath = `users/${userId}/entities/${entityId}`;
 
     try {
-        // 1. Fetch Tenant-specific Chatbot
+        // 1. Fetch Tenant-specific Chatbot (Optimized O(1) Fetch)
         const botsRef = db.collection(`${entityPath}/chatbots`);
-        const botsSnapshot = await botsRef.get();
+        const botsSnapshot = await botsRef.where('isActive', '==', true).limit(1).get();
+        let activeBotDoc = botsSnapshot.empty ? null : botsSnapshot.docs[0];
 
-        const activeBotDoc = botsSnapshot.docs.find(doc => doc.data().isActive === true || doc.data().isActive === 'true');
+        // Fallback for legacy string 'true' just in case
+        if (!activeBotDoc) {
+            const fallbackSnap = await botsRef.where('isActive', '==', 'true').limit(1).get();
+            activeBotDoc = fallbackSnap.empty ? null : fallbackSnap.docs[0];
+        }
 
         if (!activeBotDoc) {
             debugLog(`[Chatbot] No active robot for entity ${entityId}.`);
