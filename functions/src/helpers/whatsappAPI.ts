@@ -22,14 +22,23 @@ async function makeWhatsAppRequest(data: object, type: string, ctx?: { userId?: 
 
     if (ctx?.userId && ctx?.entityId) {
         try {
-            const configPath = `users/${ctx.userId}/entities/${ctx.entityId}/integrations/whatsapp`;
-            const docRef = admin.firestore().doc(configPath);
-            const snapshot = await docRef.get();
-            if (snapshot.exists) {
-                const configData = snapshot.data();
-                if (configData?.accessToken && configData?.phoneNumberId) {
-                    apiToken = configData.accessToken;
-                    phoneId = configData.phoneNumberId;
+            const db = admin.firestore();
+            // Try production config first, then dev/internal as fallback
+            const paths = [
+                `users/${ctx.userId}/entities/${ctx.entityId}/integrations/whatsapp`,
+                `users/${ctx.userId}/entities/${ctx.entityId}/integrations/whatsapp_internal`
+            ];
+
+            for (const configPath of paths) {
+                const snapshot = await db.doc(configPath).get();
+                if (snapshot.exists) {
+                    const configData = snapshot.data();
+                    if (configData?.accessToken && configData?.phoneNumberId) {
+                        apiToken = configData.accessToken;
+                        phoneId = configData.phoneNumberId;
+                        functions.logger.info(`[WhatsApp API] Loaded credentials from: ${configPath.split('/').pop()}`);
+                        break; // Stop at first valid config
+                    }
                 }
             }
         } catch (e) {

@@ -49,30 +49,14 @@ export const useCardSubscription = ({ card, groups = [], groupName }: Conversati
         }
 
         let isMounted = true;
-        let unsubscribe: (() => void) | null = null;
-        let unsubscribeCRM: (() => void) | null = null;
+        let unsubscribe: any = null;
+        let unsubscribeCRM: any = null;
 
-        const initLogic = async () => {
+        const performDynamicSearch = async (cardIdToFind: string) => {
+            if (!isMounted || !tenantPath) return;
+            console.log(`[useCardSubscription] 🔍 Performing dynamic search for card ID: ${cardIdToFind}`);
+
             try {
-                if (!isMounted || !tenantPath) return;
-
-                // Priority 1: Forced ID
-                if (forcedCardId && forcedGroupId) {
-                    const cardRef = doc(db, `${tenantPath}/kanban-groups`, forcedGroupId, 'cards', forcedCardId);
-                    const unsub = onSnapshot(cardRef, (docSnap) => {
-                        if (!isMounted) return;
-                        if (docSnap.exists()) {
-                            const data = docSnap.data() as CardData;
-                            setLiveCardData({ ...data, id: docSnap.id, groupId: forcedGroupId });
-                        }
-                    });
-                    unsubscribe = unsub;
-                    return;
-                }
-
-                // Priority 2: Standard Search
-                if (!card?.id) return;
-
                 let finalGroups = groups;
                 if (!finalGroups || finalGroups.length === 0) {
                     const groupsSnap = await getDocs(query(collection(db, `${tenantPath}/kanban-groups`), orderBy('order', 'asc')));
@@ -80,78 +64,80 @@ export const useCardSubscription = ({ card, groups = [], groupName }: Conversati
                     finalGroups = groupsSnap.docs.map(d => ({ id: d.id, ...d.data() })) as any[];
                 }
 
-                const findAndSubscribe = async (cardIdToFind?: string, phoneNumberToFind?: string): Promise<boolean> => {
-                    for (const group of finalGroups) {
-                        if (!isMounted) return false;
-                        try {
-                            let cardRef = cardIdToFind ? doc(db, `${tenantPath}/kanban-groups`, group.id, 'cards', cardIdToFind) : null;
-                            let cardSnap = cardRef ? await getDoc(cardRef) : null;
+                console.log(`[useCardSubscription] 🔍 Searching card ${cardIdToFind} across ${finalGroups.length} groups...`);
+                for (const group of finalGroups) {
+                    if (!isMounted) break;
+                    console.log(`[useCardSubscription] 📂 Checking group: ${group.id} (${group.name || 'Sin nombre'})`);
+                    const cardRef = doc(db, `${tenantPath}/kanban-groups/${group.id}/cards/${cardIdToFind}`);
+                    const cardSnap = await getDoc(cardRef);
 
-                            if ((!cardSnap || !cardSnap.exists()) && phoneNumberToFind) {
-                                const allCardsSnap = await getDocs(collection(db, `${tenantPath}/kanban-groups`, group.id, 'cards'));
-                                if (!isMounted) return false;
+                    if (cardSnap.exists() && isMounted) {
+                        console.log(`[useCardSubscription] 🎯 Found card ${cardIdToFind} in group ${group.id}. Establishing subscription.`);
 
-                                const phoneVariants = [
-                                    phoneNumberToFind,
-                                    phoneNumberToFind.startsWith('+') ? phoneNumberToFind : `+${phoneNumberToFind}`,
-                                    phoneNumberToFind.replace(/\D/g, ''),
-                                ];
-                                const digitsOnly = phoneNumberToFind.replace(/\D/g, '');
-                                if (digitsOnly.length >= 9 && !digitsOnly.startsWith('593')) {
-                                    phoneVariants.push(`+593${digitsOnly}`);
-                                    phoneVariants.push(`593${digitsOnly}`);
-                                }
-
-                                for (const cardDoc of allCardsSnap.docs) {
-                                    const cData = cardDoc.data();
-                                    const cPhone = cData.contactNumber || '';
-                                    if (phoneVariants.some(v => v.replace(/\D/g, '') === cPhone.replace(/\D/g, ''))) {
-                                        cardSnap = cardDoc;
-                                        cardRef = cardDoc.ref;
-                                        break;
-                                    }
-                                }
+                        const unsub = onSnapshot(cardRef, (docSnap) => {
+                            if (!isMounted) return;
+                            if (docSnap.exists()) {
+                                const data = docSnap.data() as CardData;
+                                console.log(`[useCardSubscription] ✅ (Fallback) Snapshot received for ${cardIdToFind}. Messages: ${data.messages?.length || 0}`);
+                                setLiveCardData({ ...data, id: docSnap.id, groupId: group.id });
                             }
-
-                            if (cardSnap && cardSnap.exists() && cardRef) {
-                                const unsub = onSnapshot(cardRef, (docSnap) => {
-                                    if (!isMounted) return;
-                                    if (docSnap.exists()) {
-                                        const data = docSnap.data() as CardData;
-                                        setLiveCardData({ ...data, id: docSnap.id, groupId: group.id });
-                                        setForcedCardId(docSnap.id);
-                                        setForcedGroupId(group.id);
-                                    }
-                                });
-                                if (isMounted) {
-                                    if (unsubscribe) unsubscribe();
-                                    unsubscribe = unsub;
-                                } else {
-                                    unsub();
-                                }
-                                return true;
-                            }
-                        } catch (e) {
-                            if (isMounted) console.warn('Group search error:', e);
-                        }
+                        });
+                        if (unsubscribe) unsubscribe();
+                        unsubscribe = unsub;
+                        return;
                     }
-                    return false;
-                };
+                }
+                console.warn(`[useCardSubscription] ❌ Card ${cardIdToFind} not found in any group.`);
+            } catch (err) {
+                console.error("[useCardSubscription] Dynamic search failed:", err);
+            }
+        };
 
-                const isTempId = card.id?.startsWith('temp-');
-                const phoneToSearch = card.contactNumber || (card as any).phone;
-                let found = false;
-                if (!isTempId) found = await findAndSubscribe(card.id, phoneToSearch);
-                if (!found && phoneToSearch && isMounted) found = await findAndSubscribe(undefined, phoneToSearch);
+        const initLogic = async () => {
+            try {
+                if (!isMounted || !tenantPath) return;
 
-                if (!found && isMounted && !isTempId) {
-                    // Initial state logic for non-found cards if needed
+                // 1. Resolve target IDs: Prioritize props (source of truth from the list)
+                const targetCardId = card?.id || forcedCardId;
+                const targetGroupId = card?.groupId || forcedGroupId;
+
+                if (!targetCardId || targetCardId.startsWith('temp-')) {
+                    setLiveCardData(null);
+                    return;
+                }
+
+                // 2. Direct Subscription (Agnostic & Efficient)
+                if (targetGroupId) {
+                    const fullPath = `${tenantPath}/kanban-groups/${targetGroupId}/cards/${targetCardId}`;
+                    console.log(`[useCardSubscription] 📡 Subscribing to direct path: ${fullPath}`);
+                    const cardRef = doc(db, fullPath);
+
+                    const unsub = onSnapshot(cardRef, (docSnap) => {
+                        if (!isMounted) return;
+                        if (docSnap.exists()) {
+                            const data = docSnap.data() as CardData;
+                            console.log(`[useCardSubscription] ✅ Snapshot received for ${targetCardId}. Messages: ${data.messages?.length || 0}`);
+                            setLiveCardData({ ...data, id: docSnap.id, groupId: targetGroupId });
+                        } else {
+                            console.warn(`[useCardSubscription] ⚠️ Document not found at path: ${cardRef.path}. Card may have moved or been deleted.`);
+                            // Trigger dynamic search as a fallback
+                            performDynamicSearch(targetCardId);
+                        }
+                    }, (error) => {
+                        console.error(`[useCardSubscription] ❌ Snapshot error for ${targetCardId}:`, error);
+                    });
+
+                    unsubscribe = unsub;
+                } else {
+                    // If no groupId provided in props/state, we MUST search
+                    performDynamicSearch(targetCardId);
                 }
 
             } catch (error) {
-                if (isMounted) console.error("Error in initLogic:", error);
+                if (isMounted) console.error("[useCardSubscription] Error in initLogic:", error);
             }
         };
+
 
         const initCRM = async () => {
             if (!tenantPath) return;
@@ -193,7 +179,7 @@ export const useCardSubscription = ({ card, groups = [], groupName }: Conversati
             if (unsubscribe) unsubscribe();
             if (unsubscribeCRM) unsubscribeCRM();
         };
-    }, [card?.id, card?.groupId, groups, card?.contactNumber, forcedCardId, forcedGroupId, currentUser?.uid, activeEntity]);
+    }, [card?.id, card?.groupId, groups, card?.contactNumber, currentUser?.uid, activeEntity]);
 
     return {
         liveCardData,

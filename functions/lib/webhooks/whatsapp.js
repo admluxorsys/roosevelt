@@ -5,6 +5,7 @@ const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const kanbanOmni_1 = require("../helpers/kanbanOmni");
 const botEngine_1 = require("../helpers/botEngine");
+const tenantResolver_1 = require("../helpers/tenantResolver");
 exports.whatsappWebhook = functions.runWith({ invoker: 'public' }).https.onRequest(async (req, res) => {
     var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o;
     // --- VERIFICACIÓN DE WEBHOOK (GET) ---
@@ -68,15 +69,23 @@ exports.whatsappWebhook = functions.runWith({ invoker: 'public' }).https.onReque
             functions.logger.warn('[Webhook] No recipient phone_number_id found in metadata');
             return;
         }
-        // --- RESOLUCIÓN DE INQUILINO DIRECTA (Vía URL) ---
-        // Evitamos usar collectionGroup para eludir el error de "Index Required" de Firestore
-        const userId = req.query['u'];
-        const entityId = req.query['e'];
-        if (!userId || !entityId) {
-            functions.logger.error(`[WhatsApp Webhook] Missing u/e parameters in POST request.`);
+        // --- RESOLUCIÓN DE INQUILINO (TENANT RESOLUTION) ---
+        // 1. Intentar resolver por phoneNumberId (Maestra de Mapeos)
+        const tenant = await (0, tenantResolver_1.resolveTenant)('whatsapp', recipientPhoneNumberId);
+        let userId = req.query['u'];
+        let entityId = req.query['e'];
+        if (tenant) {
+            userId = tenant.userId;
+            entityId = tenant.entityId;
+            functions.logger.info(`[WhatsApp Webhook] Resolved Tenant from Mapping: User=${userId}, Entity=${entityId}`);
+        }
+        else if (userId && entityId) {
+            functions.logger.info(`[Webhook] Resolved Tenant directly from URL: User=${userId}, Entity=${entityId}`);
+        }
+        else {
+            functions.logger.error(`[WhatsApp Webhook] Could not resolve tenant for ${recipientPhoneNumberId} (No mapping and no URL params).`);
             return;
         }
-        functions.logger.info(`[Webhook] Resolved Tenant directly from URL: User=${userId}, Entity=${entityId}`);
         // --- CASO 1: MANEJO DE ESTADOS (READ, DELIVERED, SENT) ---
         if (change.statuses && change.statuses.length > 0) {
             const statusUpdate = change.statuses[0];

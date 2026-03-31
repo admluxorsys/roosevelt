@@ -83,6 +83,7 @@ export async function sendWhatsAppMessage(
             if (data?.accessToken && data?.phoneNumberId) {
                 token = data.accessToken;
                 phoneNumberId = data.phoneNumberId;
+                console.log(`[sendWhatsAppMessage] Using Config: PhoneID=${phoneNumberId?.substring(0, 4)}... Source=${configDoc.exists ? 'standard' : 'internal'}`);
             } else {
                 console.warn(`[sendWhatsAppMessage] No valid config found for entity ${options.entityId}`);
             }

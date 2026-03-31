@@ -39,9 +39,11 @@ export const useMessageSender = ({
 
     // 24h Window Check (Improved Resilience)
     const isWithin24Hours = useMemo(() => {
-        if (!liveCardData?.messages || liveCardData.messages.length === 0) return false;
-        const userMessages = liveCardData.messages.filter(m => m.sender !== 'agent');
-        if (userMessages.length === 0) return false;
+        const messages = liveCardData?.messages || card?.messages || [];
+        if (messages.length === 0) return true; // Default to true for new conversations to avoid template errors
+
+        const userMessages = messages.filter((m: any) => m.sender !== 'agent');
+        if (userMessages.length === 0) return true;
 
         const lastUserMsg = userMessages[userMessages.length - 1];
         if (!lastUserMsg.timestamp) return false;
@@ -49,7 +51,7 @@ export const useMessageSender = ({
         try {
             const now = new Date();
             let lastMsgDate: Date;
-            
+
             if (lastUserMsg.timestamp.toDate) {
                 lastMsgDate = lastUserMsg.timestamp.toDate();
             } else if (lastUserMsg.timestamp.seconds) {
@@ -98,11 +100,13 @@ export const useMessageSender = ({
             if (!prev) return {
                 ...card as any,
                 id: currentCardId || 'temp',
-                messages: [tempMessage]
+                messages: [...(card?.messages || []), tempMessage],
+                unreadCount: 0
             };
             return {
                 ...prev,
-                messages: [...(prev.messages || []), tempMessage]
+                messages: [...(prev.messages || []), tempMessage],
+                unreadCount: 0 // Reset unread count optimistically when sending
             };
         });
 
@@ -153,7 +157,7 @@ export const useMessageSender = ({
 
             if (!response.ok) {
                 const errorMsg = result.error || 'Error al enviar';
-                
+
                 // Mostrar el error detallado en un Toast para diagnóstico rápido
                 let detail = '';
                 if (typeof result.details === 'object') {
@@ -161,7 +165,7 @@ export const useMessageSender = ({
                 } else {
                     detail = result.details || '';
                 }
-                
+
                 toast.error(`${errorMsg}: ${detail}`, {
                     duration: 10000, // Show for 10 seconds
                     action: {
@@ -169,7 +173,7 @@ export const useMessageSender = ({
                         onClick: () => alert(JSON.stringify(result, null, 2))
                     }
                 });
-                
+
                 // Mark message as failed
                 setLiveCardData(prev => {
                     if (!prev) return null;
@@ -180,12 +184,23 @@ export const useMessageSender = ({
                 });
                 setNewMessage(messageToSend);
             } else {
-                toast.success('Mensaje enviado');
+                // ✅ Success: update optimistic message from 'sending' → 'sent'
+                setLiveCardData(prev => {
+                    if (!prev) return null;
+                    return {
+                        ...prev,
+                        messages: prev.messages?.map(m =>
+                            (m as any).id === tempMsgId
+                                ? { ...m, status: 'sent', kambanMessageId: result?.messageId || null }
+                                : m
+                        )
+                    };
+                });
             }
         } catch (error: any) {
             console.error('[useMessageSender] Fatal Error:', error);
             toast.error(`Error de Conexión: ${error.message}`);
-            
+
             // Mark as failed in catch too
             setLiveCardData(prev => {
                 if (!prev) return null;
@@ -294,10 +309,10 @@ export const useMessageSender = ({
     const retryMessage = async (msgToRetry: Message & { id?: string }) => {
         if (!msgToRetry.id || !msgToRetry.text) return;
         setNewMessage(msgToRetry.text);
-        
+
         // We no longer remove the failed message from UI/Firestore, 
         // as the user wants error messages to stay registered.
-        
+
         // Small delay to ensure state updates before sending
         setTimeout(() => {
             handleSendMessage();

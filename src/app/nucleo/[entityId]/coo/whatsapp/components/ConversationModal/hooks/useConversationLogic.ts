@@ -79,7 +79,10 @@ export const useConversationLogic = (props: ConversationModalProps) => {
     });
 
     // 5. Computed Helpers
-    const groupedMessages = useMemo(() => groupMessagesByDate(liveCardData?.messages || []), [liveCardData?.messages]);
+    const groupedMessages = useMemo(() =>
+        groupMessagesByDate(liveCardData?.messages || props.card?.messages || []),
+        [liveCardData?.messages, props.card?.messages]
+    );
 
     const isMessageRead = (msg: any) =>
         liveCardData?.lastReadAt && msg.timestamp

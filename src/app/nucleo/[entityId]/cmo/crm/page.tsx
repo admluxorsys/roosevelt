@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';import { useAuth } from '@/contexts/AuthContext';
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
 
 import { AnimatePresence, Variants, motion } from 'framer-motion';
 
@@ -180,7 +181,7 @@ export default function ContactsPage() {
         }
     }, []);
     const [syncStatus, setSyncStatus] = useState('');
-    
+
     // Auto-hide sync status after 10 seconds
     useEffect(() => {
         if (syncStatus) {
@@ -209,21 +210,22 @@ export default function ContactsPage() {
     }, []);
 
     useEffect(() => {
+        const tenantPath = getTenantPath();
+        if (!tenantPath) return;
+
         const cardsQuery = query(collectionGroup(db, 'cards'));
         const unsubscribe = onSnapshot(cardsQuery, (snapshot) => {
-            const tenantPath = getTenantPath();
             const allCardsFromDb = snapshot.docs
                 .filter(doc => doc.ref.path.includes(tenantPath))
                 .map(doc => {
-                // Use Regex to safely extract groupId from path
-                const match = doc.ref.path.match(/kanban-groups\/([^\/]+)\/cards/);
-                const groupId = match ? match[1] : undefined;
-                return { ...doc.data(), id: doc.id, groupId: groupId };
-            });
+                    const match = doc.ref.path.match(/kanban-groups\/([^\/]+)\/cards/);
+                    const groupId = match ? match[1] : undefined;
+                    return { ...doc.data(), id: doc.id, groupId: groupId };
+                });
             setAllCards(allCardsFromDb);
         });
         return () => unsubscribe();
-    }, []);
+    }, [currentUser?.uid, activeEntity]);
 
     useEffect(() => {
         setIsLoadingContacts(true);
@@ -585,8 +587,17 @@ export default function ContactsPage() {
         setIsSyncing(true);
         setSyncStatus('Iniciando sincronización inteligente...');
         try {
-            const cardsQuery = query(collectionGroup(db, 'cards'));
-            const cardsSnapshot = await getDocs(cardsQuery);
+            const tenantPath = getTenantPath();
+            if (!tenantPath) throw new Error("No tenant path found");
+
+            // Iterative Fetching to avoid collectionGroup index requirement
+            let allCardDocs: any[] = [];
+            for (const group of groups) {
+                const cardsRef = collection(db, `${tenantPath}/kanban-groups/${group.id}/cards`);
+                const snap = await getDocs(cardsRef);
+                snap.docs.forEach(d => allCardDocs.push({ id: d.id, ref: d.ref, ...d.data() }));
+            }
+
             let importedCount = 0;
             let updatedCount = 0;
             let skippedCount = 0;
@@ -594,8 +605,7 @@ export default function ContactsPage() {
             // Dictionary to track cards by phone for auto-merging
             const phoneToCardsMap: { [key: string]: any[] } = {};
 
-            for (const cardDoc of cardsSnapshot.docs) {
-                const cardData = cardDoc.data() as any;
+            for (const cardData of allCardDocs) {
                 if (!cardData.contactNumber) continue;
 
                 // Use the standard normalization utility
@@ -603,7 +613,7 @@ export default function ContactsPage() {
                 if (!phone) continue;
 
                 if (!phoneToCardsMap[phone]) phoneToCardsMap[phone] = [];
-                phoneToCardsMap[phone].push({ id: cardDoc.id, ref: cardDoc.ref, ...cardData });
+                phoneToCardsMap[phone].push(cardData);
             }
 
             for (const phone in phoneToCardsMap) {
@@ -894,17 +904,22 @@ export default function ContactsPage() {
             await setDoc(contactRef, { ...sanitizeData(contactToSave), lastUpdated: serverTimestamp() }, { merge: true });
 
             if (sanitizedPhone) {
-                const cardsQuery = query(collectionGroup(db, 'cards'), where('contactNumber', '==', sanitizedPhone));
-                const cardsSnapshot = await getDocs(cardsQuery);
-                for (const cardDoc of cardsSnapshot.docs) {
-                    await updateDoc(cardDoc.ref, sanitizeData({
-                        contactName: selectedContact.name,
-                        email: selectedContact.email || '',
-                        company: selectedContact.company || '',
-                        city: selectedContact.city || '',
-                        profession: selectedContact.profession || '',
-                        lastUpdated: serverTimestamp()
-                    }));
+                // Update related cards in all groups (Iterative search to avoid collectionGroup index)
+                for (const group of groups) {
+                    const cardsRef = collection(db, `${getTenantPath()}/kanban-groups/${group.id}/cards`);
+                    const q = query(cardsRef, where('contactNumber', '==', sanitizedPhone));
+                    const cardsSnapshot = await getDocs(q);
+
+                    for (const cardDoc of cardsSnapshot.docs) {
+                        await updateDoc(cardDoc.ref, sanitizeData({
+                            contactName: selectedContact.name,
+                            email: selectedContact.email || '',
+                            company: selectedContact.company || '',
+                            city: selectedContact.city || '',
+                            profession: selectedContact.profession || '',
+                            lastUpdated: serverTimestamp()
+                        }));
+                    }
                 }
             }
             toast.success('Perfil actualizado');
@@ -934,47 +949,71 @@ export default function ContactsPage() {
     const confirmDelete = async () => {
         try {
             if (deleteTarget.type === 'single' && deleteTarget.id) {
-                // Find phone number to delete cards
                 const contactToDelete = contacts.find(c => c.id === deleteTarget.id);
-                const phone = contactToDelete?.phone;
+                if (!contactToDelete) return;
 
-                // 1. Delete CRM Contact
+                const phone = contactToDelete.phone;
+                const cleanPhone = phone?.replace(/\D/g, '');
+
                 await deleteDoc(doc(db, `${getTenantPath()}/contacts`, deleteTarget.id));
-                
-                // 2. Delete associated Kanban Cards
-                if (phone) {
-                    const cardsQuery = query(collectionGroup(db, 'cards'), where('contactNumber', '==', phone));
-                    const cardsSnapshot = await getDocs(cardsQuery);
-                    const cardDeletions = cardsSnapshot.docs.map(d => deleteDoc(d.ref));
-                    await Promise.all(cardDeletions);
+
+                const groupsSnap = await getDocs(collection(db, `${getTenantPath()}/kanban-groups`));
+                for (const groupDoc of groupsSnap.docs) {
+                    const cardsRef = collection(db, `${getTenantPath()}/kanban-groups/${groupDoc.id}/cards`);
+
+                    const q1 = query(cardsRef, where('contactId', '==', deleteTarget.id));
+                    const q2 = phone ? query(cardsRef, where('contactNumber', '==', phone)) : null;
+                    const q3 = cleanPhone ? query(cardsRef, where('contactNumberClean', '==', cleanPhone)) : null;
+
+                    const snaps = await Promise.all([
+                        getDocs(q1),
+                        q2 ? getDocs(q2) : Promise.resolve({ docs: [] }),
+                        q3 ? getDocs(q3) : Promise.resolve({ docs: [] })
+                    ]);
+
+                    const allCardDocs = [...snaps[0].docs, ...snaps[1].docs, ...snaps[2].docs];
+                    const uniqueCardRefs = Array.from(new Set(allCardDocs.map(d => d.ref.path))).map(path => doc(db, path));
+
+                    await Promise.all(uniqueCardRefs.map(ref => deleteDoc(ref)));
                 }
 
                 setContacts(contacts.filter(c => c.id !== deleteTarget.id));
                 setSelectedContactIds(prev => prev.filter(selectedId => selectedId !== deleteTarget.id));
                 toast.success("Contacto e instancias eliminados");
             } else if (deleteTarget.type === 'bulk') {
-                const results: any[] = [];
                 for (const id of selectedContactIds) {
                     const contact = contacts.find(c => c.id === id);
-                    const phone = contact?.phone;
-                    
-                    // Delete CRM Doc
-                    results.push(deleteDoc(doc(db, `${getTenantPath()}/contacts`, id)));
-                    
-                    // Delete Cards
-                    if (phone) {
-                        const q = query(collectionGroup(db, 'cards'), where('contactNumber', '==', phone));
-                        const snap = await getDocs(q);
-                        snap.docs.forEach(d => results.push(deleteDoc(d.ref)));
+                    if (!contact) continue;
+
+                    const phone = contact.phone;
+                    const cleanPhone = phone?.replace(/\D/g, '');
+
+                    await deleteDoc(doc(db, `${getTenantPath()}/contacts`, id));
+
+                    const groupsSnap = await getDocs(collection(db, `${getTenantPath()}/kanban-groups`));
+                    for (const groupDoc of groupsSnap.docs) {
+                        const cardsRef = collection(db, `${getTenantPath()}/kanban-groups/${groupDoc.id}/cards`);
+                        const q1 = query(cardsRef, where('contactId', '==', id));
+                        const q2 = phone ? query(cardsRef, where('contactNumber', '==', phone)) : null;
+                        const q3 = cleanPhone ? query(cardsRef, where('contactNumberClean', '==', cleanPhone)) : null;
+
+                        const snaps = await Promise.all([
+                            getDocs(q1),
+                            q2 ? getDocs(q2) : Promise.resolve({ docs: [] }),
+                            q3 ? getDocs(q3) : Promise.resolve({ docs: [] })
+                        ]);
+
+                        const allCardDocs = [...snaps[0].docs, ...snaps[1].docs, ...snaps[2].docs];
+                        const uniqueCardRefs = Array.from(new Set(allCardDocs.map(d => d.ref.path))).map(path => doc(db, path));
+                        await Promise.all(uniqueCardRefs.map(ref => deleteDoc(ref)));
                     }
                 }
-                
-                await Promise.all(results);
+
                 setContacts(contacts.filter(c => !selectedContactIds.includes(c.id)));
                 setSelectedContactIds([]);
                 toast.success(`${selectedContactIds.length} contactos e instancias eliminados`);
             }
-            setIsDeleteDialogOpen(false); // Close dialog on success
+            setIsDeleteDialogOpen(false);
         } catch (error) {
             console.error("Error deleting:", error);
             toast.error("Error al eliminar.");
@@ -1052,25 +1091,25 @@ export default function ContactsPage() {
         const email = (c.email || '').toLowerCase();
         const phone = (c.phone || '').replace(/\D/g, '');
         const query = searchQuery.toLowerCase();
-        
+
         const id = (c.id || '').toLowerCase();
         const source = (c.source || '').toLowerCase();
         const phoneRaw = (c.phone || '').replace(/\D/g, '');
         const queryDigits = query.replace(/\D/g, '');
 
-        const matchesSearch = !query || 
-            name.includes(query) || 
-            email.includes(query) || 
-            phoneRaw.includes(queryDigits || query) || 
+        const matchesSearch = !query ||
+            name.includes(query) ||
+            email.includes(query) ||
+            phoneRaw.includes(queryDigits || query) ||
             (c.phone || '').toLowerCase().includes(query) ||
-            id.includes(query) || 
+            id.includes(query) ||
             source.includes(query);
 
         const matchesStage = selectedStages.length === 0 || selectedStages.includes(c.stage);
         const matchesSource = selectedSources.length === 0 || selectedSources.includes(c.source);
         const matchesTags = selectedTags.length === 0 || (c.tags && c.tags.some((tag: string) => selectedTags.includes(tag)));
         const matchesView = currentView === 'all' || c.stage === currentView;
-        
+
         return matchesSearch && matchesStage && matchesSource && matchesTags && matchesView;
     });
 
@@ -1128,16 +1167,16 @@ export default function ContactsPage() {
                     />
 
                     {syncStatus && (
-                        <motion.div 
-                            initial={{ opacity: 0, y: -10 }} 
-                            animate={{ opacity: 1, y: 0 }} 
+                        <motion.div
+                            initial={{ opacity: 0, y: -10 }}
+                            animate={{ opacity: 1, y: 0 }}
                             className="p-4 bg-blue-600/10 border border-blue-500/30 rounded-lg text-blue-400 font-medium text-sm flex justify-between items-center"
                         >
                             <div className="flex items-center gap-2">
                                 <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
                                 {syncStatus}
                             </div>
-                            <button 
+                            <button
                                 onClick={() => setSyncStatus('')}
                                 className="p-1 hover:bg-blue-500/10 rounded transition-colors"
                             >

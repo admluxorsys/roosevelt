@@ -23,13 +23,30 @@ export async function GET(req: Request) {
     const token = searchParams.get('hub.verify_token');
     const challenge = searchParams.get('hub.challenge');
 
-    const VERIFY_TOKEN = process.env.kamban_VERIFY_TOKEN || 'my_verify_token_123';
+    const userId = searchParams.get('u');
+    const entityId = searchParams.get('e');
+    let expectedToken = process.env.kamban_VERIFY_TOKEN || 'vg37e';
 
-    if (mode === 'subscribe' && token === VERIFY_TOKEN) {
-        debugLog('Verification successful (GET)');
+    // MULTI-TENANT VERIFICATION: If IDs are in URL, we check the tenant's specific token
+    if (userId && entityId) {
+        try {
+            const [publicSnap, internalSnap] = await Promise.all([
+                db.doc(`users/${userId}/entities/${entityId}/integrations/whatsapp`).get(),
+                db.doc(`users/${userId}/entities/${entityId}/integrations/whatsapp_internal`).get()
+            ]);
+
+            const tenantToken = publicSnap.data()?.verifyToken || internalSnap.data()?.verifyToken;
+            if (tenantToken) expectedToken = tenantToken;
+        } catch (err) {
+            debugLog(`[GET] Error loading tenant token: ${err}`);
+        }
+    }
+
+    if (mode === 'subscribe' && token === expectedToken) {
+        debugLog(`Verification successful (GET) | Tenant: ${entityId || 'Global'}`);
         return new Response(challenge, { status: 200 });
     }
-    debugLog('Verification failed (GET)');
+    debugLog(`Verification failed (GET) | Expected: ${expectedToken}, Got: ${token}`);
     return new Response('Forbidden', { status: 403 });
 }
 
@@ -38,6 +55,7 @@ export async function POST(req: Request) {
     debugLog('--- [Master Webhook] INCOMING HIT ---');
 
     try {
+        const { searchParams } = new URL(req.url);
         const rawBody = await req.clone().text();
         const body = JSON.parse(rawBody);
 
@@ -52,18 +70,36 @@ export async function POST(req: Request) {
             return NextResponse.json({ success: false, error: 'No phone_number_id' });
         }
 
-        // 1. TENANT IDENTIFICATION (The core of multi-tenancy)
+        // 1. TENANT IDENTIFICATION (Resilient Strategy: Agnostic + URL Fallback)
         debugLog(`[POST] Searching tenant for Phone ID: ${recipientPhoneNumberId}`);
-        const mappingRef = db.doc(`system_mappings/whatsapp_numbers/numbers/${recipientPhoneNumberId}`);
-        const mappingDoc = await mappingRef.get();
+        const { resolveTenant } = await import('@/lib/tenantResolver');
 
-        if (!mappingDoc.exists) {
-            debugLog(`[POST] No tenant mapping found for ${recipientPhoneNumberId}. Aborting.`);
-            return NextResponse.json({ success: false, error: 'Tenant not mapped' });
+        let userId = searchParams.get('u');
+        let entityId = searchParams.get('e');
+
+        // Try discovery from vault
+        const tenant = await resolveTenant('whatsapp', recipientPhoneNumberId);
+
+        if (tenant) {
+            userId = tenant.userId;
+            entityId = tenant.entityId;
+            debugLog(`[POST] Tenant Discovery Success: User=${userId}, Entity=${entityId}`);
+        } else if (userId && entityId) {
+            debugLog(`[POST] Using Tenant from URL: User=${userId}, Entity=${entityId}`);
+        } else {
+            // BACKUP SEARCH: try a legacy system mapping if it exists
+            const mappingRef = db.doc(`system_mappings/whatsapp_numbers/numbers/${recipientPhoneNumberId}`);
+            const mappingDoc = await mappingRef.get();
+            if (mappingDoc.exists) {
+                const legacy = mappingDoc.data() as { userId: string, entityId: string };
+                userId = legacy.userId;
+                entityId = legacy.entityId;
+                debugLog(`[POST] Found via legacy mapping: User=${userId}, Entity=${entityId}`);
+            } else {
+                debugLog(`[POST] ❌ ABORT: Could not resolve tenant for Phone ID ${recipientPhoneNumberId} (No mapping and no URL params).`);
+                return NextResponse.json({ success: false, error: 'Tenant not mapped' });
+            }
         }
-
-        const { userId, entityId } = mappingDoc.data() as { userId: string, entityId: string };
-        debugLog(`[POST] Tenant Identified: User=${userId}, Entity=${entityId}`);
 
         // Base path for this specific tenant's entity
         const entityPath = `users/${userId}/entities/${entityId}`;
@@ -81,8 +117,12 @@ export async function POST(req: Request) {
             const cardsRef = db.collection(`${entityPath}/kanban-groups`);
             const groupsSnapshot = await cardsRef.get();
 
+<<<<<<< Updated upstream
             // OPTIMIZED: Search in parallel instead of sequentially blocking
             const updatePromises = groupsSnapshot.docs.map(async (group) => {
+=======
+            for (const group of groupsSnapshot.docs) {
+>>>>>>> Stashed changes
                 const cardSnapshot = await group.ref.collection('cards')
                     .where('platform_ids.whatsapp', '==', recipientId)
                     .get();
@@ -133,6 +173,7 @@ export async function POST(req: Request) {
             if (from && text) {
                 const cleanFrom = from.replace(/\D/g, '');
 
+<<<<<<< Updated upstream
                 // OPTIMIZED O(1) Search: Find group and card via indexed Contacts context
                 let targetCardDoc: any = null;
                 let targetGroupId: string | null = null;
@@ -154,6 +195,35 @@ export async function POST(req: Request) {
                             targetCardDoc = cardGet;
                         }
                     }
+=======
+                // Find all potential cards for this number across all groups
+                const allMatches: any[] = [];
+                const groupsRef = db.collection(`${entityPath}/kanban-groups`);
+                const groupsSnapshot = await groupsRef.get();
+
+                for (const groupDoc of groupsSnapshot.docs) {
+                    const cardsSnapshot = await groupDoc.ref.collection('cards')
+                        .where('contactNumberClean', '==', cleanFrom)
+                        .get();
+
+                    cardsSnapshot.forEach(doc => {
+                        allMatches.push({ doc, groupId: groupDoc.id });
+                    });
+                }
+
+                let targetCardDoc: any = null;
+                let targetGroupId: string | null = null;
+
+                if (allMatches.length > 0) {
+                    // Pick the one with the latest update
+                    allMatches.sort((a, b) => {
+                        const tA = (a.doc.data().updatedAt?.toDate?.() || new Date(0)).getTime();
+                        const tB = (b.doc.data().updatedAt?.toDate?.() || new Date(0)).getTime();
+                        return tB - tA;
+                    });
+                    targetCardDoc = allMatches[0].doc;
+                    targetGroupId = allMatches[0].groupId;
+>>>>>>> Stashed changes
                 }
 
                 // Fallback search in parallel if contact doesn't exist but card somehow does (legacy)
@@ -195,7 +265,7 @@ export async function POST(req: Request) {
                 if (targetCardDoc && targetGroupId) {
                     await targetCardDoc.ref.update({
                         lastMessage: text.length > 50 ? text.substring(0, 47) + '...' : text,
-                        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                        updatedAt: new Date(),
                         unreadCount: admin.firestore.FieldValue.increment(1),
                         messages: admin.firestore.FieldValue.arrayUnion(newMessage)
                     });
@@ -225,8 +295,8 @@ export async function POST(req: Request) {
                             contactNumber: from,
                             contactNumberClean: cleanFrom,
                             lastMessage: text.length > 50 ? text.substring(0, 47) + '...' : text,
-                            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-                            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                            updatedAt: new Date(),
+                            createdAt: new Date(),
                             messages: [newMessage],
                             unreadCount: 1,
                             status: 'open',
@@ -252,6 +322,7 @@ export async function POST(req: Request) {
                     }
                 }
 
+<<<<<<< Updated upstream
                 // 4. TRIGGER CHATBOT (Specific to this tenant) - OPTIMIZED: Asynchronous Non-blocking
                 if (groupId && cardId) {
                     debugLog(`[POST] Triggering chatbot for ${entityId}...`);
@@ -263,7 +334,14 @@ export async function POST(req: Request) {
                     } catch (botError: any) {
                         debugLog(`[POST] Chatbot Trigger Error: ${botError.message}`);
                     }
+=======
+                // Trigger Chatbot (Local/Hybrid development support)
+                if (groupId && cardId) {
+                    console.log(`[Webhook] 🤖 Triggering Chatbot for ${from}...`);
+                    await triggerChatbot(from, text, groupId, cardId, userId, entityId);
+>>>>>>> Stashed changes
                 }
+
             }
         }
 
@@ -275,6 +353,7 @@ export async function POST(req: Request) {
 }
 
 async function triggerChatbot(from: string, text: string, groupId: string, cardId: string, userId: string, entityId: string) {
+    console.log(`[Chatbot Engine] 🚀 Initiated for Tenant: ${entityId} | From: ${from}`);
     debugLog(`[Chatbot Engine] Starting for Tenant: ${entityId} | From: ${from}`);
 
     const { sendWhatsAppMessage } = await import('@/lib/sendProviders');
@@ -341,7 +420,7 @@ async function triggerChatbot(from: string, text: string, groupId: string, cardI
                         sender: 'agent', text: msg, timestamp: new Date(), whatsappMessageId: res.messages?.[0]?.id || null, platform: 'whatsapp'
                     }),
                     lastMessage: msg.substring(0, 47) + '...',
-                    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                    updatedAt: new Date(),
                     unreadCount: 0,
                 });
 
@@ -440,6 +519,17 @@ async function triggerChatbot(from: string, text: string, groupId: string, cardI
         };
 
         // --- Resume vs Start ---
+        // Failsafe Restart Command
+        if (text.trim().toLowerCase() === 'reinicia todo ahora') {
+            await cardRef.update({
+                'chatbotState.waitingForInput': false,
+                'chatbotState.currentNodeId': null
+            });
+            const startNode = flow.nodes.find((n: any) => n.type === 'startNode');
+            if (startNode) await executeNode(startNode.id);
+            return;
+        }
+
         if (currentState.waitingForInput && currentNodeId) {
             const node = flow.nodes.find((n: any) => n.id === currentNodeId);
             if (node?.type === 'captureInputNode') {

@@ -13,10 +13,8 @@ exports.normalizeTikTokMessage = normalizeTikTokMessage;
  * that the Kanban system can understand.
  */
 // --- 1. WhatsApp Normalizer (Wrapper for existing logic compatibility) ---
-function normalizeWhatsAppMessage(message, // Typed loosely here as we have specific parsing in the webhook
-contactName) {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j;
-    // Logic extracted from existing webhook to standardize output
+function normalizeWhatsAppMessage(message, contactName) {
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s;
     let type = 'text';
     let text = '';
     let mediaUrl = undefined;
@@ -25,26 +23,46 @@ contactName) {
     }
     else if (message.type === 'image') {
         type = 'image';
-        text = ((_b = message.image) === null || _b === void 0 ? void 0 : _b.caption) || 'Image';
-        mediaUrl = (_c = message.image) === null || _c === void 0 ? void 0 : _c.id; // Needs URL fetching logic usually
+        text = ((_b = message.image) === null || _b === void 0 ? void 0 : _b.caption) || 'Imagen';
+        mediaUrl = (_c = message.image) === null || _c === void 0 ? void 0 : _c.id;
+    }
+    else if (message.type === 'video') {
+        type = 'video';
+        text = ((_d = message.video) === null || _d === void 0 ? void 0 : _d.caption) || 'Video';
+        mediaUrl = (_e = message.video) === null || _e === void 0 ? void 0 : _e.id;
+    }
+    else if (message.type === 'audio' || message.type === 'voice') {
+        type = 'audio';
+        text = 'Audio';
+        mediaUrl = ((_f = message.audio) === null || _f === void 0 ? void 0 : _f.id) || ((_g = message.voice) === null || _g === void 0 ? void 0 : _g.id);
+    }
+    else if (message.type === 'document') {
+        type = 'document';
+        text = ((_h = message.document) === null || _h === void 0 ? void 0 : _h.caption) || ((_j = message.document) === null || _j === void 0 ? void 0 : _j.filename) || 'Documento';
+        mediaUrl = (_k = message.document) === null || _k === void 0 ? void 0 : _k.id;
+    }
+    else if (message.type === 'sticker') {
+        type = 'sticker';
+        text = 'Sticker';
+        mediaUrl = (_l = message.sticker) === null || _l === void 0 ? void 0 : _l.id;
     }
     else if (message.type === 'interactive') {
         type = 'interactive';
-        text = ((_e = (_d = message.interactive) === null || _d === void 0 ? void 0 : _d.button_reply) === null || _e === void 0 ? void 0 : _e.title) || ((_g = (_f = message.interactive) === null || _f === void 0 ? void 0 : _f.list_reply) === null || _g === void 0 ? void 0 : _g.title) || 'Interactive';
+        text = ((_o = (_m = message.interactive) === null || _m === void 0 ? void 0 : _m.button_reply) === null || _o === void 0 ? void 0 : _o.title) || ((_q = (_p = message.interactive) === null || _p === void 0 ? void 0 : _p.list_reply) === null || _q === void 0 ? void 0 : _q.title) || 'Interacción';
     }
-    // ... complete mapping as needed
     return {
         source_platform: 'whatsapp',
         external_id: message.from,
         contact_name: contactName,
-        message_text: text,
+        message_text: text || '',
         message_type: type,
         timestamp: new Date(parseInt(message.timestamp) * 1000),
         media_url: mediaUrl,
         interactive_data: message.interactive ? {
-            button_id: (_h = message.interactive.button_reply) === null || _h === void 0 ? void 0 : _h.id,
-            list_id: (_j = message.interactive.list_reply) === null || _j === void 0 ? void 0 : _j.id
-        } : undefined
+            button_id: (_r = message.interactive.button_reply) === null || _r === void 0 ? void 0 : _r.id,
+            list_id: (_s = message.interactive.list_reply) === null || _s === void 0 ? void 0 : _s.id
+        } : undefined,
+        platform_metadata: message
     };
 }
 // --- 2. Meta (Instagram & Messenger) Normalizer ---

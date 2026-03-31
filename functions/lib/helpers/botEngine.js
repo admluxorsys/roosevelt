@@ -44,36 +44,32 @@ async function releaseBotLock(cardRef) {
         functions.logger.warn(`[BotLock] Failed to release lock: ${err.message}`);
     }
 }
-// --- Search by platform_ids (New Unified Approach) ---
-// Try to find by whatsapp/external_id first, scoped locally to the tenant
+// --- Search by platform_ids (Simple Approach) ---
 async function resolveCardRef(userId, entityId, contactNumber, platform = 'whatsapp') {
     const db = admin.firestore();
-    const groupsPath = `users/${userId}/entities/${entityId}/kanban-groups`;
+    // Strategy A: By platform_ids.{platform}
     try {
-        const groupsSnap = await db.collection(groupsPath).get();
-        if (groupsSnap.empty)
-            return null;
-        for (const groupDoc of groupsSnap.docs) {
-            // Strategy A: platform_ids.{platform}
-            const platformSnap = await groupDoc.ref.collection('cards')
-                .where(`platform_ids.${platform}`, '==', contactNumber)
-                .limit(1)
-                .get();
-            if (!platformSnap.empty)
-                return platformSnap.docs[0].ref;
-            // Strategy B: Legacy contactNumber match (mostly for WhatsApp)
-            if (platform === 'whatsapp') {
-                const legacySnap = await groupDoc.ref.collection('cards')
-                    .where('contactNumber', '==', contactNumber)
-                    .limit(1)
-                    .get();
-                if (!legacySnap.empty)
-                    return legacySnap.docs[0].ref;
-            }
-        }
+        const snap = await db.collectionGroup('cards')
+            .where(`platform_ids.${platform}`, '==', contactNumber)
+            .limit(1)
+            .get();
+        if (!snap.empty)
+            return snap.docs[0].ref;
     }
     catch (e) {
-        functions.logger.error(`[resolveCardRef] Error scanning cards for tenant ${userId}/${entityId}`, e);
+        functions.logger.warn(`[resolveCardRef] index for platform_ids.${platform} not ready.`);
+    }
+    // Strategy B: Legacy contactNumber match
+    if (platform === 'whatsapp') {
+        try {
+            const snap = await db.collectionGroup('cards')
+                .where('contactNumber', '==', contactNumber)
+                .limit(1)
+                .get();
+            if (!snap.empty)
+                return snap.docs[0].ref;
+        }
+        catch (e) { }
     }
     return null;
 }
@@ -269,6 +265,7 @@ async function executeBotFlow(bot, userId, entityId, to, cardData, rawUserMessag
                 updatedAt: admin.firestore.FieldValue.serverTimestamp()
             });
             await adapter.sendMessage(to, "🔄 Reinicio completado, empezamos de nuevo.");
+            await logBotMessage(to, "🔄 Reinicio completado, empezamos de nuevo.", cardData.id, cardData.groupId, cardRef, 'text');
             currentMsg = ""; // Clear to avoid being used by the fresh flow
             return; // STOP execution here to wait for next user message
         }
@@ -309,8 +306,10 @@ async function executeBotFlow(bot, userId, entityId, to, cardData, rawUserMessag
                             await adapter.sendButtonMessage(to, qrText, buttons, header);
                             await logBotMessage(to, qrText, cardData.id, cardData.groupId, cardRef, 'buttons', { buttons, header });
                         }
-                        else
+                        else {
                             await adapter.sendMessage(to, qrText);
+                            await logBotMessage(to, qrText, cardData.id, cardData.groupId, cardRef, 'text');
+                        }
                     }
                     else if (currentNode.type === 'listMessageNode') {
                         const listBody = replaceVariables(((_k = currentNode.data) === null || _k === void 0 ? void 0 : _k.body) || ((_l = currentNode.data) === null || _l === void 0 ? void 0 : _l.text) || 'Elige una opción:', cardData);
@@ -320,13 +319,17 @@ async function executeBotFlow(bot, userId, entityId, to, cardData, rawUserMessag
                             await adapter.sendListMessage(to, listBody, btnText, sections);
                             await logBotMessage(to, listBody, cardData.id, cardData.groupId, cardRef, 'list', { buttonText: btnText, sections });
                         }
-                        else
+                        else {
                             await adapter.sendMessage(to, listBody);
+                            await logBotMessage(to, listBody, cardData.id, cardData.groupId, cardRef, 'text');
+                        }
                     }
                     else if (currentNode.type === 'captureInputNode') {
                         const prompt = replaceVariables(((_o = currentNode.data) === null || _o === void 0 ? void 0 : _o.content) || ((_p = currentNode.data) === null || _p === void 0 ? void 0 : _p.text) || '', cardData);
-                        if (prompt)
+                        if (prompt) {
                             await adapter.sendMessage(to, prompt);
+                            await logBotMessage(to, prompt, cardData.id, cardData.groupId, cardRef, 'text');
+                        }
                     }
                 }
                 catch (resendErr) {
@@ -359,13 +362,14 @@ async function executeBotFlow(bot, userId, entityId, to, cardData, rawUserMessag
                         // Fallback value for name variables if requested by user
                         const varName = ((_s = currentNode.data) === null || _s === void 0 ? void 0 : _s.variableName) || '';
                         const isNameVar = ['nombre', 'name', 'firstname'].includes(varName.toLowerCase());
-                        const fallbackValue = isNameVar ? "Amigo" : "No provisto";
+                        const fallbackValue = isNameVar ? "Skyler" : "No provisto";
                         await saveVariable(to, varName, fallbackValue, cardData.id, cardData.groupId, cardRef);
                         // continue to next node logic below
                     }
                     else {
                         const errorMsg = replaceVariables(validation.errorMessage || "Respuesta inválida.", cardData);
                         await adapter.sendMessage(to, errorMsg);
+                        await logBotMessage(to, errorMsg, cardData.id, cardData.groupId, cardRef, 'text');
                         // Update retry count in state
                         await updateBotState(to, Object.assign(Object.assign({}, cardData.botState), { retryCount: currentRetries + 1, lastInteraction: admin.firestore.Timestamp.now() }), cardData.id, cardData.groupId, cardRef);
                         return;
@@ -374,8 +378,9 @@ async function executeBotFlow(bot, userId, entityId, to, cardData, rawUserMessag
                 else {
                     let valueToSave = currentMsg.trim();
                     const varName = ((_t = currentNode.data) === null || _t === void 0 ? void 0 : _t.variableName) || `captured_${currentNode.id}`;
-                    // --- HEURÍSTICA DE EXTRACCIÓN DE NOMBRE ---
-                    if (['nombre', 'name', 'firstname', 'user'].includes(varName.toLowerCase())) {
+                    const vName = varName.toLowerCase();
+                    const isNameVar = vName.includes('name') || vName.includes('nombre') || vName.includes('user') || vName.includes('persona');
+                    if (isNameVar) {
                         valueToSave = extractName(valueToSave);
                         functions.logger.info(`[executeBotFlow] Name extracted: "${valueToSave}" from "${currentMsg}"`);
                     }
@@ -385,7 +390,7 @@ async function executeBotFlow(bot, userId, entityId, to, cardData, rawUserMessag
                         cardData.customFields = {};
                     cardData.customFields[varName] = valueToSave;
                     // Update local contactName for immediate use in following nodes
-                    if (['nombre', 'name', 'firstname', 'user'].includes(varName.toLowerCase()) && valueToSave !== 'Amigo') {
+                    if (isNameVar && valueToSave !== 'Amigo') {
                         cardData.contactName = valueToSave;
                     }
                 }
@@ -446,6 +451,11 @@ async function executeBotFlow(bot, userId, entityId, to, cardData, rawUserMessag
                 return;
             }
         }
+        // --- IMPORTANT: CONSUME MESSAGE ---
+        // Once the initial input has been processed (or the flow started),
+        // clear currentMsg so that subsequent captureInputNodes in the same 
+        // execution execution don't reuse the trigger message (e.g., 'hola') as an answer.
+        currentMsg = "";
         // --- EJECUCIÓN DE NODOS ---
         while (shouldContinue && nextNodeId && executionCount < MAX_STEPS) {
             executionCount++;
@@ -538,7 +548,7 @@ async function executeBotFlow(bot, userId, entityId, to, cardData, rawUserMessag
                     }
                     // Suspender ejecución y esperar nueva entrada
                     await updateBotState(to, {
-                        botState: 'awaiting_input',
+                        status: 'active',
                         currentNodeId: nextNodeId,
                         retryCount: 0,
                         lastInteraction: admin.firestore.Timestamp.now()
@@ -564,6 +574,12 @@ async function executeBotFlow(bot, userId, entityId, to, cardData, rawUserMessag
                     if (buttons.length > 0) {
                         await adapter.sendButtonMessage(to, qrText, buttons, header);
                         await logBotMessage(to, qrText, cardData.id, cardData.groupId, cardRef, 'buttons', { buttons, header });
+                        // Save state so we know where to resume
+                        await updateBotState(to, {
+                            status: 'active',
+                            currentNodeId: nextNodeId,
+                            lastInteraction: admin.firestore.Timestamp.now()
+                        }, cardData.id, cardData.groupId, cardRef);
                         shouldContinue = false;
                     }
                     else {
@@ -579,6 +595,12 @@ async function executeBotFlow(bot, userId, entityId, to, cardData, rawUserMessag
                     if (cleanSections.length > 0) {
                         await adapter.sendListMessage(to, listBody, btnLabel, cleanSections);
                         await logBotMessage(to, listBody, cardData.id, cardData.groupId, cardRef, 'list', { buttonText: btnLabel, sections: cleanSections });
+                        // Save state so we know where to resume
+                        await updateBotState(to, {
+                            status: 'active',
+                            currentNodeId: nextNodeId,
+                            lastInteraction: admin.firestore.Timestamp.now()
+                        }, cardData.id, cardData.groupId, cardRef);
                         shouldContinue = false;
                     }
                     else {
@@ -777,11 +799,13 @@ async function executeBotFlow(bot, userId, entityId, to, cardData, rawUserMessag
                         catch (error) {
                             functions.logger.error(`[Bot] AI Error:`, ((_10 = error.response) === null || _10 === void 0 ? void 0 : _10.data) || error.message);
                             await adapter.sendMessage(to, "Lo siento, tuve un problema procesando tu solicitud con IA.");
+                            await logBotMessage(to, "Lo siento, tuve un problema procesando tu solicitud con IA.", cardData.id, cardData.groupId, cardRef, 'text');
                         }
                     }
                     else {
                         functions.logger.warn("[Bot] Missing OpenAI API Key in functions.config().openai.key");
                         await adapter.sendMessage(to, "El nodo de IA no está configurado (falta API Key).");
+                        await logBotMessage(to, "El nodo de IA no está configurado (falta API Key).", cardData.id, cardData.groupId, cardRef, 'text');
                     }
                     nextNodeId = getNextNodeId(bot, nextNodeId);
                     break;
@@ -794,6 +818,7 @@ async function executeBotFlow(bot, userId, entityId, to, cardData, rawUserMessag
                         updatedAt: admin.firestore.FieldValue.serverTimestamp()
                     });
                     await adapter.sendMessage(to, "Te estoy transfiriendo con un agente humano. Por favor, espera un momento.");
+                    await logBotMessage(to, "Te estoy transfiriendo con un agente humano. Por favor, espera un momento.", cardData.id, cardData.groupId, cardRef, 'text');
                     return;
                 }
                 default:
@@ -810,22 +835,41 @@ async function executeBotFlow(bot, userId, entityId, to, cardData, rawUserMessag
     }
 }
 function extractName(input) {
-    // Remover prefijos comunes con flexibilidad en puntuación
+    // Lista ampliada de prefijos y saludos comunes en español
     const prefixes = [
-        /^(me llamo|soy|mi nombre es|este es|habla|aqui)[\s:,!¡.-]*/i,
-        /^(hola|buen[oa]s\s+(dias|tardes|noches))[\s,!¡¿?.-]*(me llamo|soy)?[\s:,!¡.-]*/i,
-        /^[\s,!¡¿?.-]*(me llamo|soy)[\s:,!¡.-]*/i
+        /^(mucho gusto|un placer|encantado|encantada|qué tal|hola|buen[oa]s\s+(días|tardes|noches|dia|tarde|noche))[\s,!¡¿?.-]*/i,
+        /^(me llamo|soy|mi nombre es|este es|habla|aquí)[\s:,!¡.-]*/i,
+        // Combinaciones: "mucho gusto me llamo..."
+        /^(mucho gusto|un placer|hola)[\s,!¡¿?.-]*(me llamo|soy|mi nombre es)[\s:,!¡.-]*/i,
+        // Específico para "me llamo [Nombre]" al inicio
+        /^[\s,!¡¿?.-]*(me llamo|soy|mi nombre es)[\s:,!¡.-]*/i
     ];
     let cleaned = input.trim();
-    for (const p of prefixes) {
-        if (p.test(cleaned)) {
-            cleaned = cleaned.replace(p, '');
-            break; // Detenerse tras el primer prefix match
+    let changed = true;
+    // Aplicar varias veces para limpiar múltiples capas (ej: "Hola mucho gusto me llamo Juan")
+    while (changed) {
+        changed = false;
+        for (const p of prefixes) {
+            if (p.test(cleaned)) {
+                cleaned = cleaned.replace(p, '').trim();
+                changed = true;
+            }
         }
     }
-    // Capitalizar primera letra de cada palabra
-    const capitalized = cleaned.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ').trim();
-    return capitalized || "Amigo";
+    // Si la cadena quedó vacía o demasiado corta después de limpiar, devolver el input original
+    // o un fallback amigablesi solo hay una palabra.
+    if (!cleaned || cleaned.length < 2) {
+        cleaned = input.trim();
+    }
+    // Capitalización inteligente (Primera letra Mayúscula, resto minúscula para cada palabra)
+    // Pero solo si no parece un apellido compuesto o algo especial
+    const words = cleaned.split(/\s+/).filter(w => w.length > 0);
+    const capitalized = words.map(word => {
+        if (word.length <= 2 && !['yo', 'el', 'la'].includes(word.toLowerCase()))
+            return word.toLowerCase();
+        return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    }).join(' ').trim();
+    return capitalized || "Skyler";
 }
 function getNextNodeId(bot, currentId) {
     if (!currentId)
@@ -952,18 +996,23 @@ async function logBotMessage(contactNumber, message, cardId, groupId, existingRe
     // Use pre-resolved ref if available, otherwise fall back to lookup
     const docRef = existingRef || (userId && entityId ? await resolveCardRef(userId, entityId, contactNumber, platform || 'whatsapp') : null);
     if (docRef) {
+        // ⚠️ NOTE: FieldValue.serverTimestamp() is NOT allowed inside arrayUnion.
+        // Use Timestamp.now() instead so the write succeeds.
         await docRef.update({
-            lastMessage: message,
+            lastMessage: message.substring(0, 100),
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
             messages: admin.firestore.FieldValue.arrayUnion({
                 sender: 'agent',
                 text: message,
                 type: type,
                 metadata: metadata || null,
-                timestamp: admin.firestore.FieldValue.serverTimestamp()
+                timestamp: admin.firestore.Timestamp.now()
             }),
             unreadCount: 0
         });
+    }
+    else {
+        functions.logger.warn(`[logBotMessage] Could not resolve cardRef for ${contactNumber}. Bot message NOT logged.`);
     }
 }
 //# sourceMappingURL=botEngine.js.map

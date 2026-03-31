@@ -25,14 +25,22 @@ async function makeWhatsAppRequest(data, type, ctx) {
     let phoneId = ((_b = functions.config().whatsapp) === null || _b === void 0 ? void 0 : _b.phone_number_id) || process.env.WHATSAPP_PHONE_NUMBER_ID || phoneNumberId;
     if ((ctx === null || ctx === void 0 ? void 0 : ctx.userId) && (ctx === null || ctx === void 0 ? void 0 : ctx.entityId)) {
         try {
-            const configPath = `users/${ctx.userId}/entities/${ctx.entityId}/integrations/whatsapp`;
-            const docRef = admin.firestore().doc(configPath);
-            const snapshot = await docRef.get();
-            if (snapshot.exists) {
-                const configData = snapshot.data();
-                if ((configData === null || configData === void 0 ? void 0 : configData.accessToken) && (configData === null || configData === void 0 ? void 0 : configData.phoneNumberId)) {
-                    apiToken = configData.accessToken;
-                    phoneId = configData.phoneNumberId;
+            const db = admin.firestore();
+            // Try production config first, then dev/internal as fallback
+            const paths = [
+                `users/${ctx.userId}/entities/${ctx.entityId}/integrations/whatsapp`,
+                `users/${ctx.userId}/entities/${ctx.entityId}/integrations/whatsapp_internal`
+            ];
+            for (const configPath of paths) {
+                const snapshot = await db.doc(configPath).get();
+                if (snapshot.exists) {
+                    const configData = snapshot.data();
+                    if ((configData === null || configData === void 0 ? void 0 : configData.accessToken) && (configData === null || configData === void 0 ? void 0 : configData.phoneNumberId)) {
+                        apiToken = configData.accessToken;
+                        phoneId = configData.phoneNumberId;
+                        functions.logger.info(`[WhatsApp API] Loaded credentials from: ${configPath.split('/').pop()}`);
+                        break; // Stop at first valid config
+                    }
                 }
             }
         }

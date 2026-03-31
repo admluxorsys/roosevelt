@@ -14,10 +14,9 @@ import {
 
 // --- 1. WhatsApp Normalizer (Wrapper for existing logic compatibility) ---
 export function normalizeWhatsAppMessage(
-    message: any, // Typed loosely here as we have specific parsing in the webhook
+    message: any,
     contactName: string
 ): UnifiedMessage {
-    // Logic extracted from existing webhook to standardize output
     let type: UnifiedMessage['message_type'] = 'text';
     let text = '';
     let mediaUrl = undefined;
@@ -26,26 +25,42 @@ export function normalizeWhatsAppMessage(
         text = message.text?.body || '';
     } else if (message.type === 'image') {
         type = 'image';
-        text = message.image?.caption || 'Image';
-        mediaUrl = message.image?.id; // Needs URL fetching logic usually
+        text = message.image?.caption || 'Imagen';
+        mediaUrl = message.image?.id;
+    } else if (message.type === 'video') {
+        type = 'video';
+        text = message.video?.caption || 'Video';
+        mediaUrl = message.video?.id;
+    } else if (message.type === 'audio' || message.type === 'voice') {
+        type = 'audio';
+        text = 'Audio';
+        mediaUrl = message.audio?.id || message.voice?.id;
+    } else if (message.type === 'document') {
+        type = 'document';
+        text = message.document?.caption || message.document?.filename || 'Documento';
+        mediaUrl = message.document?.id;
+    } else if (message.type === 'sticker') {
+        type = 'sticker';
+        text = 'Sticker';
+        mediaUrl = message.sticker?.id;
     } else if (message.type === 'interactive') {
         type = 'interactive';
-        text = message.interactive?.button_reply?.title || message.interactive?.list_reply?.title || 'Interactive';
+        text = message.interactive?.button_reply?.title || message.interactive?.list_reply?.title || 'Interacción';
     }
-    // ... complete mapping as needed
 
     return {
         source_platform: 'whatsapp',
         external_id: message.from,
         contact_name: contactName,
-        message_text: text,
+        message_text: text || '',
         message_type: type,
         timestamp: new Date(parseInt(message.timestamp) * 1000),
         media_url: mediaUrl,
         interactive_data: message.interactive ? {
             button_id: message.interactive.button_reply?.id,
             list_id: message.interactive.list_reply?.id
-        } : undefined
+        } : undefined,
+        platform_metadata: message
     };
 }
 

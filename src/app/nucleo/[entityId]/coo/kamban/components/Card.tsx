@@ -38,6 +38,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { toast } from 'sonner';
 
 const Card = ({ card, groupId, onClick, cardColor = 'bg-neutral-800', contacts = [], isCompact }: any) => {
   const { currentUser, activeEntity } = useAuth();
@@ -77,13 +78,52 @@ const Card = ({ card, groupId, onClick, cardColor = 'bg-neutral-800', contacts =
   };
 
   const handleDeleteCard = async () => {
-    if (deleteConfirmation === 'delete') {
+    const confirmation = deleteConfirmation.trim().toLowerCase();
+    if (confirmation === 'delete' || confirmation === 'borrar') {
       try {
-        const cardRef = doc(db, `${getTenantPath()}/kanban-groups`, groupId, 'cards', card.id);
-        await deleteDoc(cardRef);
+        const tenantPath = getTenantPath();
+        if (!tenantPath) {
+          toast.error("Error: No se pudo determinar la entidad actual.");
+          return;
+        }
+
+        toast.loading("Eliminando tarjeta...", { id: 'delete-card' });
+
+        // 1. Direct Deletion Attempt
+        const directCardRef = doc(db, `${tenantPath}/kanban-groups/${groupId}/cards/${card.id}`);
+        await deleteDoc(directCardRef);
+
+        // 2. Brute Force Search (Safety Net)
+        // If the card was moved or mapped incorrectly, we look everywhere for its ID or clean phone
+        const { getDocs, collection } = await import('firebase/firestore');
+        const groupsSnap = await getDocs(collection(db, `${tenantPath}/kanban-groups`));
+
+        const deletePromises: Promise<any>[] = [];
+        const cleanPhone = card.contactNumberClean || card.contactNumber?.replace(/\D/g, '');
+
+        for (const groupDoc of groupsSnap.docs) {
+          const cardsRef = collection(db, `${tenantPath}/kanban-groups/${groupDoc.id}/cards`);
+          const cardsSnap = await getDocs(cardsRef);
+
+          cardsSnap.docs.forEach(cDoc => {
+            const data = cDoc.data();
+            const cPhone = data.contactNumberClean || data.contactNumber?.replace(/\D/g, '');
+
+            // Delete if ID matches OR if phone matches (if user wants to "eliminar todo" for that contact)
+            if (cDoc.id === card.id || (cleanPhone && cPhone === cleanPhone)) {
+              console.log(`[Card] 🗑️ Deleting card ${cDoc.id} from group ${groupDoc.id}`);
+              deletePromises.push(deleteDoc(cDoc.ref));
+            }
+          });
+        }
+
+        await Promise.all(deletePromises);
+
+        toast.success("Tarjeta eliminada de todas las bandejas", { id: 'delete-card' });
         handleCloseDeleteDialog();
       } catch (error) {
         console.error("Error deleting card: ", error);
+        toast.error("Error al eliminar la tarjeta", { id: 'delete-card' });
       }
     }
   };
@@ -166,7 +206,7 @@ const Card = ({ card, groupId, onClick, cardColor = 'bg-neutral-800', contacts =
             {card.unreadCount > 0 && (
               <div className="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
             )}
-            
+
             <div className="opacity-0 group-hover:opacity-100 transition-opacity">
               <Button
                 variant="ghost"
@@ -186,7 +226,7 @@ const Card = ({ card, groupId, onClick, cardColor = 'bg-neutral-800', contacts =
           <DialogHeader>
             <DialogTitle>Confirm Deletion</DialogTitle>
             <DialogDescription>
-              To confirm deletion, type 'delete'.
+              Escribe 'delete' o 'borrar' para confirmar la eliminación.
             </DialogDescription>
           </DialogHeader>
           <div className="py-2">
@@ -194,18 +234,21 @@ const Card = ({ card, groupId, onClick, cardColor = 'bg-neutral-800', contacts =
               value={deleteConfirmation}
               onChange={(e) => setDeleteConfirmation(e.target.value)}
               className="bg-neutral-800 border-neutral-600 focus:ring-blue-500"
-              placeholder="Type 'delete'..."
+              placeholder="delete / borrar..."
               autoComplete="off"
             />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={handleCloseDeleteDialog}>Cancel</Button>
+            <Button variant="outline" onClick={handleCloseDeleteDialog}>Cancelar</Button>
             <Button
               variant="destructive"
               onClick={handleDeleteCard}
-              disabled={deleteConfirmation !== 'delete'}
+              disabled={
+                deleteConfirmation.trim().toLowerCase() !== 'delete' &&
+                deleteConfirmation.trim().toLowerCase() !== 'borrar'
+              }
             >
-              Delete
+              Borrar
             </Button>
           </DialogFooter>
         </DialogContent>

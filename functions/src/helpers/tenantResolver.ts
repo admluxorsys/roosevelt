@@ -1,67 +1,74 @@
 import * as admin from 'firebase-admin';
 import * as functions from 'firebase-functions';
 
-/**
- * TENANT RESOLVER
- * Maps platform-specific identifiers to { userId, entityId }
- * 
- * Rules:
- * 1. WhatsApp: platform='whatsapp', id=recipient_phone_number_id
- * 2. Meta (Messenger): platform='messenger', id=recipient_id (Page ID)
- * 3. Instagram: platform='instagram', id=recipient_id (IG ID)
- * 4. Telegram: platform='telegram', id=bot_token_hash (or generic for now)
- */
-
 export interface TenantContext {
     userId: string;
     entityId: string;
 }
 
-export async function resolveTenant(platform: string, platformId: string): Promise<TenantContext | null> {
+/**
+ * TENANT RESOLVER (Robust & Master Mold Compliant)
+ * Maps platform-specific identifiers to { userId, entityId }
+ * 
+ * Strategy:
+ * 1. Search in modern 'integrations' vault (Collection Group).
+ * 2. Fallback to legacy 'system_mappings' if index not ready or not found.
+ */
+export async function resolveTenant(platform: string, platformId: string | number, secondaryId?: string | number): Promise<TenantContext | null> {
     const db = admin.firestore();
-    let mappingPath = '';
-
-    switch (platform) {
-        case 'whatsapp':
-            mappingPath = `system_mappings/whatsapp_numbers/numbers/${platformId}`;
-            break;
-        case 'messenger':
-        case 'page':
-            mappingPath = `system_mappings/meta_pages/pages/${platformId}`;
-            break;
-        case 'instagram':
-            mappingPath = `system_mappings/instagram_accounts/accounts/${platformId}`;
-            break;
-        case 'telegram':
-            mappingPath = `system_mappings/telegram_bots/bots/${platformId}`;
-            break;
-        case 'tiktok':
-            mappingPath = `system_mappings/tiktok_accounts/accounts/${platformId}`;
-            break;
-        case 'webchat':
-            // For webchat, we might pass the entityId directly in the request or use a mapping for the domain
-            mappingPath = `system_mappings/webchat_configs/configs/${platformId}`;
-            break;
-        default:
-            functions.logger.warn(`[TenantResolver] Unknown platform: ${platform}`);
-            return null;
-    }
-
+    const fieldName = platform === 'whatsapp' ? 'phoneNumberId' : 'id';
+    
+    // 1. MODERN VAULT SEARCH (Preferred)
     try {
-        const snap = await db.doc(mappingPath).get();
-        if (snap.exists) {
-            return snap.data() as TenantContext;
+        let integrationsSnap = await db.collectionGroup("integrations")
+            .where(fieldName, "==", platformId)
+            .limit(1)
+            .get();
+
+        if (integrationsSnap.empty && !isNaN(Number(platformId))) {
+            integrationsSnap = await db.collectionGroup("integrations")
+                .where(fieldName, "==", Number(platformId))
+                .limit(1)
+                .get();
         }
-        functions.logger.warn(`[TenantResolver] No mapping found for ${platform}:${platformId} at ${mappingPath}`);
-        
-        // --- FALLBACK FOR DEVELOPMENT / MIGRATION ---
-        // If no mapping found, we might look for a default or return null
-        // To avoid breaking the flow if mappings aren't set up yet, we could return a "roosevelt" default
-        // if explicitly in dev mode, but "Agnosticismo Total" says no hardcoding.
-        // So we return null and the webhook should handle it.
-        return null;
+
+        // Secondary search (WABA ID)
+        if (integrationsSnap.empty && platform === 'whatsapp' && secondaryId) {
+            integrationsSnap = await db.collectionGroup("integrations")
+                .where("wabaId", "==", secondaryId)
+                .limit(1)
+                .get();
+        }
+
+        if (!integrationsSnap.empty) {
+            const pathParts = integrationsSnap.docs[0].ref.path.split('/');
+            const userId = pathParts[1];
+            const entityId = pathParts[3];
+            if (userId && entityId) {
+                functions.logger.info(`[Tenant Resolver] ✅ Resolved via Vault: ${userId}/${entityId}`);
+                return { userId, entityId };
+            }
+        }
     } catch (error: any) {
-        functions.logger.error(`[TenantResolver] Error resolving tenant for ${platform}:${platformId}`, error.message);
-        return null;
+        functions.logger.warn(`[Tenant Resolver] ⚠️ Vault query skipped (index building?): ${error.message}`);
     }
+
+    // 2. LEGACY FALLBACK (Reliable Last Resort)
+    try {
+        const mappingPath = `system_mappings/${platform === 'whatsapp' ? 'whatsapp_numbers' : platform + '_mappings'}/numbers/${platformId}`;
+        const legacySnap = await db.doc(mappingPath).get();
+        
+        if (legacySnap.exists) {
+            const data = legacySnap.data() as any;
+            if (data.userId && data.entityId) {
+                functions.logger.info(`[Tenant Resolver] ✅ Resolved via Legacy: ${data.userId}/${data.entityId}`);
+                return { userId: data.userId, entityId: data.entityId };
+            }
+        }
+    } catch (error: any) {
+        functions.logger.error(`[Tenant Resolver] ❌ Critical failure in Legacy resolution:`, error.message);
+    }
+
+    functions.logger.warn(`[Tenant Resolver] ❌ Final: UNRESOLVED for ${platform}:${platformId}`);
+    return null;
 }

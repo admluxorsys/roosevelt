@@ -7,8 +7,9 @@ import { Progress } from "@/components/ui/progress";
 import { cn } from '@/lib/utils';
 import { UploadCloud, XCircle } from 'lucide-react';
 import { useDropzone } from 'react-dropzone';
-import { getStorage, ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
-import { app } from '@/lib/firebase';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { storage } from '@/lib/firebase';
+import { toast } from 'sonner';
 
 export const SettingsSection = ({ title, children }: { title: string, children: React.ReactNode }) => (
     <div className="flex flex-col space-y-4 py-3 border-b border-neutral-800/50 last:border-0 px-1">
@@ -47,18 +48,26 @@ export const FileUploader = ({ onUploadSuccess, initialUrl = null, initialFilena
 
         setUploading(true);
         setError(null);
-        const storage = getStorage(app);
+        setProgress(0);
+        
         const storageRef = ref(storage, `chatbot_media/${Date.now()}_${file.name}`);
         const uploadTask = uploadBytesResumable(storageRef, file);
 
         uploadTask.on('state_changed',
             (snapshot) => {
-                const prog = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                const prog = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
                 setProgress(prog);
             },
             (err) => {
                 console.error("Error al subir archivo:", err);
-                setError('Error al subir el archivo.');
+                let errorMsg = 'Error al subir el archivo.';
+                if (err.code === 'storage/retry-limit-exceeded') {
+                    errorMsg = 'Error de conexión: El Bucket es incorrecto o falta configurar el CORS.';
+                } else if (err.code === 'storage/unauthorized') {
+                    errorMsg = 'Error: No tienes permisos para subir archivos aquí.';
+                }
+                setError(errorMsg);
+                toast.error(errorMsg);
                 setUploading(false);
             },
             () => {
@@ -67,6 +76,7 @@ export const FileUploader = ({ onUploadSuccess, initialUrl = null, initialFilena
                     setFilename(file.name);
                     onUploadSuccess(downloadURL, file.name, file.type);
                     setUploading(false);
+                    setProgress(100);
                 });
             }
         );

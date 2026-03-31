@@ -192,6 +192,7 @@ export interface CardData {
     propertyOrder?: string[];
     assignedTo?: string;
     labels?: string[];
+    unreadCount?: number;
 }
 
 export interface ConversationModalProps {

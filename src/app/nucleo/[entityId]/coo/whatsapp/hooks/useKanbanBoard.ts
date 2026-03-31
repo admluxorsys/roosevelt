@@ -37,35 +37,45 @@ export const useKanbanBoard = (filterTerm: string = '') => {
     // Load Cards
     useEffect(() => {
         const tenantPath = getTenantPath();
-        if (!tenantPath) return;
-
-        const unsubscribes: (() => void)[] = [];
-
-        if (groups.length === 0) {
+        if (!tenantPath || groups.length === 0) {
             setLoading(false);
             return;
         }
 
+        const unsubscribes: (() => void)[] = [];
+
+        // Track cards by ID to prevent flicker and race conditions
+        const cardRegistry = new Map<string, any>();
+
         groups.forEach(group => {
             const q = query(collection(db, `${tenantPath}/kanban-groups/${group.id}/cards`));
             const unsub = onSnapshot(q, (snapshot) => {
-                const groupCards = snapshot.docs.map(doc => ({
-                    id: doc.id,
-                    groupId: group.id,
-                    ...doc.data()
-                }));
-
-                setCards(prev => {
-                    const otherCards = prev.filter(c => c.groupId !== group.id);
-                    return [...otherCards, ...groupCards];
+                snapshot.docs.forEach(doc => {
+                    console.log(`[useKanbanBoard] 🎴 Found Card: ${doc.id} at Path: ${doc.ref.path}`);
+                    cardRegistry.set(doc.id, {
+                        id: doc.id,
+                        groupId: group.id,
+                        ...doc.data()
+                    });
                 });
+
+                // Handle deletions: if a card is not in current group snapshot but was in registry with this groupId, remove it
+                // (Unless it was moved to another group, which will be handled by its own snapshot)
+                const currentIds = new Set(snapshot.docs.map(d => d.id));
+                cardRegistry.forEach((card, id) => {
+                    if (card.groupId === group.id && !currentIds.has(id)) {
+                        cardRegistry.delete(id);
+                    }
+                });
+
+                setCards(Array.from(cardRegistry.values()));
+                setLoading(false);
             });
             unsubscribes.push(unsub);
         });
 
-        setLoading(false);
         return () => unsubscribes.forEach(u => u());
-    }, [groups.length]);
+    }, [groups, currentUser?.uid, activeEntity]);
 
     const moveCardCallable = httpsCallable(functions, 'moveCard');
 

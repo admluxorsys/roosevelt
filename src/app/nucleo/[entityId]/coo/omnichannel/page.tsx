@@ -9,9 +9,24 @@ import { useKanbanBoard } from '../whatsapp/hooks/useKanbanBoard';
 export default function OmnichannelInboxPage() {
     // State to manage which conversation is active
     const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+    const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
     const [selectedFolder, setSelectedFolder] = useState<string>('all');
 
     const { cards, groups, loading } = useKanbanBoard();
+
+    // Auto-Recovery: If activeConversationId is not in cards, we reset or switch
+    // This solves the 'Ghost Card' problem where the UI is stuck on a deleted/stale ID
+    React.useEffect(() => {
+        if (!activeConversationId || loading || cards.length === 0) return;
+
+        const exists = cards.some(c => c.id === activeConversationId);
+        if (!exists) {
+            console.warn(`[Omnichannel] Active ID ${activeConversationId} not found in board. Attempting recovery...`);
+            // Try to find ANY card that might be a better match for the contact we were looking at
+            // For now, simply resetting to null is safer to unblock the UI
+            setActiveConversationId(null);
+        }
+    }, [activeConversationId, cards, loading]);
 
     // Find active card data
     const activeCard = cards.find(c => c.id === activeConversationId) || null;
@@ -35,18 +50,15 @@ export default function OmnichannelInboxPage() {
                 loading={loading}
             />
 
-            {/* 3. Right Area: Chat history + Contact panel */}
+            {/* 3. Right Area: Chat history (Contact panel removed) */}
             <div className="flex flex-1 overflow-hidden bg-[#111111]">
                 {activeCard ? (
-                    <>
-                        {/* Chat History and Input */}
-                        <ChatArea
-                            card={activeCard}
-                            groups={groups}
-                            groupName={activeGroupName}
-                            allConversations={cards}
-                        />
-                    </>
+                    <ChatArea
+                        card={activeCard}
+                        groups={groups}
+                        groupName={activeGroupName}
+                        allConversations={cards}
+                    />
                 ) : (
                     <div className="flex flex-1 items-center justify-center flex-col text-neutral-500">
                         <div className="w-16 h-16 rounded-full bg-neutral-800/50 flex items-center justify-center mb-4">
@@ -61,4 +73,3 @@ export default function OmnichannelInboxPage() {
         </div>
     );
 }
-

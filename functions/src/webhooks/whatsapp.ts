@@ -3,6 +3,7 @@ import * as admin from 'firebase-admin';
 import { handleKanbanUpdateOmni, updateReadStatus } from '../helpers/kanbanOmni';
 import { tryTriggerBot } from '../helpers/botEngine';
 import { UnifiedMessage } from '../types/message';
+import { resolveTenant } from '../helpers/tenantResolver';
 
 
 
@@ -75,17 +76,23 @@ export const whatsappWebhook = functions.runWith({ invoker: 'public' }).https.on
             return;
         }
 
-        // --- RESOLUCIÓN DE INQUILINO DIRECTA (Vía URL) ---
-        // Evitamos usar collectionGroup para eludir el error de "Index Required" de Firestore
-        const userId = req.query['u'] as string;
-        const entityId = req.query['e'] as string;
+        // --- RESOLUCIÓN DE INQUILINO (TENANT RESOLUTION) ---
+        // 1. Intentar resolver por phoneNumberId (Maestra de Mapeos)
+        const tenant = await resolveTenant('whatsapp', recipientPhoneNumberId);
+        
+        let userId = req.query['u'] as string;
+        let entityId = req.query['e'] as string;
 
-        if (!userId || !entityId) {
-            functions.logger.error(`[WhatsApp Webhook] Missing u/e parameters in POST request.`);
+        if (tenant) {
+            userId = tenant.userId;
+            entityId = tenant.entityId;
+            functions.logger.info(`[WhatsApp Webhook] Resolved Tenant from Mapping: User=${userId}, Entity=${entityId}`);
+        } else if (userId && entityId) {
+            functions.logger.info(`[Webhook] Resolved Tenant directly from URL: User=${userId}, Entity=${entityId}`);
+        } else {
+            functions.logger.error(`[WhatsApp Webhook] Could not resolve tenant for ${recipientPhoneNumberId} (No mapping and no URL params).`);
             return;
         }
-
-        functions.logger.info(`[Webhook] Resolved Tenant directly from URL: User=${userId}, Entity=${entityId}`);
 
         // --- CASO 1: MANEJO DE ESTADOS (READ, DELIVERED, SENT) ---
         if (change.statuses && change.statuses.length > 0) {

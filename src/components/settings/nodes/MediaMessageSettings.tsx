@@ -55,7 +55,7 @@ export const MediaMessageSettings = ({ node, allNodes, updateNodeConfig }: NodeS
     
     // Auto-detect media type from URL or MimeType
     const detectMediaType = (filenameOrMime: string) => {
-        const lower = filenameOrMime.toLowerCase();
+        const lower = filenameOrMime.split('?')[0].toLowerCase();
         if (lower.match(/\.(jpg|jpeg|png|gif|webp)$/) || lower.startsWith('image/')) return 'image';
         if (lower.match(/\.(mp4|3gp|mov|avi|mkv)$/) || lower.startsWith('video/')) return 'video';
         if (lower.match(/\.(mp3|aac|ogg|wav|m4a)$/) || lower.startsWith('audio/')) return 'audio';

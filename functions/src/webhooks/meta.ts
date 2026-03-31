@@ -15,6 +15,14 @@ import { resolveTenant } from '../helpers/tenantResolver';
 
 export const metaWebhook = functions.https.onRequest(async (req: functions.https.Request, res: functions.Response) => {
     // 1. VERIFICATION REQUEST (GET)
+    if (req.method === 'POST') {
+        // --- DEBUG: LOG RAW REQUEST (Cloud Functions Logging — Respetando Molde Maestro) ---
+        functions.logger.info(`[WhatsApp Webhook Raw] Received POST from Meta`, {
+            body: req.body,
+            query: req.query
+        });
+    }
+
     if (req.method === 'GET') {
         const mode = req.query['hub.mode'];
         const token = req.query['hub.verify_token'];
@@ -23,7 +31,7 @@ export const metaWebhook = functions.https.onRequest(async (req: functions.https
         const userId = req.query['u'] as string;
         const entityId = req.query['e'] as string;
 
-        let expectedToken = process.env.META_VERIFY_TOKEN || 'malamia';
+        let expectedToken = process.env.META_VERIFY_TOKEN || 'vg37e';
 
         // Si se proveen IDs de inquilino, buscamos su token específico
         if (userId && entityId) {
@@ -61,55 +69,63 @@ export const metaWebhook = functions.https.onRequest(async (req: functions.https
     // 2. EVENT NOTIFICATION (POST)
     if (req.method === 'POST') {
         try {
+            // Confirm reception immediately to avoid Meta timeouts
+            res.status(200).send('EVENT_RECEIVED');
+
             const body = req.body;
 
-            // Support 'instagram', 'page' (messenger) and 'whatsapp_business_account'
-            if (body.object === 'instagram' || body.object === 'page' || body.object === 'whatsapp_business_account') {
-                const platform = body.object === 'whatsapp_business_account' ? 'whatsapp' : (body.object === 'instagram' ? 'instagram' : 'messenger');
+            // Support 'instagram', 'page' (messenger), 'whatsapp_business_account' AND 'whatsapp_business'
+            if (body.object === 'instagram' || body.object === 'page' || body.object === 'whatsapp_business_account' || body.object === 'whatsapp_business') {
+                const platform = (body.object === 'whatsapp_business_account' || body.object === 'whatsapp_business') ? 'whatsapp' : (body.object === 'instagram' ? 'instagram' : 'messenger');
 
                 // Iterate over entries
                 for (const entry of body.entry) {
+                    functions.logger.info(`[Meta Webhook] Processing entry for platform: ${platform}`);
                     const webhookEvent = entry.messaging ? entry.messaging[0] : null;
 
                     if (platform === 'whatsapp') {
-                        // WhatsApp Payload is structured differently (body.entry[].changes)
                         for (const change of entry.changes || []) {
-                            if (change.field === 'messages' && change.value?.messages) {
-                                const webhookEvent = change.value;
-                                const phoneNumberId = webhookEvent.metadata?.phone_number_id;
-                                
-                                // --- TENANT RESOLUTION ---
-                                let userId = req.query['u'] as string;
-                                let entityId = req.query['e'] as string;
-                                
-                                if (!userId || !entityId) {
-                                    functions.logger.info(`[WhatsApp Webhook] No query params found. Falling back to collectionGroup search for ${phoneNumberId}`);
-                                    const integrationsSnap = await admin.firestore()
-                                        .collectionGroup('integrations')
-                                        .where('phoneNumberId', '==', phoneNumberId)
-                                        .limit(1)
-                                        .get();
-                                    
-                                    if (integrationsSnap.empty) {
-                                        functions.logger.error(`[WhatsApp Webhook] No isolated integration found for ${phoneNumberId}.`);
-                                        continue;
-                                    }
+                            if (change.field !== 'messages') continue;
+                            const value = change.value;
+                            if (!value || !value.messages) continue;
 
-                                    const integrationDoc = integrationsSnap.docs[0];
-                                    const pathParts = integrationDoc.ref.path.split('/');
-                                    userId = pathParts[1];
-                                    entityId = pathParts[3];
+                            // 1. RESOLVE TENANT (Search or URL Fallback)
+                            let userId = req.query['u'] as string;
+                            let entityId = req.query['e'] as string;
+                            const phoneNumberId = value.metadata?.phone_number_id;
+                            const businessAccountId = entry.id;
+
+                            const tenant = await resolveTenant('whatsapp', phoneNumberId, businessAccountId);
+                            if (tenant) {
+                                userId = tenant.userId;
+                                entityId = tenant.entityId;
+                            }
+
+                            if (!userId || !entityId) {
+                                functions.logger.warn(`[WhatsApp Webhook] Unresolved tenant for ${phoneNumberId}.`);
+                                continue;
+                            }
+
+                            // 2. PROCESS MESSAGES
+                            const contactName = value.contacts?.[0]?.profile?.name || 'Cliente WhatsApp';
+                            
+                            for (const msg of value.messages) {
+                                if (!msg.id) {
+                                    functions.logger.warn(`[WhatsApp Webhook] Skipping message without ID`, msg);
+                                    continue;
                                 }
 
-                                functions.logger.info(`[WhatsApp Webhook] Processing for Tenant: ${userId}/${entityId}`);
-                                
-                                // Normalize and process
-                                const contactName = webhookEvent.contacts?.[0]?.profile?.name || 'Cliente WhatsApp';
-                                const unifiedMessage = normalizeWhatsAppMessage(webhookEvent.messages?.[0], contactName);
-                                const cardResult = await handleKanbanUpdateOmni(unifiedMessage, userId, entityId);
-                                
-                                if (cardResult?.success) {
-                                    await tryTriggerBot(userId, entityId, 'whatsapp', unifiedMessage.external_id, unifiedMessage.message_text);
+                                try {
+                                    functions.logger.info(`[WhatsApp Webhook] Processing msg ${msg.id} from ${msg.from}`);
+                                    const unifiedMessage = normalizeWhatsAppMessage(msg, contactName);
+                                    const cardResult = await handleKanbanUpdateOmni(unifiedMessage, userId, entityId);
+                                    functions.logger.info(`[WhatsApp Webhook] ✅ Kanban updated. CardId: ${cardResult?.cardId}, isNew: ${cardResult?.isNew}`);
+
+                                    if (cardResult?.success) {
+                                        await tryTriggerBot(userId, entityId, 'whatsapp', unifiedMessage.external_id, unifiedMessage.message_text, msg.id, { mediaUrl: unifiedMessage.media_url, type: unifiedMessage.message_type });
+                                    }
+                                } catch (msgErr: any) {
+                                    functions.logger.error(`[WhatsApp Webhook] ❌ Failed to process msg ${msg.id}: ${msgErr.message}`);
                                 }
                             }
                         }
@@ -118,16 +134,22 @@ export const metaWebhook = functions.https.onRequest(async (req: functions.https
 
                         // --- RESOLUCIÓN DE INQUILINO (TENANT RESOLUTION) ---
                         const recipientId = webhookEvent.recipient?.id;
-                        const tenant = await resolveTenant(platform, recipientId);
+                        
+                        let userId = req.query['u'] as string;
+                        let entityId = req.query['e'] as string;
 
-                        if (!tenant) {
-                            functions.logger.error(`[Meta Webhook] No mapping found for ${platform}:${recipientId}. Initializing or dropping.`);
-                            // En un sistema estricto, retornaríamos aquí. 
-                            // Para el "Master Mold", necesitamos que exista el mapeo.
-                            continue;
+                        if (!userId || !entityId) {
+                            const tenant = await resolveTenant(platform, recipientId);
+                            if (tenant) {
+                                userId = tenant.userId;
+                                entityId = tenant.entityId;
+                            }
                         }
 
-                        const { userId, entityId } = tenant;
+                        if (!userId || !entityId) {
+                            functions.logger.error(`[Meta Webhook] ❌ No mapping OR query params found for ${platform}:${recipientId}. Dropping.`);
+                            continue;
+                        }
 
                         // --- NORMALIZATION & PROCESSING ---
                         const unifiedMessage = normalizeMetaMessage(webhookEvent, platform);
@@ -139,7 +161,7 @@ export const metaWebhook = functions.https.onRequest(async (req: functions.https
                         }
                     }
                 }
-                res.status(200).send('EVENT_RECEIVED');
+                // res.status(200).send('EVENT_RECEIVED'); // Moved to top
             } else {
                 res.sendStatus(404);
             }

@@ -107,20 +107,40 @@ export default function ChatArea({ card, groups, groupName, allConversations }: 
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
+    const logic = useConversationLogic({
+        isOpen: true,
+        onClose: () => { },
+        card: card,
+        groupName: groupName,
+        groups: groups,
+        allConversations: allConversations
+    });
+
     // Clear unread count when conversation is opened/focused
     useEffect(() => {
         const resetUnread = async () => {
-            if (card?.id && (card?.unreadCount || 0) > 0 && currentUser?.uid && activeEntity) {
-                console.log(`[ChatArea] Resetting unreadCount for ${card.id}`);
+            // Priority: use liveCardData information (subscription) vs card props (can be stale)
+            const currentGid = logic.liveCardData?.groupId || card?.groupId;
+            const currentCid = logic.liveCardData?.id || card?.id;
+            // Robust check: use unreadCount from both live sub and props
+            const hasUnread = (logic.liveCardData?.unreadCount || 0) > 0 || (card?.unreadCount || 0) > 0;
+
+            if (currentCid && currentGid && hasUnread && currentUser?.uid && activeEntity) {
                 const tenantPath = `users/${currentUser.uid}/entities/${activeEntity}`;
+                console.log(`[ChatArea] Resetting unreadCount for ${currentCid} in group ${currentGid}`);
                 try {
-                    const cardRef = doc(db, tenantPath, 'kanban-groups', card.groupId, 'cards', card.id);
+                    const cardRef = doc(db, `${tenantPath}/kanban-groups/${currentGid}/cards/${currentCid}`);
                     await updateDoc(cardRef, {
                         unreadCount: 0,
                         lastReadAt: Timestamp.now()
                     });
-                } catch (err) {
-                    console.error("[ChatArea] Error clearing unread count:", err);
+                } catch (err: any) {
+                    // Fail silently if document moved or already deleted - state will sync on next render
+                    if (err.code === 'not-found' || err.message?.includes('No document to update')) {
+                        console.warn("[ChatArea] Card moved or not found at path during unread reset. Ignoring.");
+                    } else {
+                        console.error("[ChatArea] Error clearing unread count:", err);
+                    }
                 }
             }
         };
@@ -130,16 +150,7 @@ export default function ChatArea({ card, groups, groupName, allConversations }: 
         // Also reset when window gains focus
         window.addEventListener('focus', resetUnread);
         return () => window.removeEventListener('focus', resetUnread);
-    }, [card?.id, card?.unreadCount, card?.groupId, currentUser?.uid, activeEntity]);
-
-    const logic = useConversationLogic({
-        isOpen: true,
-        onClose: () => { },
-        card: card,
-        groupName: groupName,
-        groups: groups,
-        allConversations: allConversations
-    });
+    }, [card?.id, card?.unreadCount, card?.groupId, logic.liveCardData?.groupId, logic.liveCardData?.unreadCount, currentUser?.uid, activeEntity]);
 
     // Auto-scroll to bottom
     useEffect(() => {
@@ -157,22 +168,48 @@ export default function ChatArea({ card, groups, groupName, allConversations }: 
     };
 
     const handleCloseConversation = async () => {
-        if (!card?.id || !card?.groupId || !currentUser?.uid || !activeEntity) return;
+        if (!card?.id || !currentUser?.uid || !activeEntity) return;
 
         const isConfirmed = window.confirm("¿Estás seguro de que deseas eliminar permanentemente esta conversación? Esta acción no se puede deshacer.");
         if (!isConfirmed) return;
 
+        const loadingToast = toast.loading("Eliminando conversación...");
+
         try {
             const tenantPath = `users/${currentUser.uid}/entities/${activeEntity}`;
-            const cardRef = doc(db, tenantPath, 'kanban-groups', card.groupId, 'cards', card.id);
-            await import('firebase/firestore').then(mod => mod.deleteDoc(cardRef));
-            toast.success('Conversación eliminada correctamente.');
+
+            // 1. Direct Deletion (using prop groupId)
+            const directCardRef = doc(db, `${tenantPath}/kanban-groups/${card.groupId}/cards/${card.id}`);
+            const { deleteDoc, getDocs, collection } = await import('firebase/firestore');
+            await deleteDoc(directCardRef);
+
+            // 2. Brute Force Search (Safety Net)
+            const groupsSnap = await getDocs(collection(db, `${tenantPath}/kanban-groups`));
+            const deletePromises: Promise<any>[] = [];
+
+            const cleanPhone = card.contactNumberClean || card.contactNumber?.replace(/\D/g, '');
+
+            for (const groupDoc of groupsSnap.docs) {
+                const cardsRef = collection(db, `${tenantPath}/kanban-groups/${groupDoc.id}/cards`);
+                const cardsSnap = await getDocs(cardsRef);
+
+                cardsSnap.docs.forEach(cDoc => {
+                    const data = cDoc.data();
+                    const cPhone = data.contactNumberClean || data.contactNumber?.replace(/\D/g, '');
+
+                    if (cDoc.id === card.id || (cleanPhone && cPhone === cleanPhone)) {
+                        deletePromises.push(deleteDoc(cDoc.ref));
+                    }
+                });
+            }
+
+            await Promise.all(deletePromises);
+
+            toast.success('Conversación eliminada de todas las carpetas.', { id: loadingToast });
             setShowMoreMenu(false);
-            // Optionally, unselect active conversation 
-            // logic.onClose() might do something, but since the parent handles activeConversationId, resetting it is handled by the cards array updating.
         } catch (error) {
             console.error("Error deleting conversation: ", error);
-            toast.error('Hubo un error al intentar eliminar la conversación.');
+            toast.error('Hubo un error al intentar eliminar la conversación.', { id: loadingToast });
         }
     };
 
@@ -226,7 +263,6 @@ export default function ChatArea({ card, groups, groupName, allConversations }: 
                         {showMoreMenu && (
                             <div className="absolute top-full right-0 mt-2 w-52 bg-neutral-900 border border-neutral-800 rounded-lg shadow-2xl z-[70] overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
                                 <div className="p-1">
-                                    <div className="h-px bg-neutral-800 my-1 mx-2" />
                                     <button
                                         className="w-full flex items-center px-3 py-2.5 text-xs text-neutral-300 hover:bg-neutral-800 transition-colors rounded-md group text-left"
                                         onClick={handleCloseConversation}
@@ -632,4 +668,3 @@ export default function ChatArea({ card, groups, groupName, allConversations }: 
         </div>
     );
 }
-
