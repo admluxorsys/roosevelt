@@ -26,9 +26,6 @@ if (!admin.apps.length) {
 
         if (serviceAccountEnv) {
             try {
-                // Fix for Vercel/cloud environments that escape newlines as explicit \n strings
-                serviceAccountEnv = serviceAccountEnv.replace(/\\n/g, '\n');
-                
                 const serviceAccount = JSON.parse(serviceAccountEnv);
                 admin.initializeApp({
                     credential: admin.credential.cert(serviceAccount),
