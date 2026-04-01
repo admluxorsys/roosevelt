@@ -41,6 +41,11 @@ if (!admin.apps.length) {
                     parsedServiceAccount.private_key = parsedServiceAccount.private_key.replace(/\\n/g, '\n');
                 }
 
+                // Ensure project_id is present because cert() absolutely requires it
+                if (!parsedServiceAccount.project_id) {
+                    parsedServiceAccount.project_id = projectId;
+                }
+
                 admin.initializeApp({
                     credential: admin.credential.cert(parsedServiceAccount),
                     projectId
@@ -49,7 +54,8 @@ if (!admin.apps.length) {
                 console.log(`[Firebase Admin] ✅ SUCCESS: Initialized from ENV.`);
                 initialized = true;
             } catch (jsonError: any) {
-                console.error('[Firebase Admin] ❌ JSON Parse Error from ENV:', jsonError.message);
+                console.error('[Firebase Admin] ❌ Error initializing from ENV (Is the object malformed or missing fields like project_id/private_key/client_email?):', jsonError.message);
+                throw jsonError; // Do not swallow so we can see it in Vercel logs instead of "Could not load default credentials"
             }
         }
         
