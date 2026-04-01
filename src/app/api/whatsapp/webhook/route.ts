@@ -203,6 +203,8 @@ export async function POST(req: Request) {
                 // OPTIMIZED O(1) Search: Find group and card via indexed Contacts context
                 let targetCardDoc: any = null;
                 let targetGroupId: string | null = null;
+                let existingContactId: string | null = null;
+                let existingContactName: string | null = null;
 
                 const contactSnap = await db.collection(`${entityPath}/contacts`)
                     .where('phone', '==', `+${cleanFrom}`)
@@ -210,7 +212,10 @@ export async function POST(req: Request) {
                     .get();
 
                 if (!contactSnap.empty) {
-                    const contactData = contactSnap.docs[0].data();
+                    const contactDoc = contactSnap.docs[0];
+                    const contactData = contactDoc.data();
+                    existingContactId = contactDoc.id;
+                    existingContactName = contactData.name || contactData.contactName || contactData.firstName || null;
                     targetGroupId = contactData.kanbanGroupId;
                     const contactCardId = contactData.kanbanCardId;
 
@@ -223,8 +228,8 @@ export async function POST(req: Request) {
                     }
                 }
 
-                // Fallback search across all groups
-                if (!targetCardDoc || !targetGroupId) {
+                // Fallback search across all groups - only if we haven't found a card yet
+                if (!targetCardDoc) {
                     const allMatches: any[] = [];
                     const groupsRef = db.collection(`${entityPath}/kanban-groups`);
                     const groupsSnapshot = await groupsRef.get();
@@ -291,23 +296,29 @@ export async function POST(req: Request) {
                     if (defaultGroup) {
                         const newCardRef = defaultGroup.ref.collection('cards').doc();
 
-                        // 1. Generate CRM ID (Requires Transaction on system_metadata/counters)
-                        let numericId = String(Date.now()).slice(-10);
-                        try {
-                            const counterRef = db.collection(`${entityPath}/system_metadata`).doc('counters');
-                            await db.runTransaction(async (tx) => {
-                                const snap = await tx.get(counterRef);
-                                const next = (snap.exists ? (snap.data()?.crmIdCount || 0) : 0) + 1;
-                                tx.set(counterRef, { crmIdCount: next }, { merge: true });
-                                numericId = String(next).padStart(10, '0');
-                            });
-                        } catch (err) {
-                            debugLog(`[POST] Error generating CRM ID: ${err}`);
+                        // 1. Resolve CRM ID: Use existing or generate new one
+                        let numericId = existingContactId;
+                        
+                        if (!numericId) {
+                            numericId = String(Date.now()).slice(-10);
+                            try {
+                                const counterRef = db.collection(`${entityPath}/system_metadata`).doc('counters');
+                                await db.runTransaction(async (tx) => {
+                                    const snap = await tx.get(counterRef);
+                                    const next = (snap.exists ? (snap.data()?.crmIdCount || 0) : 0) + 1;
+                                    tx.set(counterRef, { crmIdCount: next }, { merge: true });
+                                    numericId = String(next).padStart(10, '0');
+                                });
+                            } catch (err) {
+                                debugLog(`[POST] Error generating CRM ID: ${err}`);
+                            }
                         }
+
+                        const finalContactName = value.contacts?.[0]?.profile?.name || existingContactName || from;
 
                         await newCardRef.set({
                             crmId: numericId,
-                            contactName: value.contacts?.[0]?.profile?.name || from,
+                            contactName: finalContactName,
                             contactNumber: from,
                             contactNumberClean: cleanFrom,
                             lastMessage: text.length > 50 ? text.substring(0, 47) + '...' : text,
@@ -320,21 +331,18 @@ export async function POST(req: Request) {
                             primary_channel: 'whatsapp'
                         });
 
-                        // 2. Create the Contact in the CRM Database
-                        const contactName = value.contacts?.[0]?.profile?.name || from;
-                        
-                        // Strict validation: Do not populate CRM with completely blank records if fallback fails
-                        if (contactName.trim() || cleanFrom.length >= 5) {
+                        // 2. Update/Create the Contact in the CRM Database
+                        if (numericId && (finalContactName.trim() || cleanFrom.length >= 5)) {
                             await db.collection(`${entityPath}/contacts`).doc(numericId).set({
                                 crmId: numericId,
-                                name: contactName || cleanFrom, // Required for CRM UI
-                                contactName: contactName || cleanFrom,
-                                firstName: contactName || cleanFrom,
+                                name: finalContactName || cleanFrom,
+                                contactName: finalContactName || cleanFrom,
+                                phone: `+${cleanFrom}`,
                                 contactNumber: from,
-                                phone: `+${cleanFrom}`, // Standardize
                                 kanbanGroupId: defaultGroup.id,
                                 kanbanCardId: newCardRef.id,
-                                createdAt: new Date().toISOString()
+                                updatedAt: new Date().toISOString(),
+                                ...(existingContactId ? {} : { createdAt: new Date().toISOString() })
                             }, { merge: true });
                         }
 

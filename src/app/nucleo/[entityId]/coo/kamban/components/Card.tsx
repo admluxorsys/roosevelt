@@ -119,6 +119,32 @@ const Card = ({ card, groupId, onClick, cardColor = 'bg-neutral-800', contacts =
 
         await Promise.all(deletePromises);
 
+        // 3. Clear Contact References (Data Integrity)
+        if (card.crmId || cleanPhone) {
+          try {
+            const contactsRef = collection(db, `${tenantPath}/contacts`);
+            let contactDocId = card.crmId;
+
+            if (!contactDocId && cleanPhone) {
+              const { query, where, getDocs } = await import('firebase/firestore');
+              const q = query(contactsRef, where('phone', '==', `+${cleanPhone}`));
+              const snap = await getDocs(q);
+              if (!snap.empty) contactDocId = snap.docs[0].id;
+            }
+
+            if (contactDocId) {
+              const { updateDoc, deleteField } = await import('firebase/firestore');
+              await updateDoc(doc(db, `${tenantPath}/contacts/${contactDocId}`), {
+                kanbanGroupId: deleteField(),
+                kanbanCardId: deleteField()
+              });
+              console.log(`[Card] 🔗 Unlinked contact ${contactDocId}`);
+            }
+          } catch (err) {
+            console.error("[Card] Error unlinking contact:", err);
+          }
+        }
+
         toast.success("Tarjeta eliminada de todas las bandejas", { id: 'delete-card' });
         handleCloseDeleteDialog();
       } catch (error) {
