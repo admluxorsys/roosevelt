@@ -4,6 +4,7 @@ import { X, AlertCircle, CheckCircle2, ChevronLeft, Settings, Copy, ShieldCheck,
 import { toast } from 'sonner';
 import { Integration } from '../../config';
 import { useAuth } from '@/contexts/AuthContext';
+import { useParams } from 'next/navigation';
 import { db } from '@/lib/firebase';
 import { doc, setDoc, deleteDoc, onSnapshot, collection, query, where, getDocs, updateDoc } from 'firebase/firestore';
 
@@ -14,7 +15,10 @@ interface Props {
 }
 
 export function WhatsAppCloudAPIModal({ isOpen, onClose, activeIntegration }: Props) {
-    const { currentUser, activeEntity } = useAuth();
+    const { currentUser } = useAuth();
+    const params = useParams();
+    const activeEntity = params?.entityId as string;
+    
     const [step, setStep] = useState<number>(1);
     const [isEditing, setIsEditing] = useState(false);
     const [initialLoading, setInitialLoading] = useState(true);
@@ -337,9 +341,9 @@ export function WhatsAppCloudAPIModal({ isOpen, onClose, activeIntegration }: Pr
                     <div className="p-4 bg-white/[0.02] border border-white/5 rounded-2xl">
                         <div className="flex items-center justify-between mb-2">
                             <span className="text-[8px] font-black uppercase text-neutral-500">URL DE CALLBACK</span>
-                            <button onClick={() => { navigator.clipboard.writeText(`https://roosevelt-api.com/webhook/${currentUser?.uid}`); toast.success("URL copiada"); }} className="p-1 hover:bg-white/5 rounded-md"><Copy className="w-3 h-3 text-blue-500" /></button>
+                            <button onClick={() => { navigator.clipboard.writeText(`https://us-central1-roosevelt-491004.cloudfunctions.net/metaWebhook?u=${currentUser?.uid}&e=${activeEntity}`); toast.success("URL copiada"); }} className="p-1 hover:bg-white/5 rounded-md"><Copy className="w-3 h-3 text-blue-500" /></button>
                         </div>
-                        <p className="text-[9px] font-mono text-blue-300 truncate tracking-tighter">https://roosevelt-api.com/webhook/{currentUser?.uid}</p>
+                        <p className="text-[9px] font-mono text-blue-300 truncate tracking-tighter">https://us-central1-roosevelt-491004.cloudfunctions.net/metaWebhook?u={currentUser?.uid}&e={activeEntity}</p>
                     </div>
                     <div className="p-4 bg-white/[0.02] border border-white/5 rounded-2xl">
                         <div className="flex items-center justify-between mb-2">

@@ -4,7 +4,7 @@ exports.baileysWebhook = void 0;
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const firestore_1 = require("firebase-admin/firestore");
-const kanbanOmni_1 = require("../helpers/kanbanOmni");
+const kanbanOperations_1 = require("../helpers/kanbanOperations");
 const botEngine_1 = require("../helpers/botEngine");
 /**
  * BAILEYS WEBHOOK HANDLER (Internal)
@@ -64,7 +64,7 @@ exports.baileysWebhook = functions.https.onRequest(async (req, res) => {
         };
         functions.logger.info(`[Baileys Webhook] Processing message for Entity: ${entityId}`, unifiedMessage);
         // 3. Update Kanban/Omnichannel (Rule 4: Isolated Storage)
-        const cardResult = await (0, kanbanOmni_1.handleKanbanUpdateOmni)(unifiedMessage, userId, entityId);
+        const cardResult = await (0, kanbanOperations_1.handleKanbanUpdateOmni)(unifiedMessage, userId, entityId);
         // 4. Trigger Bot (Unified Logic)
         if (cardResult === null || cardResult === void 0 ? void 0 : cardResult.success) {
             await (0, botEngine_1.tryTriggerBot)(userId, entityId, 'whatsapp', unifiedMessage.external_id, unifiedMessage.message_text);

@@ -1,5 +1,5 @@
 import * as functions from 'firebase-functions';
-import { handleKanbanUpdateOmni } from '../helpers/kanbanOmni';
+import { handleKanbanUpdateOmni } from '../helpers/kanbanOperations';
 import { UnifiedMessage } from '../types/message';
 
 /**

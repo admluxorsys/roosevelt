@@ -2,7 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.googleFormsWebhook = void 0;
 const functions = require("firebase-functions");
-const kanbanOmni_1 = require("../helpers/kanbanOmni");
+const kanbanOperations_1 = require("../helpers/kanbanOperations");
 /**
  * Webhook para recibir datos de Google Forms.
  * Se espera un POST con: { name, phone, email, message }
@@ -38,7 +38,7 @@ exports.googleFormsWebhook = functions.https.onRequest(async (req, res) => {
             platform_metadata: { email, original_name: name }
         };
         // Creamos la tarjeta con origen 'form' pero usando la lógica Omnicanal
-        await (0, kanbanOmni_1.handleKanbanUpdateOmni)(unifiedMessage);
+        await (0, kanbanOperations_1.handleKanbanUpdateOmni)(unifiedMessage);
         functions.logger.info(`Lead created from Google Form (Omni): ${contactName} (${phone})`);
         res.status(200).send({ success: true, message: 'Lead imported correctly' });
     }

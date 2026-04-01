@@ -1,6 +1,6 @@
 import * as functions from 'firebase-functions';
 import { normalizeTelegramMessage } from '../helpers/messageNormalizer';
-import { handleKanbanUpdateOmni } from '../helpers/kanbanOmni';
+import { handleKanbanUpdateOmni } from '../helpers/kanbanOperations';
 import { tryTriggerBot } from '../helpers/botEngine';
 import { resolveTenant } from '../helpers/tenantResolver';
 

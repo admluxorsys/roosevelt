@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { db, admin } from '@/lib/firebase-admin';
 import fs from 'fs';
 import path from 'path';
+import { sendWhatsAppMessage } from '@/lib/sendProviders';
 
 const DEBUG_FILE = '/tmp/webhook.log';
 
@@ -56,29 +57,21 @@ export async function POST(req: Request) {
 
     try {
         const { searchParams } = new URL(req.url);
-        const rawBody = await req.clone().text();
-        const body = JSON.parse(rawBody);
+        let body;
+        try {
+            const rawBody = await req.text();
+            debugLog(`[POST] Raw Body Length: ${rawBody.length}`);
+            body = JSON.parse(rawBody);
+        } catch (parseError: any) {
+            debugLog(`[POST] ❌ JSON Parse Error: ${parseError.message}`);
+            return NextResponse.json({ success: false, error: 'Invalid JSON' }, { status: 400 });
+        }
 
         const entry = body.entry?.[0];
         const changes = entry?.changes?.[0];
         const value = changes?.value;
         const metadata = value?.metadata;
         const recipientPhoneNumberId = metadata?.phone_number_id;
-
-        // EMERGENCY LOG TO FIRESTORE (Global Debug)
-        try {
-            await db.collection('_debug_webhooks').add({
-                timestamp: admin.firestore.FieldValue.serverTimestamp(),
-                phoneId: recipientPhoneNumberId || 'missing',
-                type: body.entry?.[0]?.changes?.[0]?.value?.messages ? 'message' : 'other',
-                raw: JSON.stringify(body).substring(0, 1000)
-            });
-        } catch (e) {}
-
-        if (!recipientPhoneNumberId) {
-            debugLog('[POST] Error: phone_number_id missing in webhook metadata.');
-            return NextResponse.json({ success: false, error: 'No phone_number_id' });
-        }
 
         // 1. TENANT IDENTIFICATION (Optimized O(1) Indexed Lookup)
         debugLog(`[POST] Searching tenant for Phone ID: ${recipientPhoneNumberId}`);
@@ -87,35 +80,37 @@ export async function POST(req: Request) {
         let entityId = searchParams.get('e');
 
         if (!userId || !entityId) {
-            const tenantSnap = await db.collectionGroup('integrations_whatsapp')
+            // Rule 4: Isolated Data Vault - Search across all entity integrations
+            const tenantSnap = await db.collectionGroup('integrations')
                 .where('phoneNumberId', '==', recipientPhoneNumberId)
                 .limit(1)
                 .get();
-
+            
             if (!tenantSnap.empty) {
-                const pathSegments = tenantSnap.docs[0].ref.path.split('/');
-                if (pathSegments.length >= 4) {
-                    userId = pathSegments[1];
-                    entityId = pathSegments[3];
-                }
-            } else {
-                // Fallback to internal/testing path
-                const internalSnap = await db.collectionGroup('integrations_whatsapp_internal')
-                    .where('phoneNumberId', '==', recipientPhoneNumberId)
-                    .limit(1)
-                    .get();
-                if (!internalSnap.empty) {
-                    const pathSegments = internalSnap.docs[0].ref.path.split('/');
-                    if (pathSegments.length >= 4) {
-                        userId = pathSegments[1];
-                        entityId = pathSegments[3];
-                    }
+                const pathParts = tenantSnap.docs[0].ref.path.split('/');
+                // Dynamic path resolution: users/{uid}/entities/{eid}/integrations/whatsapp
+                const uIdx = pathParts.indexOf('users');
+                const eIdx = pathParts.indexOf('entities');
+                if (uIdx !== -1 && eIdx !== -1) {
+                    userId = pathParts[uIdx + 1];
+                    entityId = pathParts[eIdx + 1];
                 }
             }
         }
 
         if (userId && entityId) {
             debugLog(`[POST] Tenant Discovery Success: User=${userId}, Entity=${entityId}`);
+            
+            // EMERGENCY LOG TO ENTITY BÓVEDA (Rule 5 & 7)
+            try {
+                await db.collection(`users/${userId}/entities/${entityId}/system_logs`).add({
+                    timestamp: admin.firestore.FieldValue.serverTimestamp(),
+                    type: 'whatsapp_webhook',
+                    phoneId: recipientPhoneNumberId || 'unknown',
+                    payload_type: value?.messages ? 'message' : (value?.statuses ? 'status' : 'other'),
+                    raw: JSON.stringify(body).substring(0, 1500)
+                });
+            } catch (e) {}
         } else {
             // BACKUP SEARCH: try a legacy system mapping if it exists
             const mappingRef = db.doc(`system_mappings/whatsapp_numbers/numbers/${recipientPhoneNumberId}`);
@@ -240,6 +235,7 @@ export async function POST(req: Request) {
 
                 // Fallback search across all groups - only if we haven't found a card yet
                 if (!targetCardDoc) {
+                    debugLog(`[POST] No card found via contact ${existingContactId}. Searching all groups...`);
                     const allMatches: any[] = [];
                     const groupsRef = db.collection(`${entityPath}/kanban-groups`);
                     const groupsSnapshot = await groupsRef.get();
@@ -247,6 +243,8 @@ export async function POST(req: Request) {
                     for (const groupDoc of groupsSnapshot.docs) {
                         const cardsSnapshot = await groupDoc.ref.collection('cards')
                             .where('contactNumberClean', '==', cleanFrom)
+                            .orderBy('updatedAt', 'desc')
+                            .limit(1)
                             .get();
 
                         cardsSnapshot.forEach(doc => {
@@ -255,7 +253,6 @@ export async function POST(req: Request) {
                     }
 
                     if (allMatches.length > 0) {
-                        // Pick the one with the latest update
                         allMatches.sort((a, b) => {
                             const tA = (a.doc.data().updatedAt?.toDate?.() || new Date(0)).getTime();
                             const tB = (b.doc.data().updatedAt?.toDate?.() || new Date(0)).getTime();
@@ -286,33 +283,32 @@ export async function POST(req: Request) {
                         lastMessage: text.length > 50 ? text.substring(0, 47) + '...' : text,
                         updatedAt: new Date(),
                         unreadCount: admin.firestore.FieldValue.increment(1),
-                        messages: admin.firestore.FieldValue.arrayUnion(newMessage)
+                        messages: admin.firestore.FieldValue.arrayUnion(newMessage),
+                        status: 'open'
                     });
                 } else {
                     // Create NEW card
-                    // Priority: 1. targetGroupId from contact, 2. First group found, 3. default_inbox
                     let destinationGroupId = targetGroupId;
-                    let targetGroupRef = destinationGroupId ? 
-                        db.doc(`${entityPath}/kanban-groups/${destinationGroupId}`) : 
-                        null;
-
-                    if (!destinationGroupId || !targetGroupRef) {
-                        const defaultGroup = groupsSnapshot.docs[0];
-                        if (defaultGroup) {
-                            destinationGroupId = defaultGroup.id;
-                            targetGroupRef = defaultGroup.ref;
+                    
+                    // SAFEGUARD: Ensure a group exists to receive the card
+                    if (!destinationGroupId) {
+                        const fallbackGroup = groupsSnapshot.docs.find(g => (g.data().name || '').toLowerCase().includes('inbox')) || groupsSnapshot.docs[0];
+                        if (fallbackGroup) {
+                            destinationGroupId = fallbackGroup.id;
                         } else {
-                            const defaultGroupRef = db.collection(`${entityPath}/kanban-groups`).doc('default_inbox');
-                            await defaultGroupRef.set({
+                            // Rule 5: Failsafe group creation if entity is empty
+                            const newGroupRef = db.collection(`${entityPath}/kanban-groups`).doc('default_inbox');
+                            await newGroupRef.set({
                                 name: 'Inbox',
                                 order: 0,
-                                color: 'bg-[#121212]/50',
+                                color: '#3B82F6',
                                 createdAt: admin.firestore.FieldValue.serverTimestamp()
                             }, { merge: true });
                             destinationGroupId = 'default_inbox';
-                            targetGroupRef = defaultGroupRef;
                         }
                     }
+
+                    const targetGroupRef = db.collection(`${entityPath}/kanban-groups`).doc(destinationGroupId);
 
                     if (targetGroupRef) {
                         const newCardRef = targetGroupRef.collection('cards').doc();

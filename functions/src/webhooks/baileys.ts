@@ -2,7 +2,7 @@ import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { UnifiedMessage } from '../types/message';
-import { handleKanbanUpdateOmni } from '../helpers/kanbanOmni';
+import { handleKanbanUpdateOmni } from '../helpers/kanbanOperations';
 import { tryTriggerBot } from '../helpers/botEngine';
 
 /**

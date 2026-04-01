@@ -444,40 +444,65 @@ export async function executeBotFlow(
             const outgoingEdges = bot.flow.edges.filter((e: any) => String(e.source) === String(currentNodeId));
             let selectedEdge = null;
 
-            if (outgoingEdges.length > 0) {
-                if (outgoingEdges.length === 1) {
-                    selectedEdge = outgoingEdges[0];
-                } else {
-                    if (currentNode.type === 'quickReplyNode') {
-                        const buttons = sanitizeButtonsData(currentNode.data.buttons || []);
+            if (currentNode.type === 'quickReplyNode' || currentNode.type === 'listMessageNode') {
+                let isValidSelection = false;
+                let matchedHandleId = null;
+
+                if (currentNode.type === 'quickReplyNode') {
+                    const buttons = sanitizeButtonsData(currentNode.data.buttons || []);
+                    if (buttons.length > 0) {
                         const matchedBtn = buttons.find((btn: any) =>
                             (btn.title || '').toLowerCase().trim() === currentMsg.toLowerCase().trim() ||
                             (btn.id || '') === currentMsg
                         );
                         if (matchedBtn) {
-                            const handleId = matchedBtn.id || matchedBtn.title;
-                            selectedEdge = outgoingEdges.find((e: any) => e.sourceHandle === handleId);
+                            isValidSelection = true;
+                            matchedHandleId = matchedBtn.id || matchedBtn.title;
                         }
-                    } else if (currentNode.type === 'listMessageNode') {
-                        const sections = sanitizeListData(currentNode.data);
-                        let matchedRowId = null;
+                    } else {
+                        isValidSelection = true; // No buttons configured, act as passthrough
+                    }
+                } else if (currentNode.type === 'listMessageNode') {
+                    const sections = sanitizeListData(currentNode.data);
+                    if (sections.length > 0) {
                         for (const sec of sections) {
                             const row = sec.rows.find((r: any) =>
                                 (r.title || '').toLowerCase().trim() === currentMsg.toLowerCase().trim() ||
                                 (r.id || '') === currentMsg
                             );
                             if (row) {
-                                matchedRowId = row.id || row.title;
+                                isValidSelection = true;
+                                matchedHandleId = row.id || row.title;
                                 break;
                             }
                         }
-                        if (matchedRowId) {
-                            selectedEdge = outgoingEdges.find((e: any) => e.sourceHandle === matchedRowId);
-                        }
+                    } else {
+                        isValidSelection = true;
                     }
-                    if (!selectedEdge) selectedEdge = outgoingEdges[0];
                 }
+
+                if (!isValidSelection) {
+                    functions.logger.info(`[executeBotFlow] Invalid option selected for ${to}. Continuing to wait.`);
+                    const errorMsg = "Por favor, selecciona una de las opciones válidas del menú para continuar.";
+                    await adapter.sendMessage(to, errorMsg);
+                    await logBotMessage(to, errorMsg, cardData.id, cardData.groupId, cardRef, 'text');
+                    // Stop execution and wait again on the same node
+                    return;
+                }
+
+                if (matchedHandleId && outgoingEdges.length > 0) {
+                    selectedEdge = outgoingEdges.find((e: any) => e.sourceHandle === matchedHandleId);
+                }
+                if (!selectedEdge && outgoingEdges.length > 0) {
+                    selectedEdge = outgoingEdges[0]; // Fallback to generic edge if handle not matched and valid
+                }
+            } else {
+                if (outgoingEdges.length > 0) selectedEdge = outgoingEdges[0];
+            }
+
+            if (outgoingEdges.length > 0) {
                 if (selectedEdge) nextNodeId = selectedEdge.target;
+
             } else {
                 await updateBotState(to, { status: 'completed', currentNodeId: null }, cardData.id, cardData.groupId, cardRef);
                 return;

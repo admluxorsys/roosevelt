@@ -7,11 +7,6 @@ const admin = require("firebase-admin");
  * OMNICHANNEL KANBAN MANAGER
  *
  * Handles Creation & Updates of Kanban Cards for ALL platforms.
- *
- * SEARCH STRATEGY (in-memory iteration — no Firestore indexes required):
- * 1. By platform_ids.{platform} (new unified approach)
- * 2. By contactNumber / contactNumberClean suffix match (last 9 digits)
- * 3. By external_id (legacy exact match)
  */
 function sanitizeForFirestore(obj) {
     if (obj === null || obj === undefined)
@@ -30,98 +25,131 @@ async function handleKanbanUpdateOmni(message, userId, entityId) {
     if (!userId || !entityId) {
         throw new Error('[Omni] Critical: Missing userId/entityId.');
     }
-    // --- 1. SEARCH FOR EXISTING CARD (Agnostic & Defensive) ---
+    // --- 1. RESOLVE GROUPS PATH (MANDATORY FOR ISOLATION - RULE 4) ---
+    const groupsPath = `users/${userId}/entities/${entityId}/kanban-groups`;
+    const groupsRef = db.collection(groupsPath);
+    const allGroupsSnap = await groupsRef.get();
     let snapshot = null;
-    // Strategy A: By platform_ids.{platform} (Unified)
-    try {
-        const s = await db.collectionGroup('cards')
-            .where(`platform_ids.${source_platform}`, '==', external_id)
-            .limit(1)
-            .get();
-        if (!s.empty)
-            snapshot = s;
+    let cardRef = null;
+    // --- 2. SEARCH FOR EXISTING CARD (Priority: LOCAL VAULT) ---
+    if (!allGroupsSnap.empty) {
+        for (const gDoc of allGroupsSnap.docs) {
+            const cards = await gDoc.ref.collection('cards')
+                .where(`platform_ids.${source_platform}`, '==', external_id)
+                .limit(1)
+                .get();
+            if (!cards.empty) {
+                snapshot = cards;
+                cardRef = cards.docs[0].ref;
+                break;
+            }
+        }
     }
-    catch (e) { }
-    // Strategy B: Legacy contactNumber match
+    // --- 3. GLOBAL FALLBACK (Only if local search failed) ---
+    if (!cardRef) {
+        try {
+            const s = await db.collectionGroup('cards')
+                .where(`platform_ids.${source_platform}`, '==', external_id)
+                .limit(1)
+                .get();
+            if (!s.empty) {
+                // VERIFY: Does it belong to CURRENT tenant? (Rule 4 Security)
+                if (s.docs[0].ref.path.includes(`users/${userId}/entities/${entityId}`)) {
+                    snapshot = s;
+                    cardRef = s.docs[0].ref;
+                }
+            }
+        }
+        catch (e) { }
+    }
+    // Final strategy: simple contactNumber check
     if (!snapshot) {
         try {
             const s = await db.collectionGroup('cards')
                 .where('contactNumber', '==', external_id)
-                .limit(1)
-                .get();
-            if (!s.empty)
+                .limit(1).get();
+            if (!s.empty && s.docs[0].ref.path.includes(`users/${userId}/entities/${entityId}`)) {
                 snapshot = s;
+                cardRef = s.docs[0].ref;
+            }
         }
         catch (e) { }
     }
-    // Strategy C: contactNumberClean match
-    if (!snapshot && (source_platform === 'whatsapp' || source_platform === 'sms')) {
-        const clean = external_id.replace(/\+/g, '');
-        try {
-            const s = await db.collectionGroup('cards')
-                .where('contactNumberClean', '==', clean)
-                .limit(1)
-                .get();
-            if (!s.empty)
-                snapshot = s;
-        }
-        catch (e) { }
-    }
-    // --- 2. RESOLVE GROUPS PATH ---
-    const groupsPath = `users/${userId}/entities/${entityId}/kanban-groups`;
-    const groupsRef = db.collection(groupsPath);
-    const allGroupsSnap = await groupsRef.get();
+    // --- 4. RESOLVE GROUPS AND CARD PLACEMENT ---
+    let isNew = false;
+    let inboxGroupId;
     if (allGroupsSnap.empty) {
-        // Create default group if mission is critical
+        // DEFAULT UNIFIED GROUP NAME: Inbox (Must match UI)
         const newGroup = await groupsRef.add({
-            name: 'Bandeja de Entrada',
+            name: 'Inbox',
             color: '#3B82F6',
             order: 0,
             createdAt: admin.firestore.FieldValue.serverTimestamp()
         });
         const snap = await newGroup.get();
-        return db.runTransaction(async (transaction) => {
-            const cardRef = groupsRef.doc(snap.id).collection('cards').doc();
-            const data = createNewCardData(message, snap.id);
-            transaction.set(cardRef, data);
-            return { success: true, cardId: cardRef.id, isNew: true };
-        });
+        inboxGroupId = snap.id;
     }
-    const inboxGroupDoc = allGroupsSnap.docs.find(g => (g.data().name || '').toLowerCase().includes('bandeja')) || allGroupsSnap.docs[0];
-    const inboxGroupId = inboxGroupDoc.id;
-    // --- 3. EXECUTE TRANSACTION ---
-    return db.runTransaction(async (transaction) => {
-        let cardRef;
-        let isNew = false;
-        if (snapshot && !snapshot.empty) {
-            cardRef = snapshot.docs[0].ref;
-            const updatePayload = {
-                lastMessage: message_text || `[${message_type.toUpperCase()}]`,
-                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-                [`platform_ids.${source_platform}`]: external_id,
-                unreadCount: admin.firestore.FieldValue.increment(1),
-                messages: admin.firestore.FieldValue.arrayUnion({
-                    sender: 'user',
-                    text: message_text,
-                    type: message_type,
-                    timestamp: timestamp || new Date(),
-                    platform: source_platform,
-                    media_url: message.media_url || null
-                })
-            };
-            if (platform_metadata) {
-                updatePayload[`platform_metadata.${source_platform}`] = sanitizeForFirestore(platform_metadata);
-            }
-            transaction.update(cardRef, updatePayload);
+    else {
+        const inboxGroupDoc = allGroupsSnap.docs.find(g => (g.data().name || '').toLowerCase().includes('inbox')) || allGroupsSnap.docs[0];
+        inboxGroupId = inboxGroupDoc.id;
+    }
+    // --- 5. UPDATE OR CREATE CARD ---
+    if (cardRef) {
+        const updatePayload = {
+            lastMessage: message_text || `[${message_type.toUpperCase()}]`,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            [`platform_ids.${source_platform}`]: external_id,
+            unreadCount: admin.firestore.FieldValue.increment(1),
+            messages: admin.firestore.FieldValue.arrayUnion({
+                sender: 'user',
+                text: message_text,
+                type: message_type,
+                timestamp: timestamp || new Date(),
+                platform: source_platform,
+                media_url: message.media_url || null
+            })
+        };
+        if (platform_metadata) {
+            updatePayload[`platform_metadata.${source_platform}`] = sanitizeForFirestore(platform_metadata);
+        }
+        await cardRef.update(updatePayload);
+    }
+    else {
+        isNew = true;
+        const newCardRef = groupsRef.doc(inboxGroupId).collection('cards').doc();
+        const data = createNewCardData(message, inboxGroupId);
+        await newCardRef.set(data);
+        cardRef = newCardRef;
+    }
+    // --- 6. SYNC WITH CRM CONTACTS ---
+    try {
+        const contactId = cardRef.id;
+        const contactRef = db.doc(`users/${userId}/entities/${entityId}/contacts/${contactId}`);
+        const contactData = {
+            id: contactId,
+            name: message.contact_name || 'Nuevo Contacto',
+            phone: message.source_platform === 'whatsapp' ? (message.external_id.startsWith('+') ? message.external_id : `+${message.external_id}`) : null,
+            source: message.source_platform,
+            kanbanGroupId: inboxGroupId,
+            kanbanCardId: contactId,
+            lastMessage: message_text,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        };
+        if (isNew) {
+            contactData.createdAt = admin.firestore.FieldValue.serverTimestamp();
+            await contactRef.set(contactData, { merge: true });
         }
         else {
-            isNew = true;
-            cardRef = groupsRef.doc(inboxGroupId).collection('cards').doc();
-            const data = createNewCardData(message, inboxGroupId);
-            transaction.set(cardRef, data);
+            await contactRef.update({
+                lastMessage: contactData.lastMessage,
+                updatedAt: contactData.updatedAt
+            });
         }
-        return { success: true, cardId: cardRef.id, isNew };
-    });
+    }
+    catch (contactErr) {
+        console.warn(`[Omni] ⚠️ CRM Sync failed: ${contactErr.message}`);
+    }
+    return { success: true, cardId: cardRef.id, isNew };
 }
 function createNewCardData(message, groupId) {
     const { source_platform, external_id, contact_name, message_text, message_type, timestamp, platform_metadata } = message;
@@ -148,7 +176,6 @@ function createNewCardData(message, groupId) {
             }]
     };
 }
-// --- Helper: UPDATE READ STATUS ---
 async function updateReadStatus(recipientId, platform = 'whatsapp') {
     const db = admin.firestore();
     try {

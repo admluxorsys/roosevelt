@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Search, Zap, ArrowRight, Settings2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useParams } from 'next/navigation';
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, query } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -13,7 +14,9 @@ import { WhatsAppQRBusinessModal } from './components/whatsapp_qr_business/Whats
 import { WhatsAppQRPersonalModal } from './components/whatsapp_qr_personal/WhatsAppQRPersonalModal';
 
 export default function IntegrationsPage() {
-    const { currentUser, activeEntity } = useAuth();
+    const { currentUser } = useAuth();
+    const params = useParams();
+    const activeEntity = params?.entityId as string;
     const getTenantPath = () => {
         if (!currentUser?.uid || !activeEntity) return '';
         return `users/${currentUser.uid}/entities/${activeEntity}`;

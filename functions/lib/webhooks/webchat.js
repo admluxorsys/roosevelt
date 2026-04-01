@@ -3,7 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.webchatWebhook = void 0;
 const functions = require("firebase-functions");
 const messageNormalizer_1 = require("../helpers/messageNormalizer");
-const kanbanOmni_1 = require("../helpers/kanbanOmni");
+const kanbanOperations_1 = require("../helpers/kanbanOperations");
 const botEngine_1 = require("../helpers/botEngine");
 const tenantResolver_1 = require("../helpers/tenantResolver");
 /**
@@ -39,7 +39,7 @@ exports.webchatWebhook = functions.https.onRequest(async (req, res) => {
             const userId = (tenant === null || tenant === void 0 ? void 0 : tenant.userId) || 'legacy';
             const entityId = (tenant === null || tenant === void 0 ? void 0 : tenant.entityId) || 'roosevelt';
             const unifiedMsg = (0, messageNormalizer_1.normalizeWebChatMessage)(body);
-            const cardResult = await (0, kanbanOmni_1.handleKanbanUpdateOmni)(unifiedMsg, userId, entityId);
+            const cardResult = await (0, kanbanOperations_1.handleKanbanUpdateOmni)(unifiedMsg, userId, entityId);
             // Trigger Bot (Unified Logic)
             if (cardResult && cardResult.success) {
                 await (0, botEngine_1.tryTriggerBot)(userId, entityId, 'webchat', unifiedMsg.external_id, unifiedMsg.message_text);
