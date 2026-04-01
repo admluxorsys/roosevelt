@@ -41,6 +41,7 @@ export default function NucleoPage() {
     const [archiveEntity, setArchiveEntity] = useState<Entity | null>(null);
 
     const [inputValue, setInputValue] = useState('');
+    const [creationType, setCreationType] = useState<'persona' | 'empresa'>('empresa');
     const [creatingProgress, setCreatingProgress] = useState(false);
 
     useEffect(() => {
@@ -100,7 +101,7 @@ export default function NucleoPage() {
             initialized: true,
             name: inputValue,
             status: 'active',
-            type: 'empresa',
+            type: creationType,
             createdAt: new Date()
         });
 
@@ -423,17 +424,37 @@ export default function NucleoPage() {
 
                 {/* Modal: Crear */}
                 {isCreating && (
-                    <Modal title="Protocolo de Bóveda" onClose={() => setIsCreating(false)}>
-                        <div className="space-y-6">
-                            <div className="relative group text-center">
-                                <label className="block text-[8px] font-bold text-white/20 mb-4 uppercase tracking-[0.5em]">Identificador de Identidad</label>
+                    <Modal title="Setup de Nueva Identidad" onClose={() => { setIsCreating(false); setCreationType('empresa'); }}>
+                        <div className="space-y-8">
+                            
+                            {/* Selector de Tipo */}
+                            <div className="flex gap-4 mb-2">
+                                <button
+                                    onClick={() => setCreationType('persona')}
+                                    className={`flex-1 p-4 rounded-xl border flex flex-col items-center gap-2 transition-all ${creationType === 'persona' ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-400 font-medium' : 'border-white/5 bg-white/[0.02] text-white/40 hover:bg-white/[0.04]'}`}
+                                >
+                                    <UserIcon className="w-5 h-5 mb-1" />
+                                    <span className="text-[10px] tracking-widest uppercase font-bold">Personal</span>
+                                </button>
+                                <button
+                                    onClick={() => setCreationType('empresa')}
+                                    className={`flex-1 p-4 rounded-xl border flex flex-col items-center gap-2 transition-all ${creationType === 'empresa' ? 'border-blue-500/50 bg-blue-500/10 text-blue-400 font-medium' : 'border-white/5 bg-white/[0.02] text-white/40 hover:bg-white/[0.04]'}`}
+                                >
+                                    <Briefcase className="w-5 h-5 mb-1" />
+                                    <span className="text-[10px] tracking-widest uppercase font-bold">Empresa</span>
+                                </button>
+                            </div>
+
+                            <div className="relative group text-center mt-6">
+                                <label className="block text-[8px] font-bold text-white/20 mb-4 uppercase tracking-[0.5em]">Nombre de la Identidad</label>
                                 <input
                                     type="text" value={inputValue} onChange={(e) => setInputValue(e.target.value)}
                                     className="w-full bg-transparent border-b border-white/10 text-white text-center py-4 focus:outline-none focus:border-white transition-all font-light text-2xl tracking-wide placeholder:text-white/5"
                                     placeholder="..." autoFocus
                                 />
                             </div>
-                            <Button onClick={handleCreateEntity} disabled={creatingProgress || !inputValue.trim()} className="w-full bg-white text-black hover:bg-neutral-200 rounded-none py-8 tracking-[0.4em] uppercase text-[10px] font-bold transition-all shadow-2xl">
+                            
+                            <Button onClick={handleCreateEntity} disabled={creatingProgress || !inputValue.trim()} className={`w-full text-black hover:bg-neutral-200 rounded-none py-8 tracking-[0.4em] uppercase text-[10px] font-bold transition-all shadow-2xl ${creationType === 'persona' ? 'bg-emerald-400 hover:bg-emerald-300' : 'bg-white'}`}>
                                 {creatingProgress ? 'Iniciando Motor...' : 'Confirmar Expansión'}
                             </Button>
                         </div>

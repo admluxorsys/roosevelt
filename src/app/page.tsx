@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 
 export default function Home() {
-  redirect('/nucleo/life');
+  redirect('/nucleo');
 }
 

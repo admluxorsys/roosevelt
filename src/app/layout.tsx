@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import { Montserrat } from "next/font/google"; // Font updated to Montserrat
 
 import "./globals.css";
@@ -6,7 +7,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { SidebarProvider } from "@/components/SidebarContext";
 import { Toaster } from "sonner";
 import { AuthProvider } from "@/contexts/AuthContext";
-
+import AppWalletProvider from "@/components/solana/AppWalletProvider";
 
 const montserrat = Montserrat({
   subsets: ["latin"],
@@ -50,12 +51,15 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <AuthProvider>
-            <SidebarProvider>
-              {children}
-              <Toaster position="top-right" richColors theme="dark" />
-            </SidebarProvider>
+            <AppWalletProvider>
+              <SidebarProvider>
+                {children}
+                <Toaster position="top-right" richColors theme="dark" />
+              </SidebarProvider>
+            </AppWalletProvider>
           </AuthProvider>
         </ThemeProvider>
+        <Script src="https://terminal.jup.ag/main-v3.js" strategy="lazyOnload" />
       </body>
     </html>
   );

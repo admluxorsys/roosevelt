@@ -21,7 +21,7 @@ export const CentralVideo = () => (
             onContextMenu={(e) => e.preventDefault()}
             className="w-full h-full object-contain hover:scale-105 transition-transform duration-500 pointer-events-none select-none"
         >
-            <source src="https://firebasestorage.googleapis.com/v0/b/roosevelt-platform-1.firebasestorage.app/o/chatbot_media%2FFrom%20KlickPin%20CF%20Pinterest%20_%20Motion%20graphics%20design%20Motion%20graphics%20inspiration%20Motion%20graphics%20trendsUser_lolHe%20avatar%20link.mp4?alt=media&token=2b218cb4-a885-4360-9368-6c0cfe8f799f" type="video/mp4" />
+            <source src="https://firebasestorage.googleapis.com/v0/b/roosevelt-491004.firebasestorage.app/o/media%2Fsphera.mp4?alt=media&token=8161da22-6280-4a9c-b87c-a0391f7fff67" type="video/mp4" />
         </video>
     </motion.div>
 );
