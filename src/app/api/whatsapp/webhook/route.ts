@@ -65,6 +65,16 @@ export async function POST(req: Request) {
         const metadata = value?.metadata;
         const recipientPhoneNumberId = metadata?.phone_number_id;
 
+        // EMERGENCY LOG TO FIRESTORE (Global Debug)
+        try {
+            await db.collection('_debug_webhooks').add({
+                timestamp: admin.firestore.FieldValue.serverTimestamp(),
+                phoneId: recipientPhoneNumberId || 'missing',
+                type: body.entry?.[0]?.changes?.[0]?.value?.messages ? 'message' : 'other',
+                raw: JSON.stringify(body).substring(0, 1000)
+            });
+        } catch (e) {}
+
         if (!recipientPhoneNumberId) {
             debugLog('[POST] Error: phone_number_id missing in webhook metadata.');
             return NextResponse.json({ success: false, error: 'No phone_number_id' });
@@ -279,22 +289,33 @@ export async function POST(req: Request) {
                         messages: admin.firestore.FieldValue.arrayUnion(newMessage)
                     });
                 } else {
-                    // Create NEW card in a default group or 'unassigned'
-                    let defaultGroup = groupsSnapshot.docs[0];
-                    if (!defaultGroup) {
-                        // If NO groups exist, deterministically create exactly one 'Inbox'
-                        const defaultGroupRef = db.collection(`${entityPath}/kanban-groups`).doc('default_inbox');
-                        await defaultGroupRef.set({
-                            name: 'Inbox',
-                            order: 0,
-                            color: 'bg-[#121212]/50',
-                            createdAt: admin.firestore.FieldValue.serverTimestamp()
-                        }, { merge: true });
-                        defaultGroup = await defaultGroupRef.get() as any;
+                    // Create NEW card
+                    // Priority: 1. targetGroupId from contact, 2. First group found, 3. default_inbox
+                    let destinationGroupId = targetGroupId;
+                    let targetGroupRef = destinationGroupId ? 
+                        db.doc(`${entityPath}/kanban-groups/${destinationGroupId}`) : 
+                        null;
+
+                    if (!destinationGroupId || !targetGroupRef) {
+                        const defaultGroup = groupsSnapshot.docs[0];
+                        if (defaultGroup) {
+                            destinationGroupId = defaultGroup.id;
+                            targetGroupRef = defaultGroup.ref;
+                        } else {
+                            const defaultGroupRef = db.collection(`${entityPath}/kanban-groups`).doc('default_inbox');
+                            await defaultGroupRef.set({
+                                name: 'Inbox',
+                                order: 0,
+                                color: 'bg-[#121212]/50',
+                                createdAt: admin.firestore.FieldValue.serverTimestamp()
+                            }, { merge: true });
+                            destinationGroupId = 'default_inbox';
+                            targetGroupRef = defaultGroupRef;
+                        }
                     }
 
-                    if (defaultGroup) {
-                        const newCardRef = defaultGroup.ref.collection('cards').doc();
+                    if (targetGroupRef) {
+                        const newCardRef = targetGroupRef.collection('cards').doc();
 
                         // 1. Resolve CRM ID: Use existing or generate new one
                         let numericId = existingContactId;
@@ -339,7 +360,7 @@ export async function POST(req: Request) {
                                 contactName: finalContactName || cleanFrom,
                                 phone: `+${cleanFrom}`,
                                 contactNumber: from,
-                                kanbanGroupId: defaultGroup.id,
+                                kanbanGroupId: destinationGroupId,
                                 kanbanCardId: newCardRef.id,
                                 updatedAt: new Date().toISOString(),
                                 ...(existingContactId ? {} : { createdAt: new Date().toISOString() })
@@ -347,7 +368,7 @@ export async function POST(req: Request) {
                         }
 
                         cardId = newCardRef.id;
-                        groupId = defaultGroup.id;
+                        groupId = destinationGroupId;
                     }
                 }
 

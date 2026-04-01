@@ -63,8 +63,8 @@ if (!admin.apps.length) {
                 console.log(`[Firebase Admin] ✅ SUCCESS: Initialized from ENV.`);
                 initialized = true;
             } catch (jsonError: any) {
-                console.error('[Firebase Admin] ❌ Error initializing from ENV (Is the object malformed or missing fields like project_id/private_key/client_email?):', jsonError.message);
-                throw jsonError; // Do not swallow so we can see it in Vercel logs instead of "Could not load default credentials"
+                console.error('[Firebase Admin] ❌ Error initializing from ENV (Is the object malformed?):', jsonError.message);
+                // Do not throw here, fallback to next strategy
             }
         }
         
