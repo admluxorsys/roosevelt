@@ -4,6 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { LucideIcon } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface OrbNodeProps {
     href?: string;
@@ -12,8 +13,6 @@ interface OrbNodeProps {
     title: string;
     subtitle: string;
     color: string;
-    index: number;
-    total: number;
 }
 
 const shadowColors: Record<string, string> = {
@@ -27,7 +26,10 @@ const shadowColors: Record<string, string> = {
     indigo: 'rgba(99, 102, 241, 0.5)',
 };
 
-export const OrbNode = ({ href, onClick, icon: Icon, title, subtitle, color }: Omit<OrbNodeProps, 'index' | 'total'>) => {
+export const OrbNode = ({ href, onClick, icon: Icon, title, subtitle, color }: OrbNodeProps) => {
+    const { activeEntity } = useAuth();
+    const finalHref = href?.replace('{entity}', activeEntity || '');
+
     const InnerContent = (
         <>
             <motion.div
@@ -46,9 +48,9 @@ export const OrbNode = ({ href, onClick, icon: Icon, title, subtitle, color }: O
         </>
     );
 
-    if (href && href !== '#') {
+    if (finalHref && finalHref !== '#') {
         return (
-            <Link href={href} className="group flex flex-col items-center gap-2">
+            <Link href={finalHref} className="group flex flex-col items-center gap-2">
                 {InnerContent}
             </Link>
         );

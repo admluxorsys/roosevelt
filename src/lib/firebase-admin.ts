@@ -46,6 +46,15 @@ if (!admin.apps.length) {
                     parsedServiceAccount.project_id = projectId;
                 }
 
+                // Ensure project_id is present because cert() absolutely requires it
+                if (!parsedServiceAccount.project_id) {
+                    parsedServiceAccount.project_id = projectId || process.env.FIREBASE_PROJECT_ID;
+                }
+
+                if (!parsedServiceAccount.project_id) {
+                    console.warn('[Firebase Admin] ⚠️ WARNING: No project_id found in service account object or environment. This may cause cert() to fail.');
+                }
+
                 admin.initializeApp({
                     credential: admin.credential.cert(parsedServiceAccount),
                     projectId
